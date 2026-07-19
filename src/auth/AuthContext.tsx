@@ -139,19 +139,6 @@ export function AuthProvider({
       JSON.stringify(users)
     );
 
-   let status = "MAX SILVER";
-
-  if (newUser.bonuses >= 50000) {
-    status = "MAX GOLD";
-  }
-
-  if (newUser.bonuses >= 150000) {
-    status = "MAX BLACK";
-  }
-
-  if (newUser.bonuses >= 300000) {
-    status = "MAX DIAMOND";
-  }
 
   const currentUser: User = {
     login,
@@ -194,19 +181,6 @@ export function AuthProvider({
       };
     }
 
-    let status = "MAX SILVER";
-
-  if (found.bonuses >= 50000) {
-    status = "MAX GOLD";
-  }
-
-  if (found.bonuses >= 150000) {
-    status = "MAX BLACK";
-  }
-
-  if (found.bonuses >= 300000) {
-    status = "MAX DIAMOND";
-  }
 
   const currentUser: User = {
     login: found.login,

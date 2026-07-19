@@ -3,7 +3,7 @@ import { useFavorites } from "../../store/FavoritesContext";
 import { useCart } from "../../store/CartContext";
 import { useAuth } from "../../auth/AuthContext";
 import { useNavigate } from "react-router-dom";
-import Button from "../ui/Button";
+
 
 
 function UserCard() {
