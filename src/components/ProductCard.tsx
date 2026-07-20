@@ -9,7 +9,7 @@ function ProductCard({ product }: Props) {
     <div className="overflow-hidden rounded-3xl bg-zinc-900">
 
       <img
-        src={product.image}
+        src={product.images[0]}
         alt={product.title}
         className="h-56 w-full object-cover"
       />
