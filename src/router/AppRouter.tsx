@@ -17,6 +17,7 @@ import ProfilePage from "../pages/ProfilePage";
 import AdminPage from "../pages/AdminPage";
 
 import ProtectedRouter from "../auth/ProtectedRouter";
+import CartPage from "../pages/CartPage";
 
 function AppRouter() {
   const { user, isAuthenticated } = useAuth();
@@ -50,6 +51,7 @@ function AppRouter() {
 
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/cart" element={<CartPage />} />
 
       <Route
         path="/profile"
