@@ -153,6 +153,7 @@ export function AuthProvider({
       JSON.stringify(currentUser)
     );
 
+    setUser(currentUser);
 
     return {
       success: true,
@@ -194,6 +195,7 @@ export function AuthProvider({
       JSON.stringify(currentUser)
     );
 
+    setUser(currentUser);
 
     return {
       success: true,
