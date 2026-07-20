@@ -136,7 +136,9 @@ function ProductPage() {
             Купить
           </Button>
 
-          <Button variant="secondary">
+          <Button 
+            className="border border-yellow-400 bg-transparent text-yellow-400 hover:bg-yellow-400 hover:text-black"
+          >
             Получить консультацию
           </Button>
 

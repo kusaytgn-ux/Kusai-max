@@ -22,7 +22,7 @@ function ProductCard({ product }: Props) {
       {/* Фото */}
       <div className="relative">
         <img
-          src={product.images[0]}
+          src={product.images[0] || "placeholder.png"}
           alt={product.title}
           className="h-64 w-full object-cover"
         />
