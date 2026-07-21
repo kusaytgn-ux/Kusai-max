@@ -10,6 +10,7 @@ import type { TradeInProduct } from "../types/TradeInProduct";
 import { getTradeInProduct } from "../services/tradeInService";
 
 function TradeInProductPage() {
+    console.log("TradeInProductPage render");
   const { id } = useParams();
 
   const [product, setProduct] = useState<TradeInProduct | null>(null);
