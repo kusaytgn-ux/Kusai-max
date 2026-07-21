@@ -1,3 +1,4 @@
+import AdminTradeIn from "../components/admin/AdminTradeIn";
 import AdminConcierge from "../components/admin/AdminConcierge";
 import { useState } from "react";
 import {
@@ -200,19 +201,7 @@ function AdminPage() {
           )}
 
           {section === "tradein" && (
-
-            <div className="rounded-3xl bg-zinc-900 p-8">
-
-              <h2 className="text-3xl font-bold">
-                Trade-In
-              </h2>
-
-              <p className="mt-4 text-zinc-400">
-                Здесь будут заявки на Trade-In.
-              </p>
-
-            </div>
-
+            <AdminTradeIn />
           )}
 
           {section === "concierge" && (
