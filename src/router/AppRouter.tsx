@@ -19,7 +19,7 @@ import AdminPage from "../pages/AdminPage";
 import ProtectedRouter from "../auth/ProtectedRouter";
 import CartPage from "../pages/CartPage";
 
-//import TradeInProductPage from "../pages/TradeInPage";
+import TradeInProductPage from "../pages/TradeInPage";
 
 function AppRouter() {
   const { user, isAuthenticated } = useAuth();
@@ -49,10 +49,10 @@ function AppRouter() {
       <Route path="/tradein" element={<TradeInPage />} />
 
       <Route
-  path="/tradein/:id"
-  element={<h1 style={{ color: "white" }}>TEST PAGE</h1>}
-/>
-
+        path="/tradein/:id"
+        element={<TradeInProductPage />}
+      />
+      
       <Route path="/history" element={<HistoryPage />} />
       <Route path="/concierge" element={<ConciergePage />} />
       <Route path="/select" element={<SelectPage />} />
