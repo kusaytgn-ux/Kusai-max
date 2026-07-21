@@ -1,7 +1,35 @@
-import { ArrowRightLeft, Smartphone } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRightLeft } from "lucide-react";
+
+import BottomNavigation from "../components/navigation/BottomNavigation";
 import Button from "../components/ui/Button";
 
+import type { TradeInProduct } from "../types/TradeInProduct";
+import { getTradeInProducts } from "../services/tradeInService";
+
+getTradeInProducts()
+
 function TradeInPage() {
+
+    const [products, setProducts] = useState<TradeInProduct[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+
+        loadProducts();
+
+    }, []);
+
+    async function loadProducts() {
+
+        const data = await getTradeInProducts();
+
+        setProducts(data);
+
+        setLoading(false);
+
+    }    
+  
   return (
     <div className="min-h-screen bg-black pb-24 text-white">
 
@@ -58,30 +86,82 @@ function TradeInPage() {
 
         {/* Заглушка */}
 
-        <div className="mt-6 rounded-3xl bg-zinc-900 p-10 text-center">
+        {loading ? (
 
-          <div className="flex justify-center">
-            <Smartphone
-              size={60}
-              className="text-yellow-400"
-            />
-          </div>
+  <div className="mt-6 rounded-3xl bg-zinc-900 p-8 text-center">
+    <p className="text-zinc-400">
+      Загрузка устройств...
+    </p>
+  </div>
 
-          <h3 className="mt-5 text-2xl font-bold">
-            Пока нет устройств
+) : products.length === 0 ? (
+
+  <div className="mt-6 rounded-3xl bg-zinc-900 p-10 text-center">
+
+    <h3 className="text-2xl font-bold">
+      Пока нет устройств
+    </h3>
+
+    <p className="mt-3 text-zinc-400">
+      Скоро здесь появятся устройства,
+      принятые по программе Trade-In.
+    </p>
+
+  </div>
+
+) : (
+
+  <div className="mt-6 space-y-5">
+
+    {products.map((product) => (
+
+      <div
+        key={product.id}
+        className="overflow-hidden rounded-3xl bg-zinc-900"
+      >
+
+        {product.images[0] && (
+
+          <img
+            src={product.images[0]}
+            alt={product.title}
+            className="h-64 w-full object-cover"
+          />
+
+        )}
+
+        <div className="p-5">
+
+          <h3 className="text-2xl font-bold">
+            {product.title}
           </h3>
 
-          <p className="mt-3 text-zinc-400 leading-7">
-            После того как администратор добавит
-            устройства, они появятся здесь.
+          <p className="mt-2 text-zinc-400">
+            {product.memory}
           </p>
+
+          <p className="mt-4 text-3xl font-black text-yellow-400">
+            {product.price.toLocaleString("ru-RU")} ₽
+          </p>
+
+          <Button>
+            Купить
+          </Button>
 
         </div>
 
       </div>
 
+    ))}
+
+  </div>
+
+)}
+
+      </div>
+<BottomNavigation />
     </div>
   );
-}
+    }
 
 export default TradeInPage;
