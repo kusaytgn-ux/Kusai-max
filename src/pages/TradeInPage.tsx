@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ArrowRightLeft } from "lucide-react";
 
 import BottomNavigation from "../components/navigation/BottomNavigation";
@@ -13,6 +14,7 @@ function TradeInPage() {
 
     const [products, setProducts] = useState<TradeInProduct[]>([]);
     const [loading, setLoading] = useState(true);
+    const navigate = useNavigate();
 
     useEffect(() => {
 
@@ -117,7 +119,8 @@ function TradeInPage() {
 
       <div
         key={product.id}
-        className="overflow-hidden rounded-3xl bg-zinc-900"
+        onClick={() => navigate('/tradein/${product.id}')}
+        className="overflow-hidden rounded-3xl bg-zinc-900 cursor-pointer transition hover:scale-[1.02] hover:border-yellow-400"
       >
 
         {product.images.length > 0 && (

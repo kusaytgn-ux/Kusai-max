@@ -19,6 +19,8 @@ import AdminPage from "../pages/AdminPage";
 import ProtectedRouter from "../auth/ProtectedRouter";
 import CartPage from "../pages/CartPage";
 
+import TradeInProductPage from "../pages/TradeInPage";
+
 function AppRouter() {
   const { user, isAuthenticated } = useAuth();
 
@@ -45,6 +47,12 @@ function AppRouter() {
       <Route path="/product/:id" element={<ProductPage />} />
       <Route path="/club" element={<ClubPage />} />
       <Route path="/tradein" element={<TradeInPage />} />
+
+      <Route
+        path="/tradein/:id"
+        element={<TradeInProductPage />}
+      />
+      
       <Route path="/history" element={<HistoryPage />} />
       <Route path="/concierge" element={<ConciergePage />} />
       <Route path="/select" element={<SelectPage />} />

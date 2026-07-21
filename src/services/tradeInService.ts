@@ -5,7 +5,10 @@ import {
   deleteDoc,
   updateDoc,
   doc,
+  getDoc,
 } from "firebase/firestore";
+
+
 
 import {
   ref,
@@ -45,6 +48,19 @@ export async function addTradeInProduct(
   await addDoc(collection(db, COLLECTION), product);
 }
 
+export async function getTradeInProduct(id: string) {
+  const snapshot = await getDoc(doc(db, COLLECTION, id));
+
+  if (!snapshot.exists()) {
+    return null;
+  }
+
+  return {
+    id: snapshot.id,
+    ...snapshot.data(),
+  } as TradeInProduct;
+}
+
 export async function uploadTradeInImage(file: File) {
   const imageRef = ref(
     storage,
@@ -52,6 +68,8 @@ export async function uploadTradeInImage(file: File) {
   );
 
   await uploadBytes(imageRef, file);
+
+  
 
   return await getDownloadURL(imageRef);
 }
