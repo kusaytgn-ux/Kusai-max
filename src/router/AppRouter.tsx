@@ -49,10 +49,10 @@ function AppRouter() {
       <Route path="/tradein" element={<TradeInPage />} />
 
       <Route
-        path="/tradein/:id"
-        element={<TradeInProductPage />}
-      />
-      
+  path="/tradein/:id"
+  element={<h1 style={{ color: "white" }}>TEST PAGE</h1>}
+/>
+
       <Route path="/history" element={<HistoryPage />} />
       <Route path="/concierge" element={<ConciergePage />} />
       <Route path="/select" element={<SelectPage />} />
