@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRightLeft } from "lucide-react";
-
+//Доработка
 import BottomNavigation from "../components/navigation/BottomNavigation";
 import Button from "../components/ui/Button";
 
