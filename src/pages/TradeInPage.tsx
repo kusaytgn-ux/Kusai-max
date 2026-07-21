@@ -120,7 +120,7 @@ function TradeInPage() {
         className="overflow-hidden rounded-3xl bg-zinc-900"
       >
 
-        {product.images[0] && (
+        {product.images.length > 0 && (
 
           <img
             src={product.images[0]}
@@ -140,9 +140,37 @@ function TradeInPage() {
             {product.memory}
           </p>
 
+          <p className="mt-2 text-zinc-400">
+            {product.color}
+          </p>
+
+          <p className="mt-2 text-zinc-400">
+            {product.condition}
+          </p>
+
           <p className="mt-4 text-3xl font-black text-yellow-400">
             {product.price.toLocaleString("ru-RU")} ₽
           </p>
+
+            <div className="mt-4 flex items-center justify-between">
+
+              <span
+                className={`rounded-full px-3 py-1 text-sm font-bold ${
+                  product.status === "available"
+                    ? "bg-green-600"
+                    : "bg-red-600"
+                }`}
+              >
+                {product.status === "available"
+                  ? "В продаже"
+                  : "Продано"}
+              </span>
+
+              <span className="text-zinc-400">
+                {product.warranty}
+              </span>
+
+            </div>
 
           <Button>
             Купить
