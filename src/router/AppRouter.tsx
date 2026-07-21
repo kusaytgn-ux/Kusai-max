@@ -19,7 +19,7 @@ import AdminPage from "../pages/AdminPage";
 import ProtectedRouter from "../auth/ProtectedRouter";
 import CartPage from "../pages/CartPage";
 
-import TradeInProductPage from "../pages/TradeInPage";
+//import TradeInProductPage from "../pages/TradeInPage";
 
 function AppRouter() {
   const { user, isAuthenticated } = useAuth();
