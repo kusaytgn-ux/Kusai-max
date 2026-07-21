@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 
 import Header from "../components/layout/Header";
 import BottomNavigation from "../components/navigation/BottomNavigation";
-//import ProductGallery from "../components/product/ProductGallery";
+import ProductGallery from "../components/product/ProductGallery";
 import Button from "../components/ui/Button";
 
 import type { TradeInProduct } from "../types/TradeInProduct";
@@ -52,11 +52,10 @@ function TradeInProductPage() {
 
       <main className="mx-auto max-w-md px-5 py-5">
  
-        <div className="h-72 rounded-3xl bg-zinc-900 flex items-center justify-center">
-        <span className="text-zinc-500">
-            Фото устройства
-        </span>
-        </div>
+        <ProductGallery
+          images={product.images}
+          title={product.title}
+        />
 
         <div className="mt-6">
 
