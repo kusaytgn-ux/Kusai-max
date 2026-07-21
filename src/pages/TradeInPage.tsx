@@ -119,7 +119,7 @@ function TradeInPage() {
 
       <div
         key={product.id}
-        onClick={() => navigate('/tradein/${product.id}')}
+        onClick={() => navigate(`/tradein/${product.id}`)}
         className="overflow-hidden rounded-3xl bg-zinc-900 cursor-pointer transition hover:scale-[1.02] hover:border-yellow-400"
       >
 
