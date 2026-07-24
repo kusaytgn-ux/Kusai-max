@@ -12,10 +12,14 @@ import { products as defaultProducts } from "../data/Products";
 
 type ProductContextType = {
   products: Product[];
+
   addProduct: (product: Omit<Product, "id">) => void;
+
   updateProduct: (product: Product) => void;
-  deleteProduct: (id: number) => void;
-  getProduct: (id: number) => Product | undefined;
+
+  deleteProduct: (id: string) => void;
+
+  getProduct: (id: string) => Product | undefined;
 };
 
 const ProductContext = createContext<ProductContextType | null>(null);
@@ -54,7 +58,7 @@ export function ProductProvider({
   function addProduct(product: Omit<Product, "id">) {
     const newProduct: Product = {
       ...product,
-      id: Date.now(),
+      id: crypto.randomUUID(),
     };
 
     saveProducts([...products, newProduct]);
@@ -68,13 +72,13 @@ export function ProductProvider({
     );
   }
 
-  function deleteProduct(id: number) {
+  function deleteProduct(id: string) {
     saveProducts(
       products.filter((item) => item.id !== id)
     );
   }
 
-  function getProduct(id: number) {
+  function getProduct(id: string) {
     return products.find((item) => item.id === id);
   }
 
