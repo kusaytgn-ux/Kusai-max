@@ -11,7 +11,7 @@ import { getTradeInProduct } from "../services/tradeInService";
 
 function TradeInProductPage() {
     console.log("TradeInProductPage render");
-  const { id } = useParams();
+    const { id } = useParams();
 
   const [product, setProduct] = useState<TradeInProduct | null>(null);
   const [loading, setLoading] = useState(true);
