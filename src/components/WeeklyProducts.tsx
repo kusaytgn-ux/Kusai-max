@@ -8,7 +8,7 @@ function WeeklyProducts() {
 
   const products = [
     {
-      id: 1,
+      id: "1",
       title: "iPhone 16 Pro",
       price: "149 990 ₽",
       rating: 4.9,
@@ -16,7 +16,7 @@ function WeeklyProducts() {
         "https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=600",
     },
     {
-      id: 2,
+      id: "2",
       title: "MacBook Pro M4",
       price: "289 990 ₽",
       rating: 5.0,
@@ -24,7 +24,7 @@ function WeeklyProducts() {
         "https://images.unsplash.com/photo-1517336714739-489689fd1ca8?w=600",
     },
     {
-      id: 3,
+      id: "3",
       title: "AirPods Pro 2",
       price: "29 990 ₽",
       rating: 4.8,
