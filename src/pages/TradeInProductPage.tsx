@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
+import { useCart } from "../store/CartContext";
 
 import Header from "../components/layout/Header";
 import BottomNavigation from "../components/navigation/BottomNavigation";
@@ -9,16 +10,22 @@ import Button from "../components/ui/Button";
 import type { TradeInProduct } from "../types/TradeInProduct";
 import { getTradeInProduct } from "../services/tradeInService";
 
+
+
 function TradeInProductPage() {
     console.log("TradeInProductPage render");
     const { id } = useParams();
+  const navigate = useNavigate();
+  const { addToCart} = useCart();
 
   const [product, setProduct] = useState<TradeInProduct | null>(null);
   const [loading, setLoading] = useState(true);
-
+  
   useEffect(() => {
     loadProduct();
   }, []);
+
+  
 
   async function loadProduct() {
     if (!id) return;
@@ -29,6 +36,8 @@ function TradeInProductPage() {
 
     setLoading(false);
   }
+
+  
 
   if (loading) {
     return (
@@ -44,6 +53,28 @@ function TradeInProductPage() {
         Устройство не найдено
       </div>
     );
+  }
+
+  function handleBuy(){
+    if (!product) return;
+
+    addToCart({
+      id:product.id,
+      type:"tradein",
+      title: product.title,
+      price: product.price,
+      image: product.images[0],
+    });
+
+    navigate("/cart");
+  }
+
+  function handleConsultation() {
+    navigate("/concierge",{
+      state: {
+        message: `Здравствуйте! Меня интересует ${product?.title} по программе Trade-In.`,
+      },
+    });
   }
 
   return (
@@ -136,11 +167,11 @@ function TradeInProductPage() {
 
         <div className="mt-8 space-y-3">
 
-          <Button>
+          <Button onClick={handleBuy}>
             Купить
           </Button>
 
-          <Button>
+          <Button onClick={handleConsultation}>
             Получить консультацию
           </Button>
 

@@ -1,25 +1,29 @@
 import { X } from "lucide-react";
 import ProductForm from "./ProductForm";
-import { useProducts } from "../../store/ProductContext";
+import { addProduct } from "../../services/productService";
 import type { Product } from "../../types/Product";
 
 type Props = {
   open: boolean;
   onClose: () => void;
+  onSaved: () => void;
 };
 
 function ProductModal({
   open,
   onClose,
+  onSaved,
 }: Props) {
-  const { addProduct } = useProducts();
+  
 
   if (!open) return null;
 
-  function handleSave(
+  async function handleSave(
     product: Omit<Product, "id">
-  ) {
-    addProduct(product);
+  ){
+    await addProduct(product);
+    onSaved();
+
     onClose();
   }
 

@@ -1,4 +1,4 @@
-import { products } from "../data/Products";
+
 import {
   createContext,
   useContext,
@@ -7,18 +7,23 @@ import {
   type ReactNode,
 } from "react";
 
-type CartItem = {
-  id: number;
+export type CartItem={
+  id: string;
+  type: "catalog" | "tradein";
+
+  title: string;
+  price: number;
+  image: string;
   quantity: number;
 };
 
 type CartContextType = {
   cart: CartItem[];
-  addToCart: (id: number) => void;
-  removeFromCart: (id: number) => void;
-  increaseQuantity: (id: number) => void;
-  decreaseQuantity: (id: number) => void;
-  getQuantity: (id: number) => number;
+  addToCart: (item: Omit<CartItem, "quantity">) => void;
+  removeFromCart: (id: string) => void;
+  increaseQuantity: (id: string) => void;
+  decreaseQuantity: (id: string) => void;
+  getQuantity: (id: string) => number;
   totalItems: number;
   totalPrice: number;
 };
@@ -32,38 +37,55 @@ export function CartProvider({
 }) {
   const [cart, setCart] = useState<CartItem[]>([]);
 
-  function addToCart(id: number) {
+  function addToCart(item: Omit<CartItem, "quantity"> ){
     setCart((prev) => {
-      const item = prev.find((p) => p.id === id);
-
-      if (item) {
+      const existing = prev.find((p) => p.id ===item.id);
+      if(existing){
         return prev.map((p) =>
-          p.id === id
-            ? { ...p, quantity: p.quantity + 1 }
-            : p
+          p.id === item.id
+            ?{
+              ...p,
+              quantity: p.quantity +1,
+            }
+          :p
         );
       }
-
-      return [...prev, { id, quantity: 1 }];
+      return[
+        ...prev,
+        {
+          ...item,
+          quantity:1,
+        },
+      ];
     });
   }
 
-  function removeFromCart(id: number) {
-    setCart((prev) => prev.filter((p) => p.id !== id));
+  function removeFromCart(id: string) {
+    setCart((prev) => 
+      prev.filter((p) => p.id !== id)
+    );
   }
 
-  function increaseQuantity(id: number) {
-  addToCart(id);
+  function increaseQuantity(id: string) {
+    setCart((prev) =>
+      prev.map((item)=>
+        item.id === id
+          ?{
+              ...item,
+              quantity: item.quantity + 1,
+          }
+        : item
+      )
+    );
 }
 
-function decreaseQuantity(id: number) {
+function decreaseQuantity(id: string) {
   setCart((prev) =>
     prev.flatMap((item) => {
       if (item.id !== id) return item;
 
-      if (item.quantity === 1) {
-        return [];
-      }
+      if (item.quantity === 1) return [];
+      
 
       return {
         ...item,
@@ -73,8 +95,11 @@ function decreaseQuantity(id: number) {
   );
 }
 
-  function getQuantity(id: number) {
-    return cart.find((p) => p.id === id)?.quantity ?? 0;
+  function getQuantity(id: string) {
+    return( 
+      cart.find((item) => item.id === id)
+        ?.quantity ?? 0
+    );
   }
 
   const totalItems = cart.reduce(
@@ -82,15 +107,12 @@ function decreaseQuantity(id: number) {
     0
   );
   
-  const totalPrice = cart.reduce((sum, item) => {
-    const product = products.find(
-      (p) => p.id === item.id
-    );
+  const totalPrice = cart.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
 
-    if (!product) return sum;
-
-    return sum + product.price * item.quantity;
-  }, 0);
+  
  
 
   const value = useMemo(

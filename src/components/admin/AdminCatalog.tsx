@@ -1,18 +1,37 @@
 import { useState } from "react";
 import { Pencil, Trash2, Plus } from "lucide-react";
-import { useProducts } from "../../store/ProductContext";
+
 import ProductModal from "./ProductModal";
 
+import { useEffect } from "react";
+
+import type { Product } from "../../types/Product";
+
+import {
+  getProducts,
+  deleteProduct,
+} from "../../services/productService";
+
 function AdminCatalog() {
-  const { products, deleteProduct } = useProducts();
+  const [products, setProducts] = useState<Product[]>([]);
 
   const [modalOpen, setModalOpen] = useState(false);
+
+  useEffect(() =>{
+    loadProducts();
+  }, []);
+
+  async function loadProducts() {
+    const data =await getProducts();
+    setProducts(data);
+  }
 
   return (
     <>
       <ProductModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
+        onSaved={loadProducts}
       />
 
       <div>
@@ -132,7 +151,10 @@ function AdminCatalog() {
                 </button>
 
                 <button
-                  onClick={() => deleteProduct(product.id)}
+                  onClick={async () =>{
+                    await deleteProduct(product.id);
+                    loadProducts();
+                  }}
                   className="rounded-xl bg-red-600 p-3 transition hover:bg-red-500"
                 >
                   <Trash2 size={18} />
