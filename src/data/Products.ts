@@ -2,7 +2,7 @@ import type { Product } from "../types/Product";
 
 export const products: Product[] = [
   {
-    id: 1,
+    id: "1",
     title: "iPhone 16 Pro Max",
     price: 149990,
 
@@ -30,7 +30,7 @@ export const products: Product[] = [
   },
 
   {
-    id: 2,
+    id: "2",
     title: "MacBook Pro M4",
     price: 239990,
 
@@ -58,7 +58,7 @@ export const products: Product[] = [
   },
 
   {
-    id: 3,
+    id: "3",
     title: "AirPods Pro 2",
     price: 29990,
 
@@ -86,7 +86,7 @@ export const products: Product[] = [
   },
 
   {
-    id: 4,
+    id: "4",
     title: "PlayStation 5 Slim",
     price: 69990,
 
