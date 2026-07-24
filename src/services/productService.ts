@@ -1,23 +1,14 @@
 import {
   collection,
-  getDocs,
-  getDoc,
   addDoc,
-  updateDoc,
+  getDocs,
   deleteDoc,
+  updateDoc,
   doc,
+  getDoc,
 } from "firebase/firestore";
 
-import {
-  ref,
-  uploadBytes,
-  getDownloadURL,
-} from "firebase/storage";
-
-
-
-import { db, storage } from "../firebase/firebase";
-
+import { db } from "../firebase/firebase";
 import type { Product } from "../types/Product";
 
 const COLLECTION = "products";
@@ -59,15 +50,4 @@ export async function updateProduct(
 
 export async function deleteProduct(id: string) {
   await deleteDoc(doc(db, COLLECTION, id));
-}
-
-export async function uploadProductImage(file: File) {
-  const imageRef = ref(
-    storage,
-    `products/${Date.now()}-${file.name}`
-  );
-
-  await uploadBytes(imageRef, file);
-
-  return await getDownloadURL(imageRef);
 }

@@ -8,23 +8,23 @@ import {
 } from "react";
 
 import type { Product } from "../types/Product";
-import { products as defaultProducts } from "../data/Products";
+
+import {
+  getProducts,
+  addProduct,
+  updateProduct,
+  deleteProduct,
+} from "../services/productService";
 
 type ProductContextType = {
   products: Product[];
-
-  addProduct: (product: Omit<Product, "id">) => void;
-
-  updateProduct: (product: Product) => void;
-
-  deleteProduct: (id: string) => void;
-
-  getProduct: (id: string) => Product | undefined;
+  addProduct: (product: Omit<Product, "id">) => Promise<void>;
+  updateProduct: (product: Product) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
+  reloadProducts: () => Promise<void>;
 };
 
 const ProductContext = createContext<ProductContextType | null>(null);
-
-const STORAGE_KEY = "kusai_products";
 
 export function ProductProvider({
   children,
@@ -33,62 +33,39 @@ export function ProductProvider({
 }) {
   const [products, setProducts] = useState<Product[]>([]);
 
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
+  async function reloadProducts() {
+    const data = await getProducts();
+    setProducts(data);
+  }
 
-    if (stored) {
-      setProducts(JSON.parse(stored));
-    } else {
-      setProducts(defaultProducts);
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(defaultProducts)
-      );
-    }
+  useEffect(() => {
+    reloadProducts();
   }, []);
 
-  function saveProducts(list: Product[]) {
-    setProducts(list);
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(list)
-    );
+  async function handleAddProduct(
+    product: Omit<Product, "id">
+  ) {
+    await addProduct(product);
+    await reloadProducts();
   }
 
-  function addProduct(product: Omit<Product, "id">) {
-    const newProduct: Product = {
-      ...product,
-      id: crypto.randomUUID(),
-    };
-
-    saveProducts([...products, newProduct]);
+  async function handleUpdateProduct(product: Product) {
+    await updateProduct(product.id, product);
+    await reloadProducts();
   }
 
-  function updateProduct(updated: Product) {
-    saveProducts(
-      products.map((item) =>
-        item.id === updated.id ? updated : item
-      )
-    );
-  }
-
-  function deleteProduct(id: string) {
-    saveProducts(
-      products.filter((item) => item.id !== id)
-    );
-  }
-
-  function getProduct(id: string) {
-    return products.find((item) => item.id === id);
+  async function handleDeleteProduct(id: string) {
+    await deleteProduct(id);
+    await reloadProducts();
   }
 
   const value = useMemo(
     () => ({
       products,
-      addProduct,
-      updateProduct,
-      deleteProduct,
-      getProduct,
+      addProduct: handleAddProduct,
+      updateProduct: handleUpdateProduct,
+      deleteProduct: handleDeleteProduct,
+      reloadProducts,
     }),
     [products]
   );
