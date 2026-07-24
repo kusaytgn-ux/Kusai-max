@@ -12,7 +12,7 @@ function ProductPage() {
   const { id } = useParams();
 
   const product = products.find(
-    (item) => item.id === Number(id)
+    (item) => item.id === String(id)
   );
 
   if (!product) {
