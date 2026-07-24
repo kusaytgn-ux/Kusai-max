@@ -111,7 +111,15 @@ function ProductCard({ product }: Props) {
           </Button>
 
           <button
-            onClick={() => addToCart(product.id)}
+            onClick={() =>
+              addToCart({
+                id: product.id,
+                type: "catalog",
+                title: product.title,
+                price: product.price,
+                image: product.images[0],
+              })
+            }
             className="rounded-2xl bg-yellow-400 px-5 font-bold text-black transition hover:bg-yellow-300"
           >
             {quantity > 0 ? `В корзине (${quantity})` : "В корзину"}
