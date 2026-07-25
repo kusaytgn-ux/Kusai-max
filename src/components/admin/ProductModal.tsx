@@ -17,7 +17,7 @@ function ProductModal({
   
 
   if (!open) return null;
-
+/*
   async function handleSave(
     product: Omit<Product, "id">
   ){
@@ -26,6 +26,25 @@ function ProductModal({
 
     onClose();
   }
+*/
+async function handleSave(
+  product: Omit<Product, "id">
+) {
+  console.log("Получили товар:", product);
+
+  try {
+    await addProduct(product);
+
+    console.log("Документ отправлен в Firestore");
+
+    await onSaved();
+
+    onClose();
+  } catch (error) {
+    console.error("Ошибка сохранения:", error);
+    alert("Ошибка: " + String(error));
+  }
+}
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
