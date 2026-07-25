@@ -104,7 +104,10 @@ function AdminCatalog() {
               <div className="col-span-2">
 
                 <img
-                  src={product.images[0]}
+                  src={
+                    product.images?.[0] ??
+                    "https://placehold.co/600x600?text=No+Image"
+                  }
                   alt={product.title}
                   className="h-16 w-16 rounded-xl object-cover"
                 />
