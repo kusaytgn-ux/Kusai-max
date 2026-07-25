@@ -46,7 +46,7 @@ function ProductForm({ onSave }: Props) {
 
 console.log("NEW PRODUCT", newProduct);
 
-await onSave(newProduct);
+//await onSave(newProduct);
 
     await onSave({
       title,
