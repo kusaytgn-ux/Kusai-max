@@ -2,7 +2,9 @@ import { useState } from "react";
 import type { Product } from "../../types/Product";
 
 type Props = {
-  onSave: (product: Omit<Product, "id">) => void;
+  onSave: (
+    product: Omit<Product, "id">
+  ) => Promise<void>;
 };
 
 function ProductForm({ onSave }: Props) {
@@ -16,7 +18,7 @@ function ProductForm({ onSave }: Props) {
   const [color, setColor] = useState("");
   const [delivery, setDelivery] = useState("1–2 дня");
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
     if (!title.trim() || !price.trim()) {
@@ -24,7 +26,7 @@ function ProductForm({ onSave }: Props) {
       return;
     }
 
-    onSave({
+    await onSave({
       title,
       price: Number(price),
       images: [
