@@ -46,26 +46,9 @@ function ProductForm({ onSave }: Props) {
 
 console.log("NEW PRODUCT", newProduct);
 
-//await onSave(newProduct);
+await onSave(newProduct);
 
-    await onSave({
-      title,
-      price: Number(price),
-      images: [
-        image ||
-          "https://placehold.co/600x600?text=KUSAI+MAX",
-      ],
-      category,
-      badge: badge === "" ? "Хит" : badge,
-      rating: 5,
-      reviews: 0,
-      delivery,
-      inStock: true,
-      description,
-      memory,
-      color,
-      warranty: "12 месяцев",
-    });
+   
 
     setTitle("");
     setPrice("");
