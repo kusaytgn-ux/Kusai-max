@@ -34,25 +34,14 @@ export async function getProduct(id: string) {
     ...snapshot.data(),
   } as Product;
 }
-/*
+
 export async function addProduct(
   product: Omit<Product, "id">
 ) {
   await addDoc(collection(db, COLLECTION), product);
 }
-*/
-export async function addProduct(
-  product: Omit<Product, "id">
-) {
-  console.log("Отправляем товар:", product);
 
-  const docRef = await addDoc(
-    collection(db, COLLECTION),
-    product
-  );
 
-  console.log("Создан документ:", docRef.id);
-}
 
 
 

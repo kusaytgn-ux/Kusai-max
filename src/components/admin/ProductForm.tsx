@@ -44,7 +44,7 @@ function ProductForm({ onSave }: Props) {
       warranty: "12 месяцев",
     };
 
-//console.log("NEW PRODUCT", newProduct);
+console.log("NEW PRODUCT", newProduct);
 
 await onSave(newProduct);
 

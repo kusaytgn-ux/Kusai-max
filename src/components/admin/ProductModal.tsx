@@ -26,7 +26,18 @@ function ProductModal({
 
     onClose();
   }
+/*
+async function handleSave(product: Omit<Product, "id">) {
+  console.log("HANDLE SAVE");
 
+  await addProduct(product);
+
+  console.log("AFTER ADD");
+
+  onSaved();
+  onClose();
+}
+*/
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
