@@ -15,7 +15,7 @@ function ProductModal({
   onSaved,
 }: Props) {
   
-
+/*
   if (!open) return null;
 
   async function handleSave(
@@ -26,7 +26,7 @@ function ProductModal({
 
     onClose();
   }
-/*
+*/
 async function handleSave(product: Omit<Product, "id">) {
   console.log("HANDLE SAVE");
 
@@ -37,7 +37,7 @@ async function handleSave(product: Omit<Product, "id">) {
   onSaved();
   onClose();
 }
-*/
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
