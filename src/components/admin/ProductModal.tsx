@@ -10,7 +10,7 @@ type Props = {
 };
 
 function ProductModal({
-  open,
+//  open,
   onClose,
   onSaved,
 }: Props) {
