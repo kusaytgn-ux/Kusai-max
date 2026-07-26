@@ -6,13 +6,14 @@ import BottomNavigation from "../components/navigation/BottomNavigation";
 import Button from "../components/ui/Button";
 import ProductGallery from "../components/product/ProductGallery";
 
-import { products } from "../data/Products";
+import { useProducts } from "../store/ProductContext";
 
 function ProductPage() {
   const { id } = useParams();
+  const { products } = useProducts();
 
   const product = products.find(
-    (item) => item.id === String(id)
+    (item) => item.id === id
   );
 
   if (!product) {
