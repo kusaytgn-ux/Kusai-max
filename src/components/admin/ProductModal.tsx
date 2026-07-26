@@ -19,6 +19,8 @@ function ProductModal({
   onClose,
   onSaved,
 }: Props) {
+
+  console.log("Редактируем товар:", product);
   
 
   if (!open) return null;
@@ -45,7 +47,7 @@ function ProductModal({
         <div className="mb-6 flex items-center justify-between">
 
           <h2 className="text-3xl font-bold text-white">
-            Новый товар
+            {product ? "Редактировать товар" : "Новый товар"}
           </h2>
 
           <button
