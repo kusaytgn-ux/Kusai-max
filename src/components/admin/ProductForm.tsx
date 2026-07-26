@@ -17,6 +17,7 @@ function ProductForm({ onSave }: Props) {
   const [memory, setMemory] = useState("");
   const [color, setColor] = useState("");
   const [delivery, setDelivery] = useState("1–2 дня");
+  
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

@@ -16,6 +16,8 @@ function AdminCatalog() {
   const [products, setProducts] = useState<Product[]>([]);
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] =
+    useState<Product |null>(null);
 
   useEffect(() =>{
     loadProducts();
@@ -30,7 +32,11 @@ function AdminCatalog() {
     <>
       <ProductModal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        product={editingProduct}
+        onClose={() => {
+          setModalOpen(false);
+          setEditingProduct(null);
+        }}
         onSaved={loadProducts}
       />
 
@@ -53,7 +59,10 @@ function AdminCatalog() {
           </div>
 
           <button
-            onClick={() => setModalOpen(true)}
+            onClick={() => { 
+              setEditingProduct(null);
+              setModalOpen(true);
+            }}
             className="flex items-center gap-2 rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-black transition hover:scale-105"
           >
             <Plus size={20} />
@@ -147,7 +156,10 @@ function AdminCatalog() {
               <div className="col-span-2 flex justify-end gap-3">
 
                 <button
-                  onClick={() => setModalOpen(true)}
+                  onClick={() => {
+                    setEditingProduct(product);
+                    setModalOpen(true);
+                  }}
                   className="rounded-xl bg-zinc-700 p-3 transition hover:bg-yellow-400 hover:text-black"
                 >
                   <Pencil size={18} />

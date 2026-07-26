@@ -1,16 +1,21 @@
 import { X } from "lucide-react";
 import ProductForm from "./ProductForm";
-import { addProduct } from "../../services/productService";
+import { 
+  addProduct,
+  updateProduct,
+ } from "../../services/productService";
 import type { Product } from "../../types/Product";
 
 type Props = {
   open: boolean;
+  product?: Product | null;
   onClose: () => void;
   onSaved: () => void;
 };
 
 function ProductModal({
   open,
+  product,
   onClose,
   onSaved,
 }: Props) {
@@ -18,14 +23,16 @@ function ProductModal({
 
   if (!open) return null;
 
-  async function handleSave(
-    product: Omit<Product, "id">
-  ){
-    await addProduct(product);
-    onSaved();
-
-    onClose();
+ async function handleSave(data: Omit<Product, "id">) {
+  if (product) {
+    await updateProduct(product.id, data);
+  } else {
+    await addProduct(data);
   }
+
+  onSaved();
+  onClose();
+}
 
 
 
