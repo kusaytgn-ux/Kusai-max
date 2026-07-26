@@ -4,7 +4,7 @@ import { useCart } from "..//..//store/CartContext";
 import { useNavigate } from "react-router-dom";
 import type { Product } from "../../types/Product";
 import Badge from "../ui/Badge";
-import Button from "../ui/Button";
+
 
 type Props = {
   product: Product;
