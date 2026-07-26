@@ -1,4 +1,3 @@
-
 import {
   createContext,
   useContext,
@@ -6,6 +5,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
+
+import { useEffect } from "react";
 
 export type CartItem={
   id: string;
@@ -27,6 +28,7 @@ type CartContextType = {
   totalItems: number;
   totalPrice: number;
 };
+const STORAGE_KEY ="kusai-cart";
 
 const CartContext = createContext<CartContextType | null>(null);
 
@@ -35,7 +37,24 @@ export function CartProvider({
 }: {
   children: ReactNode;
 }) {
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(() =>{
+    const saved = localStorage.getItem(STORAGE_KEY);
+
+    if (!saved) return [];
+
+    try{
+      return JSON.parse(saved);
+    } catch{
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(cart)
+    );
+  }, [cart]);
 
   function addToCart(item: Omit<CartItem, "quantity"> ){
     setCart((prev) => {
