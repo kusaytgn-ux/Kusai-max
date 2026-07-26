@@ -6,6 +6,7 @@ import {
   updateDoc,
   doc,
   getDoc,
+  onSnapshot,
 } from "firebase/firestore";
 
 import { db } from "../firebase/firebase";
@@ -20,6 +21,22 @@ export async function getProducts() {
     id: item.id,
     ...item.data(),
   })) as Product[];
+}
+
+export function subscribeProducts(
+  callback: (products: Product[]) => void
+) {
+  return onSnapshot(
+    collection(db, COLLECTION),
+    (snapshot) => {
+      const products = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Product[];
+
+      callback(products);
+    }
+  );
 }
 
 export async function getProduct(id: string) {

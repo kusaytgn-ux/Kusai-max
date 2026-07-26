@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import type { Product } from "../types/Product";
+import { subscribeProducts } from "../services/productService"
 
 import {
   getProducts,
@@ -38,25 +39,27 @@ export function ProductProvider({
     setProducts(data);
   }
 
-  useEffect(() => {
-    reloadProducts();
-  }, []);
+ useEffect(() => {
+  const unsubscribe = subscribeProducts(setProducts);
+
+  return () => unsubscribe();
+}, []);
 
   async function handleAddProduct(
     product: Omit<Product, "id">
   ) {
     await addProduct(product);
-    await reloadProducts();
+    
   }
 
   async function handleUpdateProduct(product: Product) {
     await updateProduct(product.id, product);
-    await reloadProducts();
+    
   }
 
   async function handleDeleteProduct(id: string) {
     await deleteProduct(id);
-    await reloadProducts();
+    
   }
 
   const value = useMemo(
