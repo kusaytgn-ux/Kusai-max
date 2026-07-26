@@ -10,6 +10,7 @@ import type { Product } from "../../types/Product";
 import {
   getProducts,
   deleteProduct,
+  updateProduct,
 } from "../../services/productService";
 
 function AdminCatalog() {
@@ -141,15 +142,23 @@ function AdminCatalog() {
 
               <div className="col-span-1">
 
-                {product.inStock ? (
-                  <span className="text-green-400">
-                    ●
-                  </span>
-                ) : (
-                  <span className="text-red-400">
-                    ●
-                  </span>
-                )}
+                <button
+                  onClick={async () => {
+                    await updateProduct(product.id, {
+                      inStock: !product.inStock,
+                    });
+
+                    loadProducts();
+                  }}
+                  className={`rounded-xl px-3 py-2 text-sm font-bold transition
+                    ${
+                      product.inStock
+                        ? "bg-green-500 text-white hover:bg-green-400"
+                        : "bg-red-500 text-white hover:bg-red-400"
+                    }`}
+                >
+                  {product.inStock ? "В наличии" : "Нет"}
+                </button>
 
               </div>
 

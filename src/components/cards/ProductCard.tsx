@@ -88,6 +88,18 @@ function ProductCard({ product }: Props) {
           {product.price.toLocaleString("ru-RU")} ₽
         </p>
 
+        <div className="mt-2">
+          {product.inStock ? (
+            <span className="rounded-full bg-green-500/20 px-3 py-1 text-xs font-semibold text-green-400">
+              ● В наличии
+            </span>
+          ) : (
+            <span className="rounded-full bg-red-500/20 px-3 py-1 text-xs font-semibold text-red-400">
+              ● Нет в наличии
+            </span>
+          )}
+        </div>
+
         <div className="mt-3 flex items-center justify-between">
 
           <span
@@ -113,20 +125,27 @@ function ProductCard({ product }: Props) {
       
 
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-
+            disabled={!product.inStock}
+            onClick={() =>
               addToCart({
                 id: product.id,
                 type: "catalog",
                 title: product.title,
                 price: product.price,
                 image: product.images[0],
-              });
-            }}
-            className="w-full rounded-2xl bg-yellow-400 py- font-bold text-black transition hover:bg-yellow-300"
+              })
+            }
+            className={`rounded-2xl px-5 font-bold transition ${
+              product.inStock
+                ? "bg-yellow-400 text-black hover:bg-yellow-300"
+                : "cursor-not-allowed bg-zinc-700 text-zinc-400"
+            }`}
           >
-            {quantity > 0 ? `В корзине (${quantity})` : "В корзину"}
+            {product.inStock
+              ? quantity > 0
+                ? `В корзине (${quantity})`
+                : "В корзину"
+              : "Нет в наличии"}
           </button>
 
         </div>

@@ -133,8 +133,15 @@ function ProductPage() {
 
         <div className="mt-8 space-y-3">
 
-          <Button>
-            Купить
+          <Button
+            disabled={!product.inStock}
+            className={
+              !product.inStock
+                ? "cursor-not-allowed bg-zinc-700 text-zinc-400"
+                : ""
+            }
+          >
+            {product.inStock ? "Купить" : "Нет в наличии"}
           </Button>
 
           <Button 

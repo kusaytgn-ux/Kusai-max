@@ -20,7 +20,7 @@ function ProductModal({
   onSaved,
 }: Props) {
 
-  console.log("Редактируем товар:", product);
+
   
 
   if (!open) return null;
