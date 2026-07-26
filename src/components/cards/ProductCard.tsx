@@ -17,8 +17,12 @@ function ProductCard({ product }: Props) {
   const quantity = getQuantity(product.id);
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900 shadow-xl transition-all duration-300 hover:-translate-y-1 hover:border-yellow-400">
+    
 
+<div
+  onClick={() => navigate(`/product/${product.id}`)}
+  className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900 shadow-xl transition-all duration-300 hover:-translate-y-1 hover:border-yellow-400 cursor-pointer"
+>
       {/* Фото */}
       <div className="relative">
         <img
@@ -34,9 +38,13 @@ function ProductCard({ product }: Props) {
         )}
 
         <button
-          onClick={() => toggleFavorite(product.id)}
+          onClick={(e) =>{
+            e.stopPropagation();
+            toggleFavorite(product.id);
+          }}
           className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 backdrop-blur transition"
-      >
+        >
+
         <Heart
           size={20}
           className={
@@ -102,25 +110,21 @@ function ProductCard({ product }: Props) {
 
         <div className="mt-6 flex gap-3">
 
-          <Button
-            onClick={() =>
-              navigate(`/product/${product.id}`)
-            }
-          >
-            Подробнее
-          </Button>
+      
 
           <button
-            onClick={() =>
+            onClick={(e) => {
+              e.stopPropagation();
+
               addToCart({
                 id: product.id,
                 type: "catalog",
                 title: product.title,
                 price: product.price,
                 image: product.images[0],
-              })
-            }
-            className="rounded-2xl bg-yellow-400 px-5 font-bold text-black transition hover:bg-yellow-300"
+              });
+            }}
+            className="w-full rounded-2xl bg-yellow-400 py- font-bold text-black transition hover:bg-yellow-300"
           >
             {quantity > 0 ? `В корзине (${quantity})` : "В корзину"}
           </button>
