@@ -35,20 +35,13 @@ export async function getProduct(id: string) {
   } as Product;
 }
 
-/*
+
 export async function addProduct(
   product: Omit<Product, "id">
 ) {
   await addDoc(collection(db, COLLECTION), product);
 }
-*/
-export async function addProduct(product: Omit<Product, "id">) {
-  console.log("ADD PRODUCT");
 
-  const docRef = await addDoc(collection(db, COLLECTION), product);
-
-  console.log("ID:", docRef.id);
-}
 
 
 

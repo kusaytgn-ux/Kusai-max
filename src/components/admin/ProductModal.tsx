@@ -10,12 +10,12 @@ type Props = {
 };
 
 function ProductModal({
-//  open,
+  open,
   onClose,
   onSaved,
 }: Props) {
   
-/*
+
   if (!open) return null;
 
   async function handleSave(
@@ -26,17 +26,8 @@ function ProductModal({
 
     onClose();
   }
-*/
-async function handleSave(product: Omit<Product, "id">) {
-  console.log("HANDLE SAVE");
 
-  await addProduct(product);
 
-  console.log("AFTER ADD");
-
-  onSaved();
-  onClose();
-}
 
 
   return (
