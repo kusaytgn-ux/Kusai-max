@@ -1,23 +1,41 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Product } from "../../types/Product";
 
 type Props = {
+  product?: Product | null;
   onSave: (
     product: Omit<Product, "id">
   ) => Promise<void>;
 };
 
-function ProductForm({ onSave }: Props) {
-  const [title, setTitle] = useState("");
-  const [price, setPrice] = useState("");
-  const [image, setImage] = useState("");
-  const [category, setCategory] = useState("Смартфоны");
-  const [badge, setBadge] = useState<"" | "Хит" | "Новинка" | "Акция">("");
-  const [description, setDescription] = useState("");
-  const [memory, setMemory] = useState("");
-  const [color, setColor] = useState("");
-  const [delivery, setDelivery] = useState("1–2 дня");
+function ProductForm({ product, onSave }: Props) {
+  const [title, setTitle] = useState(product?.title ?? "");
+  const [price, setPrice] = useState(product?.price.toString() ??"");
+  const [image, setImage] = useState(product?.images?.[0] ??"");
+  const [category, setCategory] = useState(product?.category ??"Смартфоны");
+  const [badge, setBadge] = useState<"" | "Хит" | "Новинка" | "Акция">(
+    product?.badge ??""
+  );
+  const [description, setDescription] = useState(product?.description ??"");
+  const [memory, setMemory] = useState(product?.memory ??"");
+  const [color, setColor] = useState(product?.color ??"");
+  const [delivery, setDelivery] = useState(product?.delivery ??"1–2 дня");
   
+ 
+
+  useEffect(() => {
+  if (!product) return;
+
+  setTitle(product.title);
+  setPrice(product.price.toString());
+  setImage(product.images?.[0] ?? "");
+  setCategory(product.category);
+  setBadge(product.badge ?? "");
+  setDescription(product.description);
+  setMemory(product.memory);
+  setColor(product.color);
+  setDelivery(product.delivery);
+}, [product]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

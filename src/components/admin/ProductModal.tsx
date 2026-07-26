@@ -58,6 +58,7 @@ function ProductModal({
         </div>
 
         <ProductForm
+          product={product}
           onSave={handleSave}
         />
 
