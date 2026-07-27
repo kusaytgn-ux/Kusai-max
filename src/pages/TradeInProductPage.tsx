@@ -70,9 +70,15 @@ function TradeInProductPage() {
   }
 
   function handleConsultation() {
-    navigate("/concierge",{
+    navigate("/concierge", {
       state: {
-        message: `Здравствуйте! Меня интересует ${product?.title} по программе Trade-In.`,
+        message: `Здравствуйте!
+
+  Меня заинтересовало устройство Trade-In:
+
+  📱 ${product?.title}
+
+  Хотел бы получить консультацию по нему.`,
       },
     });
   }
