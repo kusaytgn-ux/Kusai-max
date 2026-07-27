@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { Send } from "lucide-react";
 
 import Header from "../components/layout/Header";
@@ -10,12 +11,20 @@ import { useAuth } from "../auth/AuthContext";
 function ConciergePage() {
   const { user } = useAuth();
 
+  const location = useLocation();
+
   const {
     messages,
     sendUserMessage,
   } = useConcierge();
 
   const [text, setText] = useState("");
+
+  useEffect(() => {
+    if (location.state?.message) {
+      setText(location.state.message);
+    }
+  }, [location.state]);
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
