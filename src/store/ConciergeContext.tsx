@@ -10,12 +10,11 @@ import {
   collection,
   addDoc,
   onSnapshot,
-  query,
-  orderBy,
   serverTimestamp,
 } from "firebase/firestore";
 
 import { db } from "../firebase/firebase";
+
 
 export type ChatMessage = {
   id: string;
@@ -25,73 +24,123 @@ export type ChatMessage = {
   createdAt?: any;
 };
 
+
 type ConciergeContextType = {
   messages: ChatMessage[];
+
   sendUserMessage: (
     userLogin: string,
     text: string
   ) => Promise<void>;
+
   sendAdminMessage: (
-  userLogin: string,
-  text: string
-) => Promise<void>;
+    userLogin: string,
+    text: string
+  ) => Promise<void>;
 };
+
 
 const ConciergeContext =
   createContext<ConciergeContextType | null>(null);
+
+
 
 export function ConciergeProvider({
   children,
 }: {
   children: ReactNode;
 }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+
+
+  const [messages, setMessages] =
+    useState<ChatMessage[]>([]);
+
+
 
   useEffect(() => {
-    const q = query(
+
+
+    const unsubscribe = onSnapshot(
       collection(db, "messages"),
-      orderBy("createdAt")
+      (snapshot) => {
+
+
+        const list: ChatMessage[] =
+          snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...(doc.data() as Omit<ChatMessage, "id">),
+          }));
+
+
+        // сортировка на клиенте
+        list.sort((a, b) => {
+
+          const timeA =
+            a.createdAt?.seconds ?? 0;
+
+          const timeB =
+            b.createdAt?.seconds ?? 0;
+
+
+          return timeA - timeB;
+
+        });
+
+
+        setMessages(list);
+
+      }
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const list: ChatMessage[] = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...(doc.data() as Omit<ChatMessage, "id">),
-      }));
-
-      setMessages(list);
-    });
 
     return unsubscribe;
+
+
   }, []);
 
-  
 
-async function sendUserMessage(
-  userLogin: string,
-  text: string
-) {
-  await addDoc(collection(db, "messages"), {
-    userLogin,
-    author: "user",
-    text,
-    createdAt: serverTimestamp(),
-  });
-}
 
-async function sendAdminMessage(
-  userLogin: string,
-  text: string
-) {
-  await addDoc(collection(db, "messages"), {
-    userLogin,
-    author: "admin",
-    text,
-    createdAt: serverTimestamp(),
-  });
-}
+  async function sendUserMessage(
+    userLogin: string,
+    text: string
+  ) {
+
+    await addDoc(
+      collection(db, "messages"),
+      {
+        userLogin,
+        author: "user",
+        text,
+        createdAt: serverTimestamp(),
+      }
+    );
+
+  }
+
+
+
+
+  async function sendAdminMessage(
+    userLogin: string,
+    text: string
+  ) {
+
+    await addDoc(
+      collection(db, "messages"),
+      {
+        userLogin,
+        author: "admin",
+        text,
+        createdAt: serverTimestamp(),
+      }
+    );
+
+  }
+
+
 
   return (
+
     <ConciergeContext.Provider
       value={{
         messages,
@@ -99,19 +148,34 @@ async function sendAdminMessage(
         sendAdminMessage,
       }}
     >
+
       {children}
+
     </ConciergeContext.Provider>
+
   );
+
 }
 
+
+
+
 export function useConcierge() {
-  const context = useContext(ConciergeContext);
+
+
+  const context =
+    useContext(ConciergeContext);
+
 
   if (!context) {
+
     throw new Error(
       "useConcierge должен использоваться внутри ConciergeProvider"
     );
+
   }
-  
+
+
   return context;
+
 }

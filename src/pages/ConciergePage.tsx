@@ -37,7 +37,7 @@ function ConciergePage() {
   }
 
   const chat = messages.filter(
-    (message) => message.userLogin === user.login
+  (message) => message.userLogin === user.phone
   );
 
   useEffect(() =>{
@@ -49,7 +49,7 @@ function ConciergePage() {
   async function handleSend() {
     if (!text.trim()) return;
 
-    await sendUserMessage(user!.login ?? user!.name, text);
+    await sendUserMessage(user.phone, text);
 
     setText("");
   }
