@@ -4,10 +4,9 @@ import AppRouter from "./router/AppRouter";
 
 declare global {
   interface Window {
-    Telegram: {
+    Telegram?: {
       WebApp: {
         ready: () => void;
-        disableVerticalSwipes: () => void;
         expand: () => void;
         close: () => void;
       };
@@ -16,28 +15,28 @@ declare global {
 }
 
 
+
 function App() {
+
 
   useEffect(() => {
 
     const tg = window.Telegram?.WebApp;
 
+
     if (!tg) return;
 
 
-    // Сообщаем Telegram, что приложение готово
+    // Telegram Mini App готово
     tg.ready();
 
 
-    // Разворачиваем Mini App
+    // Разворачиваем на весь экран
     tg.expand();
 
 
-    // Запрещаем закрытие свайпом вверх/вниз
-    tg.disableVerticalSwipes();
-
-
   }, []);
+
 
 
   return <AppRouter />;
