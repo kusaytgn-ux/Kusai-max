@@ -49,7 +49,7 @@ function ConciergePage() {
   async function handleSend() {
     if (!text.trim()) return;
 
-    await sendUserMessage(user!.login, text);
+    await sendUserMessage(user!.login ?? user!.name, text);
 
     setText("");
   }

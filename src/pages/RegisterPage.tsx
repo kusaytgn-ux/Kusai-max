@@ -15,10 +15,10 @@ function RegisterPage() {
 
   const [error, setError] = useState("");
 
-  function handleRegister() {
+  async function handleRegister() {
     setError("");
 
-    const result = register(login, password);
+    const result = await register(login, password);
 
     if (!result.success) {
       setError(result.message);
