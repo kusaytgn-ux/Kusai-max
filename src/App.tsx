@@ -9,34 +9,38 @@ declare global {
         ready: () => void;
         expand: () => void;
         close: () => void;
+        disableVerticalSwipes?: () => void;
       };
     };
   }
 }
 
 
-
 function App() {
-
 
   useEffect(() => {
 
     const tg = window.Telegram?.WebApp;
 
-
     if (!tg) return;
 
 
-    // Telegram Mini App готово
+    // Сообщаем Telegram что приложение готово
     tg.ready();
 
 
-    // Разворачиваем на весь экран
+    // Разворачиваем приложение
     tg.expand();
 
 
-  }, []);
+    // Запрещаем закрытие свайпом,
+    // но оставляем внутренний scroll
+    if (tg.disableVerticalSwipes) {
+      tg.disableVerticalSwipes();
+    }
 
+
+  }, []);
 
 
   return <AppRouter />;
