@@ -12,11 +12,11 @@ type User = {
   id: string;
 
   name: string;
-  login?: string;
 
   phone: string;
 
   points: number;
+
   bonuses?: number;
 
   status?: string;
@@ -34,31 +34,23 @@ type Result = {
 
 
 type AuthContextType = {
+
   user: User | null;
 
   isAuthenticated: boolean;
 
   login: (
-    phone: string,
-    password: string
+    name: string,
+    phone: string
   ) => Promise<Result>;
 
   logout: () => void;
 
-  register: (
-    login: string,
-    password: string
-  ) => Promise<Result>;
-
-  updateProfile: (
-    login: string,
-    password: string
-  ) => Promise<Result>;
 };
 
 
 const AuthContext =
-  createContext<AuthContextType | null>(null);
+createContext<AuthContextType | null>(null);
 
 
 
@@ -69,306 +61,161 @@ export function AuthProvider({
 }) {
 
 
-  const [user, setUser] =
-    useState<User | null>(null);
+const [user,setUser] =
+useState<User | null>(null);
 
 
 
-  useEffect(() => {
-
-  const version =
-  localStorage.getItem("authVersion");
-
-
-  if(version !== "2") {
-
-    localStorage.removeItem("currentUser");
-    localStorage.setItem(
-      "authVersion",
-      "2"
-    );
-
-    return;
-
-  }
+useEffect(()=>{
 
 
 const saved =
-localStorage.getItem("currentUser");
+localStorage.getItem(
+"currentUser"
+);
 
 
 if(saved){
 
- setUser(JSON.parse(saved));
+setUser(
+JSON.parse(saved)
+);
 
 }
 
-  }, []);
 
+},[]);
 
 
 
 
-  async function login(
-    phone: string,
-    password: string
-  ): Promise<Result> {
 
+async function login(
+name:string,
+phone:string
+):Promise<Result>{
 
-    try {
 
+try{
 
-      const response = await fetch(
-        "http://localhost:3001/api/auth",
-        {
-          method:"POST",
-          headers:{
-            "Content-Type":"application/json"
-          },
-          body: JSON.stringify({
-            name,
-            phone
-          })
-        }
-      );
 
+const response =
+await fetch(
+"http://localhost:3001/api/auth",
+{
 
+method:"POST",
 
-      const data =
-        await response.json();
+headers:{
+"Content-Type":"application/json"
+},
 
+body:JSON.stringify({
 
+name,
 
-      if (!data.success) {
+phone
 
-        return {
-          success: false,
-          message: data.message,
-        };
+})
 
-      }
+}
+);
 
 
 
-      const client: User = {
+const data =
+await response.json();
 
-        id: data.client.id,
 
-        name:
-          data.client.name,
 
-        login:
-          data.client.login ??
-          data.client.name,
+if(!data.success){
 
-        phone:
-          data.client.phone,
+return {
 
-        points:
-          data.client.points ?? 0,
+success:false,
 
-        bonuses:
-          data.client.points ?? 0,
+message:data.message
 
-        status:
-          data.client.status ??
-          "MAX START",
+};
 
-        orders:
-          data.client.orders ?? 0,
+}
 
-        role:
-          "user",
 
-      };
 
+const client:User = {
 
 
-      localStorage.setItem(
-        "authVersion",
-        "2"
-      );
+id:data.client.id,
 
-      localStorage.setItem(
-        "currentUser",
-        JSON.stringify(client)
-      );
 
+name:data.client.name,
 
-      setUser(client);
 
+phone:data.client.phone,
 
 
-      return {
-        success: true,
-        message: "Успешный вход",
-      };
+points:data.client.points ?? 0,
 
 
-    } catch {
+bonuses:data.client.points ?? 0,
 
 
-      return {
-        success: false,
-        message:
-          "Ошибка соединения с сервером",
-      };
+status:"MAX START",
 
-    }
 
-  }
+orders:0,
 
 
+role:"user"
 
 
+};
 
-  async function register(
-    login: string,
-    password: string
-  ): Promise<Result> {
 
 
-    console.log(
-      "register:",
-      login,
-      password
-    );
+localStorage.setItem(
 
+"currentUser",
 
-    return {
+JSON.stringify(client)
 
-      success: true,
+);
 
-      message:
-        "Регистрация выполнена",
 
-    };
 
-  }
+setUser(client);
 
 
 
+return {
 
+success:true,
 
-  async function updateProfile(
-    login: string,
-    password: string
-  ): Promise<Result> {
+message:"Успешный вход"
 
+};
 
-    if (!user) {
 
-      return {
 
-        success: false,
+}
+catch(error){
 
-        message:
-          "Пользователь не найден",
 
-      };
+console.error(error);
 
-    }
 
 
+return {
 
-    const updatedUser: User = {
+success:false,
 
-      ...user,
+message:"Ошибка соединения с сервером"
 
-      login,
+};
 
-    };
 
+}
 
-
-    localStorage.setItem(
-      "currentUser",
-      JSON.stringify(updatedUser)
-    );
-
-
-    setUser(updatedUser);
-
-
-
-    console.log(
-      "new password:",
-      password
-    );
-
-
-
-    return {
-
-      success: true,
-
-      message:
-        "Профиль обновлён",
-
-    };
-
-  }
-
-
-
-
-
-  function logout() {
-
-
-    localStorage.removeItem(
-      "currentUser"
-    );
-
-
-    setUser(null);
-
-  }
-
-
-
-
-
-  const value =
-    useMemo(
-      () => ({
-
-        user,
-
-        isAuthenticated:
-          !!user,
-
-        login,
-
-        logout,
-
-        register,
-
-        updateProfile,
-
-      }),
-
-      [
-        user,
-      ]
-
-    );
-
-
-
-
-
-  return (
-
-    <AuthContext.Provider
-      value={value}
-    >
-
-      {children}
-
-    </AuthContext.Provider>
-
-  );
 
 }
 
@@ -376,23 +223,82 @@ if(saved){
 
 
 
-export function useAuth() {
+function logout(){
 
 
-  const context =
-    useContext(AuthContext);
+localStorage.removeItem(
+"currentUser"
+);
+
+
+setUser(null);
+
+
+}
 
 
 
-  if (!context) {
-
-    throw new Error(
-      "useAuth должен использоваться внутри AuthProvider"
-    );
-
-  }
 
 
-  return context;
+const value =
+useMemo(()=>({
+
+
+user,
+
+
+isAuthenticated:
+!!user,
+
+
+login,
+
+
+logout
+
+
+}),[user]);
+
+
+
+
+
+return (
+
+<AuthContext.Provider
+value={value}
+>
+
+{children}
+
+</AuthContext.Provider>
+
+);
+
+
+}
+
+
+
+
+export function useAuth(){
+
+
+const context =
+useContext(AuthContext);
+
+
+
+if(!context){
+
+throw new Error(
+"useAuth должен использоваться внутри AuthProvider"
+);
+
+}
+
+
+return context;
+
 
 }

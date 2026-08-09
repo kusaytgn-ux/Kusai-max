@@ -12,7 +12,6 @@ import ConciergePage from "../pages/ConciergePage";
 import SelectPage from "../pages/SelectPage";
 import EditProfilePage from "../pages/EditProfilePage";
 import LoginPage from "../pages/LoginPage";
-import RegisterPage from "../pages/RegisterPage";
 import ProfilePage from "../pages/ProfilePage";
 import AdminPage from "../pages/AdminPage";
 
@@ -58,7 +57,6 @@ function AppRouter() {
       <Route path="/select" element={<SelectPage />} />
 
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
       <Route path="/cart" element={<CartPage />} />
 
       <Route
