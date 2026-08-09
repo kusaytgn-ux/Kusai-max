@@ -76,17 +76,32 @@ export function AuthProvider({
 
   useEffect(() => {
 
-    const saved =
-      localStorage.getItem("currentUser");
+  const version =
+  localStorage.getItem("authVersion");
 
 
-    if (saved) {
+  if(version !== "2") {
 
-      setUser(
-        JSON.parse(saved)
-      );
+    localStorage.removeItem("currentUser");
+    localStorage.setItem(
+      "authVersion",
+      "2"
+    );
 
-    }
+    return;
+
+  }
+
+
+const saved =
+localStorage.getItem("currentUser");
+
+
+if(saved){
+
+ setUser(JSON.parse(saved));
+
+}
 
   }, []);
 
@@ -171,6 +186,11 @@ export function AuthProvider({
       };
 
 
+
+      localStorage.setItem(
+        "authVersion",
+        "2"
+      );
 
       localStorage.setItem(
         "currentUser",

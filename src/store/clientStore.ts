@@ -25,7 +25,12 @@ create<ClientStore>((set)=>({
   setClient:(client)=>{
 
     localStorage.setItem(
-      "client",
+      "authVersion",
+      "2"
+    );
+
+    localStorage.setItem(
+      "currentUser",
       JSON.stringify(client)
     );
 
