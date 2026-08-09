@@ -48,6 +48,12 @@ type AuthContextType = {
   ) => Promise<Result>;
 
 
+  adminLogin: (
+    login: string,
+    password: string
+  ) => Promise<Result>;
+
+
   logout: () => void;
 
 
@@ -65,9 +71,8 @@ type AuthContextType = {
 };
 
 
-
 const AuthContext =
-createContext<AuthContextType | null>(null);
+  createContext<AuthContextType | null>(null);
 
 
 
@@ -85,12 +90,11 @@ export function AuthProvider({
 
   useEffect(() => {
 
-
     const saved =
       localStorage.getItem("currentUser");
 
 
-    if(saved){
+    if (saved) {
 
       setUser(
         JSON.parse(saved)
@@ -98,32 +102,35 @@ export function AuthProvider({
 
     }
 
-
   }, []);
 
 
 
 
+  // =========================
+  // Вход клиента
+  // =========================
+
   async function login(
-    name:string,
-    phone:string
-  ):Promise<Result>{
+    name: string,
+    phone: string
+  ): Promise<Result> {
 
 
-    try{
-
+    try {
+// тут нужна постоянная ссылкв 
 
       const response =
         await fetch(
-          "http://localhost:3001/api/auth",
+          "https://ngrokhq.link/video",
           {
-            method:"POST",
+            method: "POST",
 
-            headers:{
-              "Content-Type":"application/json",
+            headers: {
+              "Content-Type": "application/json",
             },
 
-            body:JSON.stringify({
+            body: JSON.stringify({
               name,
               phone,
             }),
@@ -137,24 +144,28 @@ export function AuthProvider({
 
 
 
-      if(!data.success){
+      if (!data.success) {
 
         return {
-          success:false,
-          message:data.message,
+          success: false,
+          message:
+            data.message ??
+            "Пользователь не найден",
         };
 
       }
 
 
 
-      const client:User = {
+      const client: User = {
 
 
-        id:data.client.id,
+        id:
+          data.client.id,
 
 
-        name:data.client.name,
+        name:
+          data.client.name,
 
 
         login:
@@ -183,7 +194,8 @@ export function AuthProvider({
           data.client.orders ?? 0,
 
 
-        role:"user",
+        role:
+          "user",
 
       };
 
@@ -202,57 +214,133 @@ export function AuthProvider({
 
       return {
 
-        success:true,
+        success: true,
 
-        message:"Успешный вход",
+        message:
+          "Успешный вход",
 
       };
 
 
 
-    }catch{
+    } catch {
 
 
       return {
 
-        success:false,
+        success: false,
 
         message:
           "Ошибка соединения с сервером",
 
       };
 
-    }
 
+    }
 
   }
 
 
 
 
-  async function register(
-    name:string,
-    phone:string,
-    password:string
-  ):Promise<Result>{
+
+  // =========================
+  // Вход администратора
+  // =========================
+
+  async function adminLogin(
+    login: string,
+    password: string
+  ): Promise<Result> {
+
+
+    const adminLogin =
+      import.meta.env.VITE_ADMIN_LOGIN;
+
+
+    const adminPassword =
+      import.meta.env.VITE_ADMIN_PASSWORD;
 
 
 
-    console.log(
-      "register",
-      name,
-      phone,
-      password
+    if (
+      login !== adminLogin ||
+      password !== adminPassword
+    ) {
+
+
+      return {
+
+        success: false,
+
+        message:
+          "Неверный логин или пароль",
+
+      };
+
+
+    }
+
+
+
+    const adminUser: User = {
+
+
+      id:
+        "admin",
+
+
+      name:
+        "Administrator",
+
+
+      login,
+
+
+      phone:
+        "",
+
+
+      points:
+        0,
+
+
+      bonuses:
+        0,
+
+
+      status:
+        "ADMIN",
+
+
+      orders:
+        0,
+
+
+      role:
+        "admin",
+
+    };
+
+
+
+
+    localStorage.setItem(
+      "currentUser",
+      JSON.stringify(adminUser)
     );
+
+
+    setUser(adminUser);
 
 
 
     return {
 
-      success:true,
+      success: true,
 
       message:
-        "Регистрация выполнена",
+        "Вход администратора выполнен",
 
     };
 
@@ -263,17 +351,58 @@ export function AuthProvider({
 
 
 
+
+
+  // =========================
+  // Регистрация
+  // =========================
+
+  async function register(
+    name: string,
+    phone: string,
+    password: string
+  ): Promise<Result> {
+
+
+    console.log(
+      "register",
+      name,
+      phone,
+      password
+    );
+
+
+    return {
+
+      success: true,
+
+      message:
+        "Регистрация выполнена",
+
+    };
+
+  }
+
+
+
+
+
+
+  // =========================
+  // Обновление профиля
+  // =========================
+
   async function updateProfile(
-    data:Partial<User>
-  ):Promise<Result>{
+    data: Partial<User>
+  ): Promise<Result> {
 
 
+    if (!user) {
 
-    if(!user){
 
       return {
 
-        success:false,
+        success: false,
 
         message:
           "Пользователь не найден",
@@ -284,7 +413,7 @@ export function AuthProvider({
 
 
 
-    const updatedUser = {
+    const updatedUser: User = {
 
       ...user,
 
@@ -306,13 +435,12 @@ export function AuthProvider({
 
     return {
 
-      success:true,
+      success: true,
 
       message:
         "Профиль обновлен",
 
     };
-
 
   }
 
@@ -320,7 +448,7 @@ export function AuthProvider({
 
 
 
-  function logout(){
+  function logout() {
 
 
     localStorage.removeItem(
@@ -330,8 +458,9 @@ export function AuthProvider({
 
     setUser(null);
 
-
   }
+
+
 
 
 
@@ -339,7 +468,7 @@ export function AuthProvider({
 
   const value =
     useMemo(
-      ()=>({
+      () => ({
 
         user,
 
@@ -349,6 +478,9 @@ export function AuthProvider({
 
 
         login,
+
+
+        adminLogin,
 
 
         logout,
@@ -362,7 +494,9 @@ export function AuthProvider({
 
       }),
 
-      [user]
+      [
+        user,
+      ]
 
     );
 
@@ -388,7 +522,10 @@ export function AuthProvider({
 
 
 
-export function useAuth(){
+
+
+
+export function useAuth() {
 
 
   const context =
@@ -396,7 +533,7 @@ export function useAuth(){
 
 
 
-  if(!context){
+  if (!context) {
 
     throw new Error(
       "useAuth должен использоваться внутри AuthProvider"
@@ -405,7 +542,7 @@ export function useAuth(){
   }
 
 
-  return context;
 
+  return context;
 
 }
