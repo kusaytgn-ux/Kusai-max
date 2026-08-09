@@ -1,122 +1,347 @@
-import { Heart, Package, ShoppingCart, Star } from "lucide-react";
+import {
+  Heart,
+  Package,
+  ShoppingCart,
+  Star,
+} from "lucide-react";
+
 import { useFavorites } from "../../store/FavoritesContext";
 import { useCart } from "../../store/CartContext";
 import { useAuth } from "../../auth/AuthContext";
 import { useNavigate } from "react-router-dom";
 
 
-
 function UserCard() {
+
   const { user } = useAuth();
+
   const { favorites } = useFavorites();
+
   const { totalItems } = useCart();
+
   const navigate = useNavigate();
+
+
+  const points = user?.points ?? 0;
+
+
+  const kusaiLevel =
+    points >= 200000
+      ? "MAX"
+      : points >= 50000
+      ? "GOLD"
+      : points >= 10000
+      ? "SILVER"
+      : "START";
+
+
+  const kusaiScore = Math.floor(points / 100);
+
+
+
   return (
-    <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-yellow-500 via-yellow-400 to-amber-300 p-6 shadow-2xl">
 
-      <p className="text-sm font-medium text-black/70">
-        Добро пожаловать
-      </p>
+    <section>
 
-      <h2 className="mt-1 text-3xl font-black text-black">
-        {user?.login} 👋
-      </h2>
 
-      
+      <div className="
+        mt-6
+        rounded-3xl
+        bg-gradient-to-br
+        from-yellow-300
+        via-yellow-400
+        to-yellow-500
+        p-6
+        shadow-xl
+      ">
 
-      <div className="mt-6 rounded-2xl bg-black/10 p-5 backdrop-blur">
 
-      
+        {/* Приветствие */}
 
-        <div className="grid grid-cols-2 gap-5">
+        <p className="text-sm font-medium text-black/70">
+          Добро пожаловать
+        </p>
 
-          <div>
-            <p className="text-xs uppercase tracking-widest text-black/70">
+
+        <h2 className="mt-1 text-3xl font-black text-black">
+          {user?.name || "Гость"} 👋
+        </h2>
+
+
+
+
+
+        {/* Информация */}
+
+        <div className="
+          mt-6
+          grid
+          grid-cols-2
+          gap-4
+        ">
+
+
+
+          {/* Статус */}
+
+          <div className="
+            rounded-2xl
+            bg-black/10
+            p-4
+          ">
+
+            <p className="text-xs uppercase tracking-widest text-black/60">
               Статус
             </p>
 
+
             <div className="mt-2 flex items-center gap-2">
-              <Star size={18} />
-              <h3 className="font-bold">
-                {user?.status}
+
+
+              <Star
+                size={18}
+                fill="black"
+              />
+
+
+              <h3 className="font-black text-black">
+                KUSAI {kusaiLevel}
               </h3>
+
+
             </div>
+
 
           </div>
 
-          <div>
 
-            <p className="text-xs uppercase tracking-widest text-black/70">
+
+
+
+          {/* Бонусы */}
+
+          <div className="
+            rounded-2xl
+            bg-black/10
+            p-4
+          ">
+
+
+            <p className="text-xs uppercase tracking-widest text-black/60">
               Бонусы
             </p>
 
-            <h3 className="mt-2 text-xl font-black">
-              {(user?.bonuses ?? 0). toLocaleString("ru-RU")}
+
+            <h3 className="mt-2 text-xl font-black text-black">
+
+              {points.toLocaleString("ru-RU")}
+
             </h3>
+
 
           </div>
 
-          <div>
 
-            <p className="text-xs uppercase tracking-widest text-black/70">
+
+
+
+
+          {/* SCORE */}
+
+          <div className="
+            rounded-2xl
+            bg-black/10
+            p-4
+          ">
+
+
+            <p className="text-xs uppercase tracking-widest text-black/60">
+              KUSAI SCORE
+            </p>
+
+
+            <h3 className="mt-2 text-xl font-black text-black">
+
+              {kusaiScore.toLocaleString("ru-RU")}
+
+            </h3>
+
+
+          </div>
+
+
+
+
+
+          {/* Заказы */}
+
+          <div className="
+            rounded-2xl
+            bg-black/10
+            p-4
+          ">
+
+
+            <p className="text-xs uppercase tracking-widest text-black/60">
               Заказы
             </p>
 
-            <div className="mt-2 flex items-center gap-2">
+
+            <div className="mt-2 flex items-center gap-2 text-black">
+
               <Package size={18}/>
-              <span>{user?.orders}</span>
+
+              <span>
+                0
+              </span>
+
             </div>
+
 
           </div>
 
-          <div>
 
-            <p className="text-xs uppercase tracking-widest text-black/70">
+
+
+
+          {/* Избранное */}
+
+          <div className="
+            rounded-2xl
+            bg-black/10
+            p-4
+          ">
+
+
+            <p className="text-xs uppercase tracking-widest text-black/60">
               Избранное
             </p>
 
-            <div className="mt-2 flex items-center gap-2">
+
+            <div className="mt-2 flex items-center gap-2 text-black">
+
+
               <Heart size={18}/>
-              <span>{favorites.length}</span>
+
+
+              <span>
+                {favorites.length}
+              </span>
+
+
             </div>
+
 
           </div>
 
+
         </div>
 
-        <div className="mt-6 rounded-xl bg-black/10 p-4">
 
-          <div className="flex items-center justify-between">
 
-            <div className="flex items-center gap-3">
+
+
+
+
+        {/* Корзина */}
+
+        <div className="
+          mt-6
+          rounded-2xl
+          bg-black/10
+          p-4
+        ">
+
+
+          <div className="
+            flex
+            items-center
+            justify-between
+          ">
+
+
+            <div className="
+              flex
+              items-center
+              gap-3
+              text-black
+            ">
+
 
               <ShoppingCart size={22}/>
+
 
               <span className="font-semibold">
                 В корзине
               </span>
 
+
             </div>
 
-            <span className="text-2xl font-black">
+
+
+            <span className="
+              text-2xl
+              font-black
+              text-black
+            ">
+
               {totalItems}
+
             </span>
+
 
           </div>
 
+
         </div>
+
+
+
+
+
+
+
+        {/* Клуб */}
+
         <div className="mt-6">
+
+
           <button
+
             onClick={() => navigate("/club")}
-            className="w-full rounded-2x1 bg-black py-3 text-lg font-bold text-yellow-400 transition hover:bg-zinc-900"
-            >
-            👑Мой клуб
-            </button>
+
+            className="
+              w-full
+              rounded-2xl
+              bg-black
+              py-3
+              text-lg
+              font-bold
+              text-yellow-400
+              transition
+              hover:bg-zinc-900
+            "
+
+          >
+
+            👑 Мой клуб
+
+          </button>
+
+
         </div>
+
+
+
       </div>
 
+
     </section>
+
   );
+
 }
+
 
 export default UserCard;

@@ -48,9 +48,9 @@ function Header() {
             onClick={() => navigate("/profile/edit")}
             className="flex h-11 w-11 items-center justify-center rounded-full bg-yellow-400 text-lg font-bold text-black transition hover:scale-105"
           >
-            {user?.login.charAt(0).toUpperCase()}
+            {user?.name?.charAt(0).toUpperCase() || "U"}
           </button>
-
+          
         </div>
 
       </div>

@@ -1,6 +1,7 @@
+import { useEffect } from "react";
 import AppRouter from "./router/AppRouter";
 
-// В самом верху app.tsx
+
 declare global {
   interface Window {
     Telegram: {
@@ -14,8 +15,34 @@ declare global {
   }
 }
 
+
 function App() {
+
+  useEffect(() => {
+
+    const tg = window.Telegram?.WebApp;
+
+    if (!tg) return;
+
+
+    // Сообщаем Telegram, что приложение готово
+    tg.ready();
+
+
+    // Разворачиваем Mini App
+    tg.expand();
+
+
+    // Запрещаем закрытие свайпом вверх/вниз
+    tg.disableVerticalSwipes();
+
+
+  }, []);
+
+
   return <AppRouter />;
+
 }
+
 
 export default App;
