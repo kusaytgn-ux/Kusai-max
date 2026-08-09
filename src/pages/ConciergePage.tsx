@@ -47,7 +47,7 @@ function ConciergePage() {
   }, [chat]);
 
   async function handleSend() {
-    if (!text.trim()) return;
+    if (!text.trim() || !user) return;
 
     await sendUserMessage(user.phone, text);
 
