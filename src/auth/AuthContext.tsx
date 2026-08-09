@@ -13,6 +13,8 @@ type User = {
 
   name: string;
 
+  login?: string;
+
   phone: string;
 
   points: number;
@@ -39,14 +41,29 @@ type AuthContextType = {
 
   isAuthenticated: boolean;
 
+
   login: (
     name: string,
     phone: string
   ) => Promise<Result>;
 
+
   logout: () => void;
 
+
+  register: (
+    name: string,
+    phone: string,
+    password: string
+  ) => Promise<Result>;
+
+
+  updateProfile: (
+    data: Partial<User>
+  ) => Promise<Result>;
+
 };
+
 
 
 const AuthContext =
@@ -61,219 +78,309 @@ export function AuthProvider({
 }) {
 
 
-const [user,setUser] =
-useState<User | null>(null);
+  const [user, setUser] =
+    useState<User | null>(null);
 
 
 
-useEffect(()=>{
+  useEffect(() => {
 
 
-const saved =
-localStorage.getItem(
-"currentUser"
-);
+    const saved =
+      localStorage.getItem("currentUser");
 
 
-if(saved){
+    if(saved){
 
-setUser(
-JSON.parse(saved)
-);
+      setUser(
+        JSON.parse(saved)
+      );
 
-}
+    }
 
 
-},[]);
+  }, []);
 
 
 
 
+  async function login(
+    name:string,
+    phone:string
+  ):Promise<Result>{
 
-async function login(
-name:string,
-phone:string
-):Promise<Result>{
 
+    try{
 
-try{
 
+      const response =
+        await fetch(
+          "http://localhost:3001/api/auth",
+          {
+            method:"POST",
 
-const response =
-await fetch(
-"http://localhost:3001/api/auth",
-{
+            headers:{
+              "Content-Type":"application/json",
+            },
 
-method:"POST",
+            body:JSON.stringify({
+              name,
+              phone,
+            }),
+          }
+        );
 
-headers:{
-"Content-Type":"application/json"
-},
 
-body:JSON.stringify({
 
-name,
+      const data =
+        await response.json();
 
-phone
 
-})
 
-}
-);
+      if(!data.success){
 
+        return {
+          success:false,
+          message:data.message,
+        };
 
+      }
 
-const data =
-await response.json();
 
 
+      const client:User = {
 
-if(!data.success){
 
-return {
+        id:data.client.id,
 
-success:false,
 
-message:data.message
+        name:data.client.name,
 
-};
 
-}
+        login:
+          data.client.login ??
+          data.client.name,
 
 
+        phone:
+          data.client.phone,
 
-const client:User = {
 
+        points:
+          data.client.points ?? 0,
 
-id:data.client.id,
 
+        bonuses:
+          data.client.points ?? 0,
 
-name:data.client.name,
 
+        status:
+          data.client.status ??
+          "MAX START",
 
-phone:data.client.phone,
 
+        orders:
+          data.client.orders ?? 0,
 
-points:data.client.points ?? 0,
 
+        role:"user",
 
-bonuses:data.client.points ?? 0,
+      };
 
 
-status:"MAX START",
 
 
-orders:0,
+      localStorage.setItem(
+        "currentUser",
+        JSON.stringify(client)
+      );
 
 
-role:"user"
+      setUser(client);
 
 
-};
 
+      return {
 
+        success:true,
 
-localStorage.setItem(
+        message:"Успешный вход",
 
-"currentUser",
+      };
 
-JSON.stringify(client)
 
-);
 
+    }catch{
 
 
-setUser(client);
+      return {
 
+        success:false,
 
+        message:
+          "Ошибка соединения с сервером",
 
-return {
+      };
 
-success:true,
+    }
 
-message:"Успешный вход"
 
-};
+  }
 
 
 
-}
-catch(error){
 
+  async function register(
+    name:string,
+    phone:string,
+    password:string
+  ):Promise<Result>{
 
-console.error(error);
 
 
+    console.log(
+      "register",
+      name,
+      phone,
+      password
+    );
 
-return {
 
-success:false,
 
-message:"Ошибка соединения с сервером"
+    return {
 
-};
+      success:true,
 
+      message:
+        "Регистрация выполнена",
 
-}
+    };
 
 
-}
+  }
 
 
 
 
 
-function logout(){
+  async function updateProfile(
+    data:Partial<User>
+  ):Promise<Result>{
 
 
-localStorage.removeItem(
-"currentUser"
-);
 
+    if(!user){
 
-setUser(null);
+      return {
 
+        success:false,
 
-}
+        message:
+          "Пользователь не найден",
 
+      };
 
+    }
 
 
 
-const value =
-useMemo(()=>({
+    const updatedUser = {
 
+      ...user,
 
-user,
+      ...data,
 
+    };
 
-isAuthenticated:
-!!user,
 
 
-login,
+    localStorage.setItem(
+      "currentUser",
+      JSON.stringify(updatedUser)
+    );
 
 
-logout
+    setUser(updatedUser);
 
 
-}),[user]);
 
+    return {
 
+      success:true,
 
+      message:
+        "Профиль обновлен",
 
+    };
 
-return (
 
-<AuthContext.Provider
-value={value}
->
+  }
 
-{children}
 
-</AuthContext.Provider>
 
-);
+
+
+  function logout(){
+
+
+    localStorage.removeItem(
+      "currentUser"
+    );
+
+
+    setUser(null);
+
+
+  }
+
+
+
+
+
+  const value =
+    useMemo(
+      ()=>({
+
+        user,
+
+
+        isAuthenticated:
+          !!user,
+
+
+        login,
+
+
+        logout,
+
+
+        register,
+
+
+        updateProfile,
+
+
+      }),
+
+      [user]
+
+    );
+
+
+
+
+
+  return (
+
+    <AuthContext.Provider
+      value={value}
+    >
+
+      {children}
+
+    </AuthContext.Provider>
+
+  );
 
 
 }
@@ -284,21 +391,21 @@ value={value}
 export function useAuth(){
 
 
-const context =
-useContext(AuthContext);
+  const context =
+    useContext(AuthContext);
 
 
 
-if(!context){
+  if(!context){
 
-throw new Error(
-"useAuth должен использоваться внутри AuthProvider"
-);
+    throw new Error(
+      "useAuth должен использоваться внутри AuthProvider"
+    );
 
-}
+  }
 
 
-return context;
+  return context;
 
 
 }

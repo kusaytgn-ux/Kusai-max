@@ -13,7 +13,9 @@ function EditProfilePage() {
 
   const {updateProfile} = useAuth();
   async function handleSave() { // Сохраняет изменение профиля  
-    const result = await updateProfile(login, password);
+    const result = await updateProfile({
+    login
+  });
 
     if (result.success){
       alert(result.message);
