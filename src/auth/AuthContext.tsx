@@ -122,7 +122,7 @@ export function AuthProvider({
 
       const response =
         await fetch(
-          "https://ngrokhq.link/video",
+          "https://kusai-max-api.vercel.app/api/auth",
           {
             method: "POST",
 
