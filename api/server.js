@@ -4,6 +4,7 @@ import cors from "cors";
 import { db } from "./firebaseAdmin.js";
 import { calculateBonusDiscount } from "./bonus.js";
 import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 
 function validatePhone(phone) {
 
@@ -1420,6 +1421,122 @@ app.post("/api/admin/login", async (req, res) => {
 
   }
 
+});
+
+// ==========================================
+// Авторизация администратора
+// POST /api/admin/login
+// ==========================================
+
+app.post("/api/admin/login", async (req, res) => {
+  try {
+    const { login, password } = req.body;
+
+    if (!login || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Введите логин и пароль",
+      });
+    }
+
+    console.log(
+      "ADMIN LOGIN:",
+      login
+    );
+
+    // Ищем администратора в Firebase
+    const snapshot = await db
+      .collection("admins")
+      .where("login", "==", login)
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) {
+      console.log(
+        "ADMIN NOT FOUND:",
+        login
+      );
+
+      return res.status(401).json({
+        success: false,
+        message:
+          "Неверный логин или пароль",
+      });
+    }
+
+    const adminDoc =
+      snapshot.docs[0];
+
+    const adminData =
+      adminDoc.data();
+
+    // Проверяем роль
+    if (
+      adminData.role !== "admin"
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "У пользователя нет прав администратора",
+      });
+    }
+
+    // Проверяем пароль через bcrypt
+    const passwordCorrect =
+      await bcrypt.compare(
+        password,
+        adminData.passwordHash
+      );
+
+    if (!passwordCorrect) {
+      console.log(
+        "ADMIN WRONG PASSWORD:",
+        login
+      );
+
+      return res.status(401).json({
+        success: false,
+        message:
+          "Неверный логин или пароль",
+      });
+    }
+
+    console.log(
+      "ADMIN LOGIN SUCCESS:",
+      login
+    );
+
+    return res.json({
+      success: true,
+
+      message:
+        "Вход администратора выполнен",
+
+      admin: {
+        id: adminDoc.id,
+
+        login:
+          adminData.login,
+
+        name:
+          adminData.name ??
+          "Administrator",
+
+        role: "admin",
+      },
+    });
+  } catch (error) {
+    console.error(
+      "Ошибка авторизации администратора:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Ошибка сервера",
+    });
+  }
 });
 
 app.listen(PORT, () => {
