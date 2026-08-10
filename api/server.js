@@ -1423,11 +1423,6 @@ app.post("/api/admin/login", async (req, res) => {
 
 });
 
-// ==========================================
-// Авторизация администратора
-// POST /api/admin/login
-// ==========================================
-
 app.post("/api/admin/login", async (req, res) => {
   try {
     const { login, password } = req.body;
@@ -1439,102 +1434,50 @@ app.post("/api/admin/login", async (req, res) => {
       });
     }
 
-    console.log(
-      "ADMIN LOGIN:",
-      login
-    );
-
-    // Ищем администратора в Firebase
     const snapshot = await db
-      .collection("admins")
+      .collection("adminUsers")
       .where("login", "==", login)
       .limit(1)
       .get();
 
     if (snapshot.empty) {
-      console.log(
-        "ADMIN NOT FOUND:",
-        login
-      );
-
       return res.status(401).json({
         success: false,
-        message:
-          "Неверный логин или пароль",
+        message: "Неверный логин или пароль",
       });
     }
 
-    const adminDoc =
-      snapshot.docs[0];
+    const adminDoc = snapshot.docs[0];
+    const admin = adminDoc.data();
 
-    const adminData =
-      adminDoc.data();
-
-    // Проверяем роль
-    if (
-      adminData.role !== "admin"
-    ) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "У пользователя нет прав администратора",
-      });
-    }
-
-    // Проверяем пароль через bcrypt
-    const passwordCorrect =
-      await bcrypt.compare(
-        password,
-        adminData.passwordHash
-      );
-
-    if (!passwordCorrect) {
-      console.log(
-        "ADMIN WRONG PASSWORD:",
-        login
-      );
-
-      return res.status(401).json({
-        success: false,
-        message:
-          "Неверный логин или пароль",
-      });
-    }
-
-    console.log(
-      "ADMIN LOGIN SUCCESS:",
-      login
+    const passwordValid = await bcrypt.compare(
+      password,
+      admin.passwordHash
     );
+
+    if (!passwordValid) {
+      return res.status(401).json({
+        success: false,
+        message: "Неверный логин или пароль",
+      });
+    }
 
     return res.json({
       success: true,
-
-      message:
-        "Вход администратора выполнен",
-
       admin: {
         id: adminDoc.id,
-
-        login:
-          adminData.login,
-
-        name:
-          adminData.name ??
-          "Administrator",
-
+        login: admin.login,
+        name: admin.name || "Administrator",
         role: "admin",
       },
     });
+
   } catch (error) {
-    console.error(
-      "Ошибка авторизации администратора:",
-      error
-    );
+    console.error("Ошибка входа администратора:", error);
 
     return res.status(500).json({
       success: false,
-      message:
-        "Ошибка сервера",
+      message: "Ошибка сервера",
     });
   }
 });
