@@ -3,7 +3,6 @@ import express from "express";
 import cors from "cors";
 import { db } from "./firebaseAdmin.js";
 import { calculateBonusDiscount } from "./bonus.js";
-import bcrypt from "bcrypt";
 import bcrypt from "bcryptjs";
 
 function validatePhone(phone) {
@@ -1423,64 +1422,7 @@ app.post("/api/admin/login", async (req, res) => {
 
 });
 
-app.post("/api/admin/login", async (req, res) => {
-  try {
-    const { login, password } = req.body;
 
-    if (!login || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Введите логин и пароль",
-      });
-    }
-
-    const snapshot = await db
-      .collection("adminUsers")
-      .where("login", "==", login)
-      .limit(1)
-      .get();
-
-    if (snapshot.empty) {
-      return res.status(401).json({
-        success: false,
-        message: "Неверный логин или пароль",
-      });
-    }
-
-    const adminDoc = snapshot.docs[0];
-    const admin = adminDoc.data();
-
-    const passwordValid = await bcrypt.compare(
-      password,
-      admin.passwordHash
-    );
-
-    if (!passwordValid) {
-      return res.status(401).json({
-        success: false,
-        message: "Неверный логин или пароль",
-      });
-    }
-
-    return res.json({
-      success: true,
-      admin: {
-        id: adminDoc.id,
-        login: admin.login,
-        name: admin.name || "Administrator",
-        role: "admin",
-      },
-    });
-
-  } catch (error) {
-    console.error("Ошибка входа администратора:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Ошибка сервера",
-    });
-  }
-});
 
 app.listen(PORT, () => {
   console.log(
