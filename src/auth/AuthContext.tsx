@@ -188,38 +188,22 @@ else{
 
 
 const newClient = {
+  name,
+  phone,
+  login:name,
 
+  // приветственные бонусы
+  points:100000,
+  bonuses:100000,
+  orders:0,
 
-name,
+  status:"NEW CLIENT",
+  role:"user",
 
-phone,
-
-
-login:name,
-
-
-points:0,
-
-
-bonuses:0,
-
-
-orders:0,
-
-
-status:"MAX START",
-
-
-role:"user",
-
-
-createdAt:
-serverTimestamp(),
-
-
-source:"telegram",
-
-
+  createdAt:
+    serverTimestamp(),
+  source:"telegram",
+  welcomeBonus:true,
 };
 
 
