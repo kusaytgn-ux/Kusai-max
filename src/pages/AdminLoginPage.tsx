@@ -4,90 +4,234 @@ import { Shield } from "lucide-react";
 
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
-import { useAuth } from "../auth/AuthContext";
 
 
 function AdminLoginPage() {
 
-const navigate = useNavigate();
-
-const { adminLogin } = useAuth();
+  const navigate = useNavigate();
 
 
-const [login,setLogin] = useState("");
+  const [login,setLogin] =
+    useState("");
 
-const [password,setPassword] = useState("");
+  const [password,setPassword] =
+    useState("");
 
-const [error,setError] = useState("");
-
-
-
-async function handleLogin(){
-
-setError("");
-
-
-const result =
-await adminLogin(
-login,
-password
-);
+  const [error,setError] =
+    useState("");
 
 
 
-if(!result.success){
+  async function handleLogin(){
 
-setError(
-result.message
-);
-
-return;
-
-}
+    setError("");
 
 
-navigate("/admin");
+    try {
 
 
-}
+      const response =
+        await fetch(
+          "http://localhost:3001/api/admin/login",
+          {
+
+            method:"POST",
+
+            headers:{
+              "Content-Type":
+              "application/json",
+            },
+
+            body:JSON.stringify({
+
+              login,
+              password,
+
+            }),
+
+          }
+        );
+
+
+
+      const data =
+        await response.json();
+
+
+
+      if(!data.success){
+
+        setError(
+          data.message
+        );
+
+        return;
+
+      }
+
+
+
+      const adminUser = {
+
+        id:
+          data.admin.id,
+
+        name:
+          data.admin.name,
+
+        login:
+          data.admin.login,
+
+        phone:"",
+
+        points:0,
+
+        bonuses:0,
+
+        status:"ADMIN",
+
+        orders:0,
+
+        role:"admin",
+
+      };
+
+
+
+      localStorage.setItem(
+        "currentUser",
+        JSON.stringify(adminUser)
+      );
+
+
+
+      navigate("/admin");
+
+
+
+    } catch(error){
+
+
+      console.error(error);
+
+
+      setError(
+        "Ошибка соединения с сервером"
+      );
+
+
+    }
+
+
+  }
 
 
 
 return (
 
-<div className="min-h-screen flex items-center justify-center bg-black">
+<div
+
+className="
+min-h-screen
+bg-black
+flex
+items-center
+justify-center
+px-4
+"
+
+>
 
 
-<div className="w-full max-w-md rounded-3xl bg-zinc-900 p-8">
+<div
+
+className="
+w-full
+max-w-md
+text-white
+"
+
+>
 
 
-<div className="flex justify-center">
+<div
 
-<Shield
-size={50}
-className="text-yellow-400"
-/>
+className="
+flex
+justify-center
+mb-8
+"
+
+>
+
+<div
+
+className="
+w-20
+h-20
+rounded-full
+bg-white
+text-black
+flex
+items-center
+justify-center
+shadow-2xl
+"
+
+>
+
+<Shield size={38}/>
+
+</div>
+
 
 </div>
 
 
 
-<h1 className="mt-5 text-center text-3xl font-black text-white">
+<h1
 
-KUSAI MAX ADMIN
+className="
+text-4xl
+font-bold
+text-center
+tracking-widest
+"
+
+>
+
+KUSAI MAX
 
 </h1>
 
 
-<p className="mt-2 text-center text-zinc-400">
 
-Вход администратора
+<p
+
+className="
+text-center
+text-gray-400
+mt-3
+mb-10
+tracking-wide
+"
+
+>
+
+ADMIN PANEL
 
 </p>
 
 
 
-<div className="mt-8 space-y-5">
+
+<div
+
+className="
+space-y-5
+"
+
+>
 
 
 <Input
@@ -97,7 +241,9 @@ placeholder="Логин"
 value={login}
 
 onChange={(e)=>
-setLogin(e.target.value)
+setLogin(
+e.target.value
+)
 }
 
 />
@@ -113,7 +259,9 @@ placeholder="Пароль"
 value={password}
 
 onChange={(e)=>
-setPassword(e.target.value)
+setPassword(
+e.target.value
+)
 }
 
 />
@@ -121,38 +269,63 @@ setPassword(e.target.value)
 
 
 {
-error && (
+error &&
 
-<div className="rounded-xl border border-red-500 bg-red-500/10 p-3 text-red-400">
+<div
+
+className="
+text-red-400
+text-center
+text-sm
+"
+
+>
 
 {error}
 
 </div>
-
-)
 
 }
 
 
 
 <Button
+
 onClick={handleLogin}
+
 >
 
 Войти
 
+
 </Button>
 
 
+</div>
+
+
+
+<p
+
+className="
+text-center
+text-xs
+text-gray-600
+mt-10
+"
+
+>
+
+KUSAI MAX SECURITY SYSTEM
+
+</p>
+
+
 
 </div>
 
 
 </div>
-
-
-</div>
-
 
 );
 

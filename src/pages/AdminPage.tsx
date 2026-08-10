@@ -1,3 +1,4 @@
+import AdminUsers from "../components/admin/AdminUsers";
 import AdminTradeIn from "../components/admin/AdminTradeIn";
 import AdminConcierge from "../components/admin/AdminConcierge";
 import { useState } from "react";
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 
 import AdminCatalog from "../components/admin/AdminCatalog";
+
 
 function AdminPage() {
   const [section, setSection] = useState("dashboard");
@@ -179,6 +181,7 @@ function AdminPage() {
             </>
 
           )}
+          
 
           {section === "catalog" && (
             <AdminCatalog />
@@ -199,6 +202,7 @@ function AdminPage() {
             </div>
 
           )}
+          
 
           {section === "tradein" && (
             <AdminTradeIn />
@@ -210,17 +214,7 @@ function AdminPage() {
 
           {section === "users" && (
 
-            <div className="rounded-3xl bg-zinc-900 p-8">
-
-              <h2 className="text-3xl font-bold">
-                Пользователи
-              </h2>
-
-              <p className="mt-4 text-zinc-400">
-                Управление пользователями.
-              </p>
-
-            </div>
+            <AdminUsers />
 
           )}
 
