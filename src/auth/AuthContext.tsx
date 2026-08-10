@@ -214,58 +214,98 @@ export function AuthProvider({
   // Вход администратора
   // ==========================================
 
-  async function adminLogin(
+  
+async function adminLogin(
   login: string,
   password: string
 ): Promise<Result> {
   try {
-    const response = await fetch(
-      `${API_URL}/api/admin/login`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          login: login.trim(),
-          password,
-        }),
-      }
+    console.log("ADMIN LOGIN START");
+    console.log("Login:", login);
+
+    if (!login || !password) {
+      return {
+        success: false,
+        message: "Введите логин и пароль",
+      };
+    }
+
+    const response = await fetch("/api/admin/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        login: login.trim(),
+        password,
+      }),
+    });
+
+    console.log(
+      "ADMIN LOGIN RESPONSE:",
+      response.status
     );
 
-    const data = await response.json();
+    const text = await response.text();
+
+    console.log(
+      "ADMIN LOGIN RAW RESPONSE:",
+      text
+    );
+
+    let data: any;
+
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return {
+        success: false,
+        message:
+          "Сервер вернул некорректный ответ",
+      };
+    }
 
     if (!response.ok) {
       return {
         success: false,
         message:
-          data.message ||
+          data?.message ||
           "Неверный логин или пароль",
       };
     }
 
-    if (!data.success) {
+    if (!data?.success) {
       return {
         success: false,
         message:
-          data.message ||
+          data?.message ||
           "Неверный логин или пароль",
       };
     }
 
     const adminUser: User = {
-      id: data.admin?.id || "admin",
+      id:
+        data.admin?.id ||
+        "admin",
+
       name:
         data.admin?.name ||
         "Administrator",
+
       login:
         data.admin?.login ||
         login,
+
       phone: "",
+
       points: 0,
+
       bonuses: 0,
+
       status: "ADMIN",
+
       orders: 0,
+
       role: "admin",
     };
 
@@ -275,6 +315,10 @@ export function AuthProvider({
     );
 
     setUser(adminUser);
+
+    console.log(
+      "ADMIN LOGIN SUCCESS"
+    );
 
     return {
       success: true,
@@ -293,6 +337,8 @@ export function AuthProvider({
     };
   }
 }
+
+
 
   // ==========================================
   // Старая регистрация отключена
