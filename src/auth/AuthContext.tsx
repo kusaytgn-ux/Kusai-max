@@ -15,6 +15,7 @@ import {
   where,
   serverTimestamp,
   doc,
+  getDoc,
   updateDoc,
 } from "firebase/firestore";
 
@@ -341,110 +342,64 @@ message:
 
 
 async function adminLogin(
-login:string,
-password:string
-):Promise<Result>{
+  login: string,
+  password: string
+): Promise<Result> {
+  try {
+    const adminRef = doc(db, "admins", "admin");
+    const adminSnapshot = await getDoc(adminRef);
 
+    if (!adminSnapshot.exists()) {
+      return {
+        success: false,
+        message: "Администратор не найден",
+      };
+    }
 
+    const adminData = adminSnapshot.data();
 
-const adminLogin =
-import.meta.env.VITE_ADMIN_LOGIN;
+    if (
+      login !== adminData.login ||
+      password !== adminData.password
+    ) {
+      return {
+        success: false,
+        message: "Неверный логин или пароль",
+      };
+    }
 
+    const adminUser: User = {
+      id: "admin",
+      name: adminData.name || "Administrator",
+      login: adminData.login,
+      phone: "",
+      points: 0,
+      bonuses: 0,
+      status: "ADMIN",
+      orders: 0,
+      role: "admin",
+    };
 
+    localStorage.setItem(
+      "currentUser",
+      JSON.stringify(adminUser)
+    );
 
-const adminPassword =
-import.meta.env.VITE_ADMIN_PASSWORD;
+    setUser(adminUser);
 
+    return {
+      success: true,
+      message: "Вход выполнен",
+    };
+  } catch (error) {
+    console.error("Firebase admin login error:", error);
 
-
-
-if(
-login !== adminLogin ||
-password !== adminPassword
-){
-
-
-return{
-
-
-success:false,
-
-message:
-"Неверный логин или пароль",
-
-
-};
-
-
+    return {
+      success: false,
+      message: "Ошибка соединения с Firebase",
+    };
+  }
 }
-
-
-
-
-
-const adminUser:User = {
-
-
-id:"admin",
-
-
-name:
-"Administrator",
-
-
-login,
-
-
-phone:"",
-
-
-points:0,
-
-
-bonuses:0,
-
-
-status:"ADMIN",
-
-
-orders:0,
-
-
-role:"admin",
-
-
-};
-
-
-
-localStorage.setItem(
-"currentUser",
-JSON.stringify(adminUser)
-);
-
-
-
-setUser(adminUser);
-
-
-
-return{
-
-
-success:true,
-
-message:
-"Вход выполнен",
-
-
-};
-
-
-}
-
-
-
-
 
 // =========================
 // Регистрация
