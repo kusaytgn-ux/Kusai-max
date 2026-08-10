@@ -7,6 +7,19 @@ import {
   type ReactNode,
 } from "react";
 
+import {
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  where,
+  serverTimestamp,
+  doc,
+  updateDoc,
+} from "firebase/firestore";
+
+import { db } from "../firebase/firebase";
+
 
 type User = {
   id: string;
@@ -41,7 +54,6 @@ type AuthContextType = {
 
   isAuthenticated: boolean;
 
-
   login: (
     name: string,
     phone: string
@@ -71,8 +83,9 @@ type AuthContextType = {
 };
 
 
+
 const AuthContext =
-  createContext<AuthContextType | null>(null);
+createContext<AuthContextType | null>(null);
 
 
 
@@ -83,438 +96,151 @@ export function AuthProvider({
 }) {
 
 
-  const [user, setUser] =
-    useState<User | null>(null);
+const [user,setUser] =
+useState<User | null>(null);
 
 
 
-  useEffect(() => {
+useEffect(()=>{
 
-    const saved =
-      localStorage.getItem("currentUser");
 
+const saved =
+localStorage.getItem(
+  "currentUser"
+);
 
-    if (saved) {
 
-      setUser(
-        JSON.parse(saved)
-      );
+if(saved){
 
-    }
+setUser(
+  JSON.parse(saved)
+);
 
-  }, []);
+}
 
 
+},[]);
 
 
-  // =========================
-  // Вход клиента
-  // =========================
 
-  async function login(
-    name: string,
-    phone: string
-  ): Promise<Result> {
 
 
-    try {
-// тут нужна постоянная ссылкв 
+// =========================
+// Пользовательский вход
+// =========================
 
-      const response =
-        await fetch(
-          "https://kusai-max-api.vercel.app/api/auth",
-          {
-            method: "POST",
 
-            headers: {
-              "Content-Type": "application/json",
-            },
+async function login(
+name:string,
+phone:string
+):Promise<Result>{
 
-            body: JSON.stringify({
-              name,
-              phone,
-            }),
-          }
-        );
 
+try{
 
 
-      const data =
-        await response.json();
+const q =
+query(
+collection(db,"clients"),
+where(
+"phone",
+"==",
+phone
+)
+);
 
 
 
-      if (!data.success) {
+const snapshot =
+await getDocs(q);
 
-        return {
-          success: false,
-          message:
-            data.message ??
-            "Пользователь не найден",
-        };
 
-      }
 
+let client:any;
 
 
-      const client: User = {
 
+// Клиент уже существует
 
-        id:
-          data.client.id,
+if(!snapshot.empty){
 
 
-        name:
-          data.client.name,
+const clientDoc =
+snapshot.docs[0];
 
 
-        login:
-          data.client.login ??
-          data.client.name,
+client = {
 
+id:clientDoc.id,
 
-        phone:
-          data.client.phone,
+...clientDoc.data(),
 
+};
 
-        points:
-          data.client.points ?? 0,
 
 
-        bonuses:
-          data.client.points ?? 0,
+}
 
 
-        status:
-          data.client.status ??
-          "MAX START",
+// Новый клиент
 
+else{
 
-        orders:
-          data.client.orders ?? 0,
 
+const newClient = {
 
-        role:
-          "user",
 
-      };
+name,
 
+phone,
 
 
+login:name,
 
-      localStorage.setItem(
-        "currentUser",
-        JSON.stringify(client)
-      );
 
+points:0,
 
-      setUser(client);
 
+bonuses:0,
 
 
-      return {
+orders:0,
 
-        success: true,
 
-        message:
-          "Успешный вход",
+status:"MAX START",
 
-      };
 
+role:"user",
 
 
-    } catch {
+createdAt:
+serverTimestamp(),
 
 
-      return {
+source:"telegram",
 
-        success: false,
 
-        message:
-          "Ошибка соединения с сервером",
+};
 
-      };
 
 
-    }
+const docRef =
+await addDoc(
+collection(db,"clients"),
+newClient
+);
 
-  }
 
 
+client = {
 
 
+id:docRef.id,
 
-  // =========================
-  // Вход администратора
-  // =========================
+...newClient,
 
-  async function adminLogin(
-    login: string,
-    password: string
-  ): Promise<Result> {
 
-
-    const adminLogin =
-      import.meta.env.VITE_ADMIN_LOGIN;
-
-
-    const adminPassword =
-      import.meta.env.VITE_ADMIN_PASSWORD;
-
-
-
-    if (
-      login !== adminLogin ||
-      password !== adminPassword
-    ) {
-
-
-      return {
-
-        success: false,
-
-        message:
-          "Неверный логин или пароль",
-
-      };
-
-
-    }
-
-
-
-    const adminUser: User = {
-
-
-      id:
-        "admin",
-
-
-      name:
-        "Administrator",
-
-
-      login,
-
-
-      phone:
-        "",
-
-
-      points:
-        0,
-
-
-      bonuses:
-        0,
-
-
-      status:
-        "ADMIN",
-
-
-      orders:
-        0,
-
-
-      role:
-        "admin",
-
-    };
-
-
-
-
-    localStorage.setItem(
-      "currentUser",
-      JSON.stringify(adminUser)
-    );
-
-
-    setUser(adminUser);
-
-
-
-    return {
-
-      success: true,
-
-      message:
-        "Вход администратора выполнен",
-
-    };
-
-
-  }
-
-
-
-
-
-
-
-  // =========================
-  // Регистрация
-  // =========================
-
-  async function register(
-    name: string,
-    phone: string,
-    password: string
-  ): Promise<Result> {
-
-
-    console.log(
-      "register",
-      name,
-      phone,
-      password
-    );
-
-
-    return {
-
-      success: true,
-
-      message:
-        "Регистрация выполнена",
-
-    };
-
-  }
-
-
-
-
-
-
-  // =========================
-  // Обновление профиля
-  // =========================
-
-  async function updateProfile(
-    data: Partial<User>
-  ): Promise<Result> {
-
-
-    if (!user) {
-
-
-      return {
-
-        success: false,
-
-        message:
-          "Пользователь не найден",
-
-      };
-
-    }
-
-
-
-    const updatedUser: User = {
-
-      ...user,
-
-      ...data,
-
-    };
-
-
-
-    localStorage.setItem(
-      "currentUser",
-      JSON.stringify(updatedUser)
-    );
-
-
-    setUser(updatedUser);
-
-
-
-    return {
-
-      success: true,
-
-      message:
-        "Профиль обновлен",
-
-    };
-
-  }
-
-
-
-
-
-  function logout() {
-
-
-    localStorage.removeItem(
-      "currentUser"
-    );
-
-
-    setUser(null);
-
-  }
-
-
-
-
-
-
-
-  const value =
-    useMemo(
-      () => ({
-
-        user,
-
-
-        isAuthenticated:
-          !!user,
-
-
-        login,
-
-
-        adminLogin,
-
-
-        logout,
-
-
-        register,
-
-
-        updateProfile,
-
-
-      }),
-
-      [
-        user,
-      ]
-
-    );
-
-
-
-
-
-  return (
-
-    <AuthContext.Provider
-      value={value}
-    >
-
-      {children}
-
-    </AuthContext.Provider>
-
-  );
+};
 
 
 }
@@ -523,26 +249,446 @@ export function AuthProvider({
 
 
 
+const currentUser:User = {
 
 
-export function useAuth() {
+id:
+client.id,
 
 
-  const context =
-    useContext(AuthContext);
+name:
+client.name,
+
+
+login:
+client.login ??
+client.name,
+
+
+phone:
+client.phone,
+
+
+points:
+client.points ?? 0,
+
+
+bonuses:
+client.bonuses ?? 0,
+
+
+status:
+client.status ??
+"MAX START",
+
+
+orders:
+client.orders ?? 0,
+
+
+role:
+"user",
+
+
+};
 
 
 
-  if (!context) {
 
-    throw new Error(
-      "useAuth должен использоваться внутри AuthProvider"
-    );
-
-  }
+localStorage.setItem(
+"currentUser",
+JSON.stringify(currentUser)
+);
 
 
 
-  return context;
+setUser(currentUser);
+
+
+
+return {
+
+
+success:true,
+
+message:
+"Успешный вход",
+
+
+};
+
+
+
+}catch(error){
+
+
+console.error(
+"Firebase login error",
+error
+);
+
+
+
+return {
+
+
+success:false,
+
+message:
+"Ошибка Firebase",
+
+
+};
+
+
+
+}
+
+
+}
+
+
+
+
+
+// =========================
+// Вход администратора
+// =========================
+
+
+async function adminLogin(
+login:string,
+password:string
+):Promise<Result>{
+
+
+
+const adminLogin =
+import.meta.env.VITE_ADMIN_LOGIN;
+
+
+
+const adminPassword =
+import.meta.env.VITE_ADMIN_PASSWORD;
+
+
+
+
+if(
+login !== adminLogin ||
+password !== adminPassword
+){
+
+
+return{
+
+
+success:false,
+
+message:
+"Неверный логин или пароль",
+
+
+};
+
+
+}
+
+
+
+
+
+const adminUser:User = {
+
+
+id:"admin",
+
+
+name:
+"Administrator",
+
+
+login,
+
+
+phone:"",
+
+
+points:0,
+
+
+bonuses:0,
+
+
+status:"ADMIN",
+
+
+orders:0,
+
+
+role:"admin",
+
+
+};
+
+
+
+localStorage.setItem(
+"currentUser",
+JSON.stringify(adminUser)
+);
+
+
+
+setUser(adminUser);
+
+
+
+return{
+
+
+success:true,
+
+message:
+"Вход выполнен",
+
+
+};
+
+
+}
+
+
+
+
+
+// =========================
+// Регистрация
+// =========================
+
+
+async function register(
+  name: string,
+  phone: string,
+  password: string
+): Promise<Result> {
+
+
+  console.log(
+    "Старая регистрация отключена:",
+    name,
+    phone,
+    password
+  );
+
+
+  return {
+
+    success: false,
+
+    message:
+      "Регистрация по логину и паролю отключена. Используйте вход по имени и телефону.",
+
+  };
+
+
+}
+
+
+
+
+// =========================
+// Обновление профиля
+// =========================
+
+
+async function updateProfile(
+data:Partial<User>
+):Promise<Result>{
+
+
+
+if(!user){
+
+
+return {
+
+
+success:false,
+
+message:
+"Пользователь не найден",
+
+
+};
+
+
+}
+
+
+
+
+
+const updatedUser = {
+
+
+...user,
+
+...data,
+
+
+};
+
+
+
+
+
+localStorage.setItem(
+"currentUser",
+JSON.stringify(updatedUser)
+);
+
+
+
+setUser(updatedUser);
+
+
+
+
+
+if(user.id !== "admin"){
+
+
+await updateDoc(
+doc(
+db,
+"clients",
+user.id
+),
+
+data
+
+);
+
+
+}
+
+
+
+
+
+return {
+
+
+success:true,
+
+message:
+"Профиль обновлен",
+
+
+};
+
+
+
+}
+
+
+
+
+
+// =========================
+// Выход
+// =========================
+
+
+function logout(){
+
+
+localStorage.removeItem(
+"currentUser"
+);
+
+
+setUser(null);
+
+
+}
+
+
+
+
+
+const value =
+useMemo(()=>({
+
+
+user,
+
+
+isAuthenticated:
+!!user,
+
+
+login,
+
+
+adminLogin,
+
+
+logout,
+
+
+register,
+
+
+updateProfile,
+
+
+}),[user]);
+
+
+
+
+
+return(
+
+<AuthContext.Provider
+value={value}
+>
+
+{children}
+
+</AuthContext.Provider>
+
+);
+
+
+}
+
+
+
+
+
+export function useAuth(){
+
+
+const context =
+useContext(AuthContext);
+
+
+
+if(!context){
+
+throw new Error(
+"useAuth должен использоваться внутри AuthProvider"
+);
+
+
+}
+
+
+
+return context;
+
 
 }
