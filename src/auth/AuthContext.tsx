@@ -11,7 +11,7 @@ import {
   collection,
   addDoc,
   getDocs,
-  query,
+  query, 
   where,
   serverTimestamp,
   doc,
