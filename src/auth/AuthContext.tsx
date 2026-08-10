@@ -67,7 +67,9 @@ type AuthContextType = {
 const AuthContext =
   createContext<AuthContextType | null>(null);
 
-const API_URL = "";
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  "https://kusai-max.vercel.app";
 
 export function AuthProvider({
   children,
@@ -213,109 +215,84 @@ export function AuthProvider({
   // ==========================================
 
   async function adminLogin(
-    login: string,
-    password: string
-  ): Promise<Result> {
-    try {
-      if (!login || !password) {
-        return {
-          success: false,
-          message:
-            "Введите логин и пароль",
-        };
+  login: string,
+  password: string
+): Promise<Result> {
+  try {
+    const response = await fetch(
+      `${API_URL}/api/admin/login`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          login: login.trim(),
+          password,
+        }),
       }
+    );
 
-      const response =
-        await fetch(
-          `${API_URL}/api/admin/login`,
-          {
-            method: "POST",
+    const data = await response.json();
 
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-
-            body: JSON.stringify({
-              login,
-              password,
-            }),
-          }
-        );
-
-      let data: any;
-
-      try {
-        data =
-          await response.json();
-      } catch {
-        return {
-          success: false,
-          message:
-            "Сервер вернул некорректный ответ",
-        };
-      }
-
-      if (!response.ok || !data.success) {
-        return {
-          success: false,
-          message:
-            data.message ??
-            "Неверный логин или пароль",
-        };
-      }
-
-      const adminUser: User = {
-        id:
-          data.admin?.id ??
-          "admin",
-
-        name:
-          data.admin?.name ??
-          "Administrator",
-
-        login:
-          data.admin?.login ??
-          login,
-
-        phone: "",
-
-        points: 0,
-
-        bonuses: 0,
-
-        status: "ADMIN",
-
-        orders: 0,
-
-        role: "admin",
-      };
-
-      localStorage.setItem(
-        "currentUser",
-        JSON.stringify(adminUser)
-      );
-
-      setUser(adminUser);
-
-      return {
-        success: true,
-        message:
-          "Вход выполнен",
-      };
-    } catch (error) {
-      console.error(
-        "Admin login error:",
-        error
-      );
-
+    if (!response.ok) {
       return {
         success: false,
         message:
-          "Ошибка соединения с сервером",
+          data.message ||
+          "Неверный логин или пароль",
       };
     }
+
+    if (!data.success) {
+      return {
+        success: false,
+        message:
+          data.message ||
+          "Неверный логин или пароль",
+      };
+    }
+
+    const adminUser: User = {
+      id: data.admin?.id || "admin",
+      name:
+        data.admin?.name ||
+        "Administrator",
+      login:
+        data.admin?.login ||
+        login,
+      phone: "",
+      points: 0,
+      bonuses: 0,
+      status: "ADMIN",
+      orders: 0,
+      role: "admin",
+    };
+
+    localStorage.setItem(
+      "currentUser",
+      JSON.stringify(adminUser)
+    );
+
+    setUser(adminUser);
+
+    return {
+      success: true,
+      message: "Вход выполнен",
+    };
+  } catch (error) {
+    console.error(
+      "ADMIN LOGIN FETCH ERROR:",
+      error
+    );
+
+    return {
+      success: false,
+      message:
+        "Ошибка соединения с сервером",
+    };
   }
+}
 
   // ==========================================
   // Старая регистрация отключена

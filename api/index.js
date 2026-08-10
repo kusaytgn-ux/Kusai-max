@@ -1,4 +1,3 @@
-
 import express from "express";
 import cors from "cors";
 import bcrypt from "bcryptjs";
@@ -8,28 +7,18 @@ import { calculateBonusDiscount } from "./bonus.js";
 
 const app = express();
 
-// ======================================================
-// CORS
-// ======================================================
-
 app.use(
   cors({
     origin: true,
     credentials: true,
-    methods: ["GET", "POST", "PATCH", "OPTIONS"],
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "X-API-Key",
-    ],
   })
 );
 
 app.use(express.json());
 
-// ======================================================
+// =====================================================
 // HEALTH
-// ======================================================
+// =====================================================
 
 app.get("/", (req, res) => {
   res.json({
@@ -54,80 +43,40 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// ======================================================
-// ADMIN LOGIN — ПРОВЕРКА МАРШРУТА
-// ======================================================
-
-app.get("/api/admin/login", (req, res) => {
-  res.json({
-    success: true,
-    message: "Маршрут авторизации администратора работает",
-    method: "POST",
-    collection: "adminUsers",
-  });
-});
-
-// ======================================================
-// ADMIN LOGIN — POST
-// ======================================================
+// =====================================================
+// ADMIN LOGIN
+// =====================================================
 
 app.post("/api/admin/login", async (req, res) => {
   console.log("=================================");
   console.log("ADMIN LOGIN REQUEST");
+  console.log("BODY:", req.body);
   console.log("=================================");
 
   try {
-    console.log("Body:", {
-      login: req.body?.login,
-      passwordProvided:
-        typeof req.body?.password === "string" &&
-        req.body.password.length > 0,
-    });
-
-    const login =
-      typeof req.body?.login === "string"
-        ? req.body.login.trim()
-        : "";
-
-    const password =
-      typeof req.body?.password === "string"
-        ? req.body.password
-        : "";
+    const { login, password } = req.body || {};
 
     if (!login || !password) {
-      console.log("ADMIN LOGIN: empty credentials");
-
       return res.status(400).json({
         success: false,
         message: "Введите логин и пароль",
       });
     }
 
-    // ==================================================
-    // Ищем администратора
-    // ==================================================
-
-    console.log(
-      "Searching adminUsers for login:",
-      login
-    );
+    console.log("Ищем администратора:", login);
 
     const snapshot = await db
       .collection("adminUsers")
-      .where("login", "==", login)
+      .where("login", "==", String(login).trim())
       .limit(1)
       .get();
 
     console.log(
-      "Admin documents found:",
-      snapshot.size
+      "Администратор найден:",
+      !snapshot.empty
     );
 
     if (snapshot.empty) {
-      console.log(
-        "ADMIN LOGIN: administrator not found"
-      );
-
       return res.status(401).json({
         success: false,
         message: "Неверный логин или пароль",
@@ -137,61 +86,32 @@ app.post("/api/admin/login", async (req, res) => {
     const adminDoc = snapshot.docs[0];
     const admin = adminDoc.data();
 
-    console.log("Admin document:", {
-      id: adminDoc.id,
-      login: admin.login,
-      name: admin.name,
-      role: admin.role,
-      hasPasswordHash:
-        typeof admin.passwordHash === "string" &&
-        admin.passwordHash.length > 0,
-    });
+    console.log("ADMIN ID:", adminDoc.id);
+    console.log("ADMIN LOGIN:", admin.login);
+    console.log("ADMIN ROLE:", admin.role);
+    console.log(
+      "PASSWORD HASH EXISTS:",
+      Boolean(admin.passwordHash)
+    );
 
-    // ==================================================
-    // Проверяем passwordHash
-    // ==================================================
-
-    if (
-      !admin.passwordHash ||
-      typeof admin.passwordHash !== "string"
-    ) {
+    if (!admin.passwordHash) {
       console.error(
-        "ADMIN LOGIN ERROR: passwordHash отсутствует"
+        "У администратора отсутствует passwordHash"
       );
 
       return res.status(500).json({
         success: false,
-        message:
-          "У администратора не настроен пароль",
+        message: "У администратора не настроен пароль",
       });
     }
 
-    // ==================================================
-    // Проверяем пароль
-    // ==================================================
-
-    let passwordValid = false;
-
-    try {
-      passwordValid = await bcrypt.compare(
-        password,
-        admin.passwordHash
-      );
-    } catch (bcryptError) {
-      console.error(
-        "BCRYPT ERROR:",
-        bcryptError
-      );
-
-      return res.status(500).json({
-        success: false,
-        message:
-          "Ошибка проверки пароля",
-      });
-    }
+    const passwordValid = await bcrypt.compare(
+      String(password),
+      String(admin.passwordHash)
+    );
 
     console.log(
-      "Password valid:",
+      "PASSWORD VALID:",
       passwordValid
     );
 
@@ -202,26 +122,15 @@ app.post("/api/admin/login", async (req, res) => {
       });
     }
 
-    // ==================================================
-    // Успешный вход
-    // ==================================================
-
-    console.log(
-      "ADMIN LOGIN SUCCESS:",
-      login
-    );
+    console.log("ADMIN LOGIN SUCCESS");
 
     return res.status(200).json({
       success: true,
-
       message: "Вход выполнен",
-
       admin: {
         id: adminDoc.id,
         login: admin.login,
-        name:
-          admin.name ||
-          "Administrator",
+        name: admin.name || "Administrator",
         role: "admin",
       },
     });
@@ -231,7 +140,7 @@ app.post("/api/admin/login", async (req, res) => {
     );
 
     console.error(
-      "ADMIN LOGIN SERVER ERROR:"
+      "ADMIN LOGIN ERROR:"
     );
 
     console.error(error);
@@ -247,154 +156,92 @@ app.post("/api/admin/login", async (req, res) => {
   }
 });
 
-// ======================================================
-// GET CLIENT BY ID
-// ======================================================
-
-app.get(
-  "/api/clients/:id",
-  async (req, res) => {
-    try {
-      const { id } = req.params;
-
-      const clientDoc = await db
-        .collection("clients")
-        .doc(id)
-        .get();
-
-      if (!clientDoc.exists) {
-        return res.status(404).json({
-          success: false,
-          message: "Клиент не найден",
-        });
-      }
-
-      return res.json({
-        success: true,
-        client: {
-          id: clientDoc.id,
-          ...clientDoc.data(),
-        },
-      });
-    } catch (error) {
-      console.error(
-        "GET CLIENT ERROR:",
-        error
-      );
-
-      return res.status(500).json({
-        success: false,
-        message:
-          "Ошибка получения клиента",
-      });
-    }
-  }
-);
-
-// ======================================================
-// GET CLIENT BY PHONE
-// ======================================================
-
-app.get(
-  "/api/clients/phone/:phone",
-  async (req, res) => {
-    try {
-      const { phone } = req.params;
-
-      const snapshot = await db
-        .collection("clients")
-        .where("phone", "==", phone)
-        .limit(1)
-        .get();
-
-      if (snapshot.empty) {
-        return res.status(404).json({
-          success: false,
-          message: "Клиент не найден",
-        });
-      }
-
-      const clientDoc =
-        snapshot.docs[0];
-
-      return res.json({
-        success: true,
-        client: {
-          id: clientDoc.id,
-          ...clientDoc.data(),
-        },
-      });
-    } catch (error) {
-      console.error(
-        "GET CLIENT BY PHONE ERROR:",
-        error
-      );
-
-      return res.status(500).json({
-        success: false,
-        message:
-          "Ошибка поиска клиента",
-      });
-    }
-  }
-);
-
-// ======================================================
+// =====================================================
 // GET ALL CLIENTS
-// ======================================================
+// =====================================================
 
-app.get(
-  "/api/clients",
-  async (req, res) => {
-    try {
-      const snapshot = await db
-        .collection("clients")
-        .get();
+app.get("/api/clients", async (req, res) => {
+  try {
+    const snapshot = await db
+      .collection("clients")
+      .get();
 
-      const clients =
-        snapshot.docs.map(
-          (clientDoc) => {
-            const data =
-              clientDoc.data();
+    const clients = snapshot.docs.map((clientDoc) => {
+      const data = clientDoc.data();
 
-            return {
-              id: clientDoc.id,
-              ...data,
+      return {
+        id: clientDoc.id,
+        ...data,
+        createdAt:
+          data.createdAt?.toDate
+            ? data.createdAt
+                .toDate()
+                .toISOString()
+            : data.createdAt ?? null,
+      };
+    });
 
-              createdAt:
-                data.createdAt?.toDate
-                  ? data.createdAt
-                      .toDate()
-                      .toISOString()
-                  : data.createdAt ??
-                    null,
-            };
-          }
-        );
+    return res.json({
+      success: true,
+      count: clients.length,
+      clients,
+    });
+  } catch (error) {
+    console.error(
+      "GET ALL CLIENTS ERROR:",
+      error
+    );
 
-      return res.json({
-        success: true,
-        count: clients.length,
-        clients,
-      });
-    } catch (error) {
-      console.error(
-        "GET ALL CLIENTS ERROR:",
-        error
-      );
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка получения клиентов",
+    });
+  }
+});
 
-      return res.status(500).json({
+// =====================================================
+// GET CLIENT
+// =====================================================
+
+app.get("/api/clients/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const clientDoc = await db
+      .collection("clients")
+      .doc(id)
+      .get();
+
+    if (!clientDoc.exists) {
+      return res.status(404).json({
         success: false,
-        message:
-          "Ошибка получения клиентов",
+        message: "Клиент не найден",
       });
     }
-  }
-);
 
-// ======================================================
+    return res.json({
+      success: true,
+      client: {
+        id: clientDoc.id,
+        ...clientDoc.data(),
+      },
+    });
+  } catch (error) {
+    console.error(
+      "GET CLIENT ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка получения клиента",
+    });
+  }
+});
+
+// =====================================================
 // GET CLIENT PROFILE
-// ======================================================
+// =====================================================
 
 app.get(
   "/api/clients/:id/profile",
@@ -412,8 +259,7 @@ app.get(
       if (!clientDoc.exists) {
         return res.status(404).json({
           success: false,
-          message:
-            "Клиент не найден",
+          message: "Клиент не найден",
         });
       }
 
@@ -432,14 +278,12 @@ app.get(
             return {
               id: operationDoc.id,
               ...data,
-
               date:
                 data.date?.toDate
                   ? data.date
                       .toDate()
                       .toISOString()
-                  : data.date ??
-                    null,
+                  : data.date ?? null,
             };
           }
         );
@@ -449,19 +293,15 @@ app.get(
 
       return res.json({
         success: true,
-
         client: {
           id: clientDoc.id,
           ...client,
-
           createdAt:
             client.createdAt?.toDate
               ? client.createdAt
                   .toDate()
                   .toISOString()
-              : client.createdAt ??
-                null,
-
+              : client.createdAt ?? null,
           operations,
         },
       });
@@ -480,9 +320,9 @@ app.get(
   }
 );
 
-// ======================================================
+// =====================================================
 // GET OPERATIONS
-// ======================================================
+// =====================================================
 
 app.get(
   "/api/clients/:id/operations",
@@ -500,8 +340,7 @@ app.get(
       if (!clientDoc.exists) {
         return res.status(404).json({
           success: false,
-          message:
-            "Клиент не найден",
+          message: "Клиент не найден",
         });
       }
 
@@ -522,14 +361,12 @@ app.get(
               type: data.type,
               points: data.points,
               reason: data.reason,
-
               date:
                 data.date?.toDate
                   ? data.date
                       .toDate()
                       .toISOString()
-                  : data.date ??
-                    null,
+                  : null,
             };
           }
         );
@@ -553,122 +390,99 @@ app.get(
   }
 );
 
-// ======================================================
+// =====================================================
 // CREATE CLIENT
-// ======================================================
+// =====================================================
 
-app.post(
-  "/api/clients",
-  async (req, res) => {
-    try {
-      const { name, phone } =
-        req.body;
+app.post("/api/clients", async (req, res) => {
+  try {
+    const { name, phone } =
+      req.body;
 
-      if (!name || !phone) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Введите имя и телефон",
-        });
-      }
-
-      const existingSnapshot =
-        await db
-          .collection("clients")
-          .where(
-            "phone",
-            "==",
-            phone
-          )
-          .limit(1)
-          .get();
-
-      if (
-        !existingSnapshot.empty
-      ) {
-        return res.status(409).json({
-          success: false,
-          message:
-            "Клиент с таким номером телефона уже существует",
-        });
-      }
-
-      const welcomeBonus =
-        100000;
-
-      const clientRef =
-        db.collection("clients").doc();
-
-      const client = {
-        name,
-        phone,
-
-        points:
-          welcomeBonus,
-
-        bonuses:
-          welcomeBonus,
-
-        orders: 0,
-
-        status:
-          "NEW CLIENT",
-
-        role: "user",
-
-        createdAt:
-          new Date(),
-      };
-
-      await clientRef.set(
-        client
-      );
-
-      await clientRef
-        .collection("operations")
-        .add({
-          type: "add",
-
-          points:
-            welcomeBonus,
-
-          reason:
-            "Приветственные бонусы",
-
-          date:
-            new Date(),
-        });
-
-      return res.status(201).json({
-        success: true,
-
-        client: {
-          id: clientRef.id,
-          ...client,
-
-          createdAt:
-            client.createdAt
-              .toISOString(),
-        },
-      });
-    } catch (error) {
-      console.error(
-        "CREATE CLIENT ERROR:",
-        error
-      );
-
-      return res.status(500).json({
+    if (!name || !phone) {
+      return res.status(400).json({
         success: false,
         message:
-          "Ошибка создания клиента",
+          "Введите имя и телефон",
       });
     }
-  }
-);
 
-// ======================================================
+    const existingSnapshot =
+      await db
+        .collection("clients")
+        .where(
+          "phone",
+          "==",
+          phone
+        )
+        .limit(1)
+        .get();
+
+    if (!existingSnapshot.empty) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "Клиент с таким номером телефона уже существует",
+      });
+    }
+
+    const welcomeBonus =
+      100000;
+
+    const clientRef =
+      db
+        .collection("clients")
+        .doc();
+
+    const client = {
+      name,
+      phone,
+      points: welcomeBonus,
+      bonuses: welcomeBonus,
+      orders: 0,
+      status: "NEW CLIENT",
+      role: "user",
+      createdAt: new Date(),
+    };
+
+    await clientRef.set(client);
+
+    await clientRef
+      .collection("operations")
+      .add({
+        type: "add",
+        points: welcomeBonus,
+        reason:
+          "Приветственные бонусы",
+        date: new Date(),
+      });
+
+    return res.status(201).json({
+      success: true,
+      client: {
+        id: clientRef.id,
+        ...client,
+        createdAt:
+          client.createdAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error(
+      "CREATE CLIENT ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Ошибка создания клиента",
+    });
+  }
+});
+
+// =====================================================
 // UPDATE CLIENT
-// ======================================================
+// =====================================================
 
 app.patch(
   "/api/clients/:id",
@@ -740,7 +554,6 @@ app.patch(
 
       return res.json({
         success: true,
-
         client: {
           id: updatedDoc.id,
           ...updatedDoc.data(),
@@ -761,9 +574,9 @@ app.patch(
   }
 );
 
-// ======================================================
+// =====================================================
 // ADD BONUS
-// ======================================================
+// =====================================================
 
 app.post(
   "/api/clients/:id/bonus/add",
@@ -781,9 +594,7 @@ app.post(
         Number(points);
 
       if (
-        !Number.isFinite(
-          amount
-        ) ||
+        !Number.isFinite(amount) ||
         amount <= 0
       ) {
         return res.status(400).json({
@@ -818,8 +629,7 @@ app.post(
         );
 
       const newPoints =
-        currentPoints +
-        amount;
+        currentPoints + amount;
 
       await clientRef.update({
         points: newPoints,
@@ -830,15 +640,11 @@ app.post(
         .collection("operations")
         .add({
           type: "add",
-
           points: amount,
-
           reason:
             reason ||
             "Начисление бонусов",
-
-          date:
-            new Date(),
+          date: new Date(),
         });
 
       return res.json({
@@ -862,9 +668,9 @@ app.post(
   }
 );
 
-// ======================================================
+// =====================================================
 // REMOVE BONUS
-// ======================================================
+// =====================================================
 
 app.post(
   "/api/clients/:id/bonus/remove",
@@ -882,9 +688,7 @@ app.post(
         Number(points);
 
       if (
-        !Number.isFinite(
-          amount
-        ) ||
+        !Number.isFinite(amount) ||
         amount <= 0
       ) {
         return res.status(400).json({
@@ -930,8 +734,7 @@ app.post(
       }
 
       const newPoints =
-        currentPoints -
-        amount;
+        currentPoints - amount;
 
       await clientRef.update({
         points: newPoints,
@@ -942,25 +745,18 @@ app.post(
         .collection("operations")
         .add({
           type: "remove",
-
           points: amount,
-
           reason:
             reason ||
             "Списание бонусов",
-
-          date:
-            new Date(),
+          date: new Date(),
         });
 
       return res.json({
         success: true,
-
         message:
           "Бонусы списаны",
-
-        points:
-          newPoints,
+        points: newPoints,
       });
     } catch (error) {
       console.error(
@@ -977,9 +773,9 @@ app.post(
   }
 );
 
-// ======================================================
+// =====================================================
 // BONUS CALCULATOR
-// ======================================================
+// =====================================================
 
 app.post(
   "/api/bonus/calculate",
@@ -1017,17 +813,13 @@ app.post(
   }
 );
 
-// ======================================================
+// =====================================================
 // 1C
-// ======================================================
+// =====================================================
 
 const ONE_C_API_KEY =
   process.env.ONE_C_API_KEY ||
   "KUSAI-MAX-1C-KEY-2026";
-
-// ------------------------------------------------------
-// 1C TEST
-// ------------------------------------------------------
 
 app.get(
   "/api/1c/test",
@@ -1048,19 +840,13 @@ app.get(
 
     return res.json({
       success: true,
-
       message:
         "KUSAI MAX API подключен",
-
       serverTime:
         new Date().toISOString(),
     });
   }
 );
-
-// ------------------------------------------------------
-// 1C CLIENTS
-// ------------------------------------------------------
 
 app.get(
   "/api/1c/clients",
@@ -1093,19 +879,12 @@ app.get(
 
             return {
               id: clientDoc.id,
-
-              name:
-                data.name,
-
-              phone:
-                data.phone,
-
+              name: data.name,
+              phone: data.phone,
               points:
                 data.points || 0,
-
               createdAt:
-                data.createdAt
-                  ?.toDate
+                data.createdAt?.toDate
                   ? data.createdAt
                       .toDate()
                       .toISOString()
@@ -1116,10 +895,7 @@ app.get(
 
       return res.json({
         success: true,
-
-        count:
-          clients.length,
-
+        count: clients.length,
         clients,
       });
     } catch (error) {
@@ -1137,125 +913,21 @@ app.get(
   }
 );
 
-// ------------------------------------------------------
-// 1C CLIENT
-// ------------------------------------------------------
-
-app.get(
-  "/api/1c/client",
-  async (req, res) => {
-    const apiKey =
-      req.headers["x-api-key"];
-
-    if (
-      apiKey !==
-      ONE_C_API_KEY
-    ) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "Нет доступа",
-      });
-    }
-
-    try {
-      let phone =
-        String(
-          req.query.phone || ""
-        ).trim();
-
-      if (!phone) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Не указан телефон",
-        });
-      }
-
-      if (
-        !phone.startsWith("+")
-      ) {
-        phone = "+" + phone;
-      }
-
-      const snapshot =
-        await db
-          .collection("clients")
-          .where(
-            "phone",
-            "==",
-            phone
-          )
-          .limit(1)
-          .get();
-
-      if (snapshot.empty) {
-        return res.json({
-          success: false,
-          message:
-            "Клиент не найден",
-        });
-      }
-
-      const clientDoc =
-        snapshot.docs[0];
-
-      const data =
-        clientDoc.data();
-
-      return res.json({
-        success: true,
-
-        client: {
-          id: clientDoc.id,
-
-          name:
-            data.name,
-
-          phone:
-            data.phone,
-
-          points:
-            data.points || 0,
-
-          status:
-            data.status ||
-            "MAX GOLD",
-        },
-      });
-    } catch (error) {
-      console.error(
-        "1C CLIENT ERROR:",
-        error
-      );
-
-      return res.status(500).json({
-        success: false,
-        message:
-          "Ошибка сервера",
-      });
-    }
-  }
-);
-
-// ======================================================
+// =====================================================
 // UNKNOWN ROUTE
-// ======================================================
+// =====================================================
 
-app.use(
-  (req, res) => {
-    res.status(404).json({
-      success: false,
-      message:
-        "API route not found",
-      path: req.path,
-    });
-  }
-);
+app.use((req, res) => {
+  return res.status(404).json({
+    success: false,
+    message:
+      "API route not found",
+    path: req.path,
+  });
+});
 
-// ======================================================
+// =====================================================
 // VERCEL
-// ======================================================
+// =====================================================
 
 export default app;
-
