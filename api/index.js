@@ -1,4 +1,3 @@
-import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import bcrypt from "bcryptjs";
@@ -9,930 +8,1035 @@ import { calculateBonusDiscount } from "./bonus.js";
 const app = express();
 
 app.use(
-  cors({
-    origin: true,
-    credentials: true,
-  })
+cors({
+origin: true,
+credentials: true,
+})
 );
 
 app.use(express.json());
 
-const ONE_C_API_KEY =
-  process.env.ONE_C_API_KEY || "KUSAI-MAX-1C-KEY-2026";
-
-function validatePhone(phone) {
-  const regex = /^\+7\d{10}$/;
-  return regex.test(phone);
-}
-
-function check1CAccess(req, res) {
-  const apiKey = req.headers["x-api-key"];
-
-  if (apiKey !== ONE_C_API_KEY) {
-    res.status(403).json({
-      success: false,
-      message: "Нет доступа",
-    });
-
-    return false;
-  }
-
-  return true;
-}
-
-/* =========================================================
-   HEALTH CHECK
-========================================================= */
+// ==========================================
+// HEALTH CHECK
+// ==========================================
 
 app.get("/", (req, res) => {
-  res.json({
-    success: true,
-    message: "KUSAI MAX REST API работает",
-  });
+res.json({
+success: true,
+message: "KUSAI MAX API работает",
+serverTime: new Date().toISOString(),
+});
 });
 
 app.get("/api", (req, res) => {
-  res.json({
-    success: true,
-    message: "KUSAI MAX API работает",
-  });
+res.json({
+success: true,
+message: "KUSAI MAX API работает",
+});
 });
 
 app.get("/api/health", (req, res) => {
-  res.json({
-    success: true,
-    message: "KUSAI MAX API работает",
-    serverTime: new Date().toISOString(),
+res.json({
+success: true,
+message: "KUSAI MAX API подключен",
+serverTime: new Date().toISOString(),
+});
+});
+
+// ==========================================
+// ADMIN LOGIN
+// ==========================================
+
+app.post("/api/admin/login", async (req, res) => {
+try {
+const { login, password } = req.body;
+
+```
+if (!login || !password) {
+  return res.status(400).json({
+    success: false,
+    message: "Введите логин и пароль",
   });
-});
+}
 
-/* =========================================================
-   1C
-========================================================= */
+const snapshot = await db
+  .collection("adminUsers")
+  .where("login", "==", login)
+  .limit(1)
+  .get();
 
-app.get("/api/1c/test", (req, res) => {
-  if (!check1CAccess(req, res)) {
-    return;
-  }
-
-  res.json({
-    success: true,
-    message: "KUSAI MAX API подключен",
-    serverTime: new Date().toISOString(),
+if (snapshot.empty) {
+  return res.status(401).json({
+    success: false,
+    message: "Неверный логин или пароль",
   });
+}
+
+const adminDoc = snapshot.docs[0];
+const admin = adminDoc.data();
+
+if (!admin.passwordHash) {
+  console.error(
+    "У администратора отсутствует passwordHash"
+  );
+
+  return res.status(500).json({
+    success: false,
+    message: "У администратора не настроен пароль",
+  });
+}
+
+const passwordValid = await bcrypt.compare(
+  password,
+  admin.passwordHash
+);
+
+if (!passwordValid) {
+  return res.status(401).json({
+    success: false,
+    message: "Неверный логин или пароль",
+  });
+}
+
+return res.json({
+  success: true,
+  admin: {
+    id: adminDoc.id,
+    login: admin.login,
+    name: admin.name || "Administrator",
+    role: "admin",
+  },
+});
+```
+
+} catch (error) {
+console.error(
+"ADMIN LOGIN ERROR:",
+error
+);
+
+```
+return res.status(500).json({
+  success: false,
+  message: "Ошибка сервера",
+});
+```
+
+}
 });
 
-app.get("/api/1c/client", async (req, res) => {
-  if (!check1CAccess(req, res)) {
-    return;
-  }
-
-  try {
-    let phone = String(req.query.phone || "").trim();
-
-    if (!phone) {
-      return res.status(400).json({
-        success: false,
-        message: "Не указан телефон",
-      });
-    }
-
-    if (!phone.startsWith("+")) {
-      phone = "+" + phone;
-    }
-
-    const snapshot = await db
-      .collection("clients")
-      .where("phone", "==", phone)
-      .limit(1)
-      .get();
-
-    if (snapshot.empty) {
-      return res.json({
-        success: false,
-        message: "Клиент не найден",
-      });
-    }
-
-    const clientDoc = snapshot.docs[0];
-    const data = clientDoc.data();
-
-    res.json({
-      success: true,
-      client: {
-        id: clientDoc.id,
-        name: data.name || "",
-        phone: data.phone || "",
-        points: Number(data.points || 0),
-        bonuses: Number(data.bonuses || 0),
-        status: data.status || "MAX GOLD",
-      },
-    });
-  } catch (error) {
-    console.error("Ошибка поиска клиента для 1С:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Ошибка сервера",
-    });
-  }
-});
-
-app.get("/api/1c/clients", async (req, res) => {
-  if (!check1CAccess(req, res)) {
-    return;
-  }
-
-  try {
-    const snapshot = await db.collection("clients").get();
-
-    const clients = snapshot.docs.map((clientDoc) => {
-      const data = clientDoc.data();
-
-      return {
-        id: clientDoc.id,
-        name: data.name || "",
-        phone: data.phone || "",
-        points: Number(data.points || 0),
-        bonuses: Number(data.bonuses || 0),
-        status: data.status || "MAX GOLD",
-        createdAt: data.createdAt?.toDate
-          ? data.createdAt.toDate().toISOString()
-          : data.createdAt || null,
-      };
-    });
-
-    res.json({
-      success: true,
-      count: clients.length,
-      clients,
-    });
-  } catch (error) {
-    console.error("Ошибка выгрузки клиентов для 1С:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Ошибка получения клиентов",
-    });
-  }
-});
-
-/* =========================================================
-   CLIENTS
-========================================================= */
-
-app.get("/api/clients", async (req, res) => {
-  try {
-    const snapshot = await db.collection("clients").get();
-
-    const clients = snapshot.docs.map((clientDoc) => {
-      const data = clientDoc.data();
-
-      return {
-        id: clientDoc.id,
-        ...data,
-        createdAt: data.createdAt?.toDate
-          ? data.createdAt.toDate().toISOString()
-          : data.createdAt || null,
-      };
-    });
-
-    res.json({
-      success: true,
-      count: clients.length,
-      clients,
-    });
-  } catch (error) {
-    console.error("Ошибка получения клиентов:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Ошибка получения клиентов",
-    });
-  }
-});
+// ==========================================
+// GET CLIENT BY ID
+// ==========================================
 
 app.get("/api/clients/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
+try {
+const { id } = req.params;
 
-    const clientDoc = await db
-      .collection("clients")
-      .doc(id)
-      .get();
+```
+const clientDoc = await db
+  .collection("clients")
+  .doc(id)
+  .get();
 
-    if (!clientDoc.exists) {
-      return res.status(404).json({
-        success: false,
-        message: "Клиент не найден",
-      });
-    }
+if (!clientDoc.exists) {
+  return res.status(404).json({
+    success: false,
+    message: "Клиент не найден",
+  });
+}
 
-    const data = clientDoc.data();
+return res.json({
+  success: true,
+  client: {
+    id: clientDoc.id,
+    ...clientDoc.data(),
+  },
+});
+```
 
-    res.json({
-      success: true,
-      client: {
-        id: clientDoc.id,
-        ...data,
-        createdAt: data.createdAt?.toDate
-          ? data.createdAt.toDate().toISOString()
-          : data.createdAt || null,
-      },
-    });
-  } catch (error) {
-    console.error("Ошибка получения клиента:", error);
+} catch (error) {
+console.error(
+"GET CLIENT ERROR:",
+error
+);
 
-    res.status(500).json({
-      success: false,
-      message: "Ошибка получения клиента",
-    });
-  }
+```
+return res.status(500).json({
+  success: false,
+  message: "Ошибка получения клиента",
+});
+```
+
+}
 });
 
-app.get("/api/clients/phone/:phone", async (req, res) => {
-  try {
-    const { phone } = req.params;
+// ==========================================
+// GET CLIENT BY PHONE
+// ==========================================
 
-    const snapshot = await db
-      .collection("clients")
-      .where("phone", "==", phone)
-      .limit(1)
-      .get();
+app.get(
+"/api/clients/phone/:phone",
+async (req, res) => {
+try {
+const { phone } = req.params;
 
-    if (snapshot.empty) {
-      return res.status(404).json({
-        success: false,
-        message: "Клиент не найден",
-      });
-    }
+```
+  const snapshot = await db
+    .collection("clients")
+    .where("phone", "==", phone)
+    .limit(1)
+    .get();
 
-    const clientDoc = snapshot.docs[0];
-
-    res.json({
-      success: true,
-      client: {
-        id: clientDoc.id,
-        ...clientDoc.data(),
-      },
-    });
-  } catch (error) {
-    console.error("Ошибка поиска клиента:", error);
-
-    res.status(500).json({
+  if (snapshot.empty) {
+    return res.status(404).json({
       success: false,
-      message: "Ошибка поиска клиента",
+      message: "Клиент не найден",
     });
   }
+
+  const clientDoc = snapshot.docs[0];
+
+  return res.json({
+    success: true,
+    client: {
+      id: clientDoc.id,
+      ...clientDoc.data(),
+    },
+  });
+} catch (error) {
+  console.error(
+    "GET CLIENT BY PHONE ERROR:",
+    error
+  );
+
+  return res.status(500).json({
+    success: false,
+    message: "Ошибка поиска клиента",
+  });
+}
+
+
+}
+);
+
+// ==========================================
+// GET ALL CLIENTS
+// ==========================================
+
+app.get("/api/clients", async (req, res) => {
+try {
+const snapshot = await db
+.collection("clients")
+.get();
+
+```
+const clients = snapshot.docs.map((clientDoc) => {
+  const data = clientDoc.data();
+
+  return {
+    id: clientDoc.id,
+    ...data,
+    createdAt:
+      data.createdAt?.toDate
+        ? data.createdAt.toDate().toISOString()
+        : data.createdAt ?? null,
+  };
 });
 
-app.post("/api/clients", async (req, res) => {
-  try {
-    const { name, phone } = req.body;
+return res.json({
+  success: true,
+  count: clients.length,
+  clients,
+});
+```
 
-    if (!name || !phone) {
-      return res.status(400).json({
-        success: false,
-        message: "Введите имя и телефон",
-      });
-    }
+} catch (error) {
+console.error(
+"GET ALL CLIENTS ERROR:",
+error
+);
 
-    if (!validatePhone(phone)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Телефон должен начинаться с +7 и содержать 11 цифр",
-      });
-    }
+```
+return res.status(500).json({
+  success: false,
+  message: "Ошибка получения клиентов",
+});
+```
 
-    const existingSnapshot = await db
-      .collection("clients")
-      .where("phone", "==", phone)
-      .limit(1)
-      .get();
+}
+});
 
-    if (!existingSnapshot.empty) {
-      return res.status(409).json({
-        success: false,
-        message:
-          "Клиент с таким номером телефона уже существует",
-      });
-    }
+// ==========================================
+// GET CLIENT PROFILE
+// ==========================================
 
-    const welcomeBonus = 100000;
+app.get(
+"/api/clients/:id/profile",
+async (req, res) => {
+try {
+const { id } = req.params;
 
-    const clientRef = db.collection("clients").doc();
+```
+  const clientRef = db
+    .collection("clients")
+    .doc(id);
 
-    const client = {
-      name,
-      phone,
-      login: name,
-      points: welcomeBonus,
-      bonuses: welcomeBonus,
-      orders: 0,
-      status: "NEW CLIENT",
-      role: "user",
-      createdAt: new Date(),
-      source: "api",
-      welcomeBonus: true,
-    };
+  const clientDoc =
+    await clientRef.get();
 
-    await clientRef.set(client);
-
-    await clientRef.collection("operations").add({
-      type: "add",
-      points: welcomeBonus,
-      reason: "Приветственные бонусы",
-      date: new Date(),
-    });
-
-    res.status(201).json({
-      success: true,
-      client: {
-        id: clientRef.id,
-        ...client,
-      },
-    });
-  } catch (error) {
-    console.error("Ошибка создания клиента:", error);
-
-    res.status(500).json({
+  if (!clientDoc.exists) {
+    return res.status(404).json({
       success: false,
-      message: "Ошибка создания клиента",
+      message: "Клиент не найден",
     });
   }
-});
 
-app.patch("/api/clients/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, phone, points, bonuses, status } = req.body;
-
-    const clientRef = db.collection("clients").doc(id);
-
-    const clientDoc = await clientRef.get();
-
-    if (!clientDoc.exists) {
-      return res.status(404).json({
-        success: false,
-        message: "Клиент не найден",
-      });
-    }
-
-    const updates = {};
-
-    if (name !== undefined) {
-      updates.name = name;
-    }
-
-    if (phone !== undefined) {
-      updates.phone = phone;
-    }
-
-    if (points !== undefined) {
-      updates.points = Number(points);
-    }
-
-    if (bonuses !== undefined) {
-      updates.bonuses = Number(bonuses);
-    }
-
-    if (status !== undefined) {
-      updates.status = status;
-    }
-
-    await clientRef.update(updates);
-
-    const updatedDoc = await clientRef.get();
-
-    res.json({
-      success: true,
-      client: {
-        id: updatedDoc.id,
-        ...updatedDoc.data(),
-      },
-    });
-  } catch (error) {
-    console.error("Ошибка обновления клиента:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Ошибка обновления клиента",
-    });
-  }
-});
-
-/* =========================================================
-   CLIENT PROFILE
-========================================================= */
-
-app.get("/api/clients/:id/profile", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const clientRef = db.collection("clients").doc(id);
-
-    const clientDoc = await clientRef.get();
-
-    if (!clientDoc.exists) {
-      return res.status(404).json({
-        success: false,
-        message: "Клиент не найден",
-      });
-    }
-
-    const operationsSnapshot = await clientRef
+  const operationsSnapshot =
+    await clientRef
       .collection("operations")
       .orderBy("date", "desc")
       .get();
 
-    const operations = operationsSnapshot.docs.map(
+  const operations =
+    operationsSnapshot.docs.map(
       (operationDoc) => {
-        const data = operationDoc.data();
+        const data =
+          operationDoc.data();
 
         return {
           id: operationDoc.id,
-          type: data.type,
-          points: Number(data.points || 0),
-          reason: data.reason || "",
-          date: data.date?.toDate
-            ? data.date.toDate().toISOString()
-            : data.date || null,
+          ...data,
+          date:
+            data.date?.toDate
+              ? data.date
+                  .toDate()
+                  .toISOString()
+              : data.date ?? null,
         };
       }
     );
 
-    const client = clientDoc.data();
+  const client =
+    clientDoc.data();
 
-    res.json({
-      success: true,
-      client: {
-        id: clientDoc.id,
-        ...client,
-        createdAt: client.createdAt?.toDate
-          ? client.createdAt.toDate().toISOString()
-          : client.createdAt || null,
-        operations,
-      },
-    });
-  } catch (error) {
-    console.error("Ошибка получения профиля:", error);
+  return res.json({
+    success: true,
+    client: {
+      id: clientDoc.id,
+      ...client,
+      createdAt:
+        client.createdAt?.toDate
+          ? client.createdAt
+              .toDate()
+              .toISOString()
+          : client.createdAt ?? null,
+      operations,
+    },
+  });
+} catch (error) {
+  console.error(
+    "GET CLIENT PROFILE ERROR:",
+    error
+  );
 
-    res.status(500).json({
+  return res.status(500).json({
+    success: false,
+    message:
+      "Ошибка получения профиля клиента",
+  });
+}
+
+
+}
+);
+
+// ==========================================
+// GET OPERATIONS
+// ==========================================
+
+app.get(
+"/api/clients/:id/operations",
+async (req, res) => {
+try {
+const { id } = req.params;
+
+
+  const clientRef = db
+    .collection("clients")
+    .doc(id);
+
+  const clientDoc =
+    await clientRef.get();
+
+  if (!clientDoc.exists) {
+    return res.status(404).json({
       success: false,
-      message: "Ошибка получения профиля",
+      message: "Клиент не найден",
     });
   }
-});
 
-/* =========================================================
-   OPERATIONS
-========================================================= */
-
-app.get("/api/clients/:id/operations", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const clientRef = db.collection("clients").doc(id);
-
-    const clientDoc = await clientRef.get();
-
-    if (!clientDoc.exists) {
-      return res.status(404).json({
-        success: false,
-        message: "Клиент не найден",
-      });
-    }
-
-    const snapshot = await clientRef
+  const snapshot =
+    await clientRef
       .collection("operations")
       .orderBy("date", "desc")
       .get();
 
-    const operations = snapshot.docs.map((operationDoc) => {
-      const data = operationDoc.data();
+  const operations =
+    snapshot.docs.map(
+      (operationDoc) => {
+        const data =
+          operationDoc.data();
 
-      return {
-        id: operationDoc.id,
-        type: data.type,
-        points: Number(data.points || 0),
-        reason: data.reason || "",
-        date: data.date?.toDate
-          ? data.date.toDate().toISOString()
-          : null,
-      };
-    });
+        return {
+          id: operationDoc.id,
+          type: data.type,
+          points: data.points,
+          reason: data.reason,
+          date:
+            data.date?.toDate
+              ? data.date
+                  .toDate()
+                  .toISOString()
+              : null,
+        };
+      }
+    );
 
-    res.json({
-      success: true,
-      operations,
-    });
-  } catch (error) {
-    console.error("Ошибка получения истории:", error);
+  return res.json({
+    success: true,
+    operations,
+  });
+} catch (error) {
+  console.error(
+    "GET OPERATIONS ERROR:",
+    error
+  );
 
-    res.status(500).json({
-      success: false,
-      message: "Ошибка получения истории",
-    });
-  }
+  return res.status(500).json({
+    success: false,
+    message:
+      "Ошибка получения истории",
+  });
+}
+
+
+}
+);
+
+// ==========================================
+// CREATE CLIENT
+// ==========================================
+
+app.post("/api/clients", async (req, res) => {
+try {
+const { name, phone } = req.body;
+
+
+if (!name || !phone) {
+  return res.status(400).json({
+    success: false,
+    message: "Введите имя и телефон",
+  });
+}
+
+const existingSnapshot =
+  await db
+    .collection("clients")
+    .where("phone", "==", phone)
+    .limit(1)
+    .get();
+
+if (!existingSnapshot.empty) {
+  return res.status(409).json({
+    success: false,
+    message:
+      "Клиент с таким номером телефона уже существует",
+  });
+}
+
+const welcomeBonus = 100000;
+
+const clientRef =
+  db.collection("clients").doc();
+
+const client = {
+  name,
+  phone,
+  points: welcomeBonus,
+  bonuses: welcomeBonus,
+  orders: 0,
+  status: "NEW CLIENT",
+  role: "user",
+  createdAt: new Date(),
+};
+
+await clientRef.set(client);
+
+await clientRef
+  .collection("operations")
+  .add({
+    type: "add",
+    points: welcomeBonus,
+    reason: "Приветственные бонусы",
+    date: new Date(),
+  });
+
+return res.status(201).json({
+  success: true,
+  client: {
+    id: clientRef.id,
+    ...client,
+    createdAt:
+      client.createdAt.toISOString(),
+  },
 });
 
-/* =========================================================
-   BONUS ADD
-========================================================= */
 
-app.post("/api/clients/:id/bonus/add", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { points, reason } = req.body;
+} catch (error) {
+console.error(
+"CREATE CLIENT ERROR:",
+error
+);
 
-    const amount = Number(points);
 
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Некорректное количество бонусов",
-      });
-    }
+return res.status(500).json({
+  success: false,
+  message: "Ошибка создания клиента",
+});
 
-    const clientRef = db.collection("clients").doc(id);
 
-    const clientDoc = await clientRef.get();
+}
+});
 
-    if (!clientDoc.exists) {
-      return res.status(404).json({
-        success: false,
-        message: "Клиент не найден",
-      });
-    }
+// ==========================================
+// UPDATE CLIENT
+// ==========================================
 
-    const client = clientDoc.data();
+app.patch(
+"/api/clients/:id",
+async (req, res) => {
+try {
+const { id } = req.params;
 
-    const currentPoints = Number(client.points || 0);
-    const newPoints = currentPoints + amount;
 
-    await clientRef.update({
-      points: newPoints,
-      bonuses: newPoints,
+  const {
+    name,
+    phone,
+    points,
+    bonuses,
+    status,
+    orders,
+  } = req.body;
+
+  const clientRef =
+    db.collection("clients").doc(id);
+
+  const clientDoc =
+    await clientRef.get();
+
+  if (!clientDoc.exists) {
+    return res.status(404).json({
+      success: false,
+      message: "Клиент не найден",
     });
+  }
 
-    await clientRef.collection("operations").add({
+  const updates = {};
+
+  if (name !== undefined) {
+    updates.name = name;
+  }
+
+  if (phone !== undefined) {
+    updates.phone = phone;
+  }
+
+  if (points !== undefined) {
+    updates.points = Number(points);
+  }
+
+  if (bonuses !== undefined) {
+    updates.bonuses = Number(bonuses);
+  }
+
+  if (status !== undefined) {
+    updates.status = status;
+  }
+
+  if (orders !== undefined) {
+    updates.orders = Number(orders);
+  }
+
+  await clientRef.update(updates);
+
+  const updatedDoc =
+    await clientRef.get();
+
+  return res.json({
+    success: true,
+    client: {
+      id: updatedDoc.id,
+      ...updatedDoc.data(),
+    },
+  });
+} catch (error) {
+  console.error(
+    "UPDATE CLIENT ERROR:",
+    error
+  );
+
+  return res.status(500).json({
+    success: false,
+    message:
+      "Ошибка обновления клиента",
+  });
+}
+
+
+}
+);
+
+// ==========================================
+// ADD BONUS
+// ==========================================
+
+app.post(
+"/api/clients/:id/bonus/add",
+async (req, res) => {
+try {
+const { id } = req.params;
+
+
+  const {
+    points,
+    reason,
+  } = req.body;
+
+  const amount =
+    Number(points);
+
+  if (
+    !Number.isFinite(amount) ||
+    amount <= 0
+  ) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "Некорректное количество бонусов",
+    });
+  }
+
+  const clientRef =
+    db.collection("clients").doc(id);
+
+  const clientDoc =
+    await clientRef.get();
+
+  if (!clientDoc.exists) {
+    return res.status(404).json({
+      success: false,
+      message: "Клиент не найден",
+    });
+  }
+
+  const client =
+    clientDoc.data();
+
+  const currentPoints =
+    Number(client.points || 0);
+
+  const newPoints =
+    currentPoints + amount;
+
+  await clientRef.update({
+    points: newPoints,
+    bonuses: newPoints,
+  });
+
+  await clientRef
+    .collection("operations")
+    .add({
       type: "add",
       points: amount,
-      reason: reason || "Начисление бонусов",
+      reason:
+        reason ||
+        "Начисление бонусов",
       date: new Date(),
     });
 
-    res.json({
-      success: true,
-      message: "Бонусы начислены",
-      points: newPoints,
-    });
-  } catch (error) {
-    console.error("Ошибка начисления бонусов:", error);
+  return res.json({
+    success: true,
+    message:
+      "Бонусы начислены",
+    points: newPoints,
+  });
+} catch (error) {
+  console.error(
+    "ADD BONUS ERROR:",
+    error
+  );
 
-    res.status(500).json({
+  return res.status(500).json({
+    success: false,
+    message:
+      "Ошибка начисления бонусов",
+  });
+}
+
+
+}
+);
+
+// ==========================================
+// REMOVE BONUS
+// ==========================================
+
+app.post(
+"/api/clients/:id/bonus/remove",
+async (req, res) => {
+try {
+const { id } = req.params;
+
+
+  const {
+    points,
+    reason,
+  } = req.body;
+
+  const amount =
+    Number(points);
+
+  if (
+    !Number.isFinite(amount) ||
+    amount <= 0
+  ) {
+    return res.status(400).json({
       success: false,
-      message: "Ошибка начисления бонусов",
+      message:
+        "Некорректное количество бонусов",
     });
   }
-});
 
-/* =========================================================
-   BONUS REMOVE
-========================================================= */
+  const clientRef =
+    db.collection("clients").doc(id);
 
-app.post("/api/clients/:id/bonus/remove", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { points, reason } = req.body;
+  const clientDoc =
+    await clientRef.get();
 
-    const amount = Number(points);
-
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Некорректное количество бонусов",
-      });
-    }
-
-    const clientRef = db.collection("clients").doc(id);
-
-    const clientDoc = await clientRef.get();
-
-    if (!clientDoc.exists) {
-      return res.status(404).json({
-        success: false,
-        message: "Клиент не найден",
-      });
-    }
-
-    const client = clientDoc.data();
-
-    const currentPoints = Number(client.points || 0);
-
-    if (amount > currentPoints) {
-      return res.status(400).json({
-        success: false,
-        message: "Недостаточно бонусов",
-      });
-    }
-
-    const newPoints = currentPoints - amount;
-
-    await clientRef.update({
-      points: newPoints,
-      bonuses: newPoints,
+  if (!clientDoc.exists) {
+    return res.status(404).json({
+      success: false,
+      message: "Клиент не найден",
     });
+  }
 
-    await clientRef.collection("operations").add({
+  const client =
+    clientDoc.data();
+
+  const currentPoints =
+    Number(client.points || 0);
+
+  if (amount > currentPoints) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "Недостаточно бонусов",
+    });
+  }
+
+  const newPoints =
+    currentPoints - amount;
+
+  await clientRef.update({
+    points: newPoints,
+    bonuses: newPoints,
+  });
+
+  await clientRef
+    .collection("operations")
+    .add({
       type: "remove",
       points: amount,
-      reason: reason || "Списание бонусов",
+      reason:
+        reason ||
+        "Списание бонусов",
       date: new Date(),
     });
 
-    res.json({
-      success: true,
-      message: "Бонусы списаны",
-      points: newPoints,
-    });
-  } catch (error) {
-    console.error("Ошибка списания бонусов:", error);
+  return res.json({
+    success: true,
+    message:
+      "Бонусы списаны",
+    points: newPoints,
+  });
+} catch (error) {
+  console.error(
+    "REMOVE BONUS ERROR:",
+    error
+  );
 
-    res.status(500).json({
-      success: false,
-      message: "Ошибка списания бонусов",
+  return res.status(500).json({
+    success: false,
+    message:
+      "Ошибка списания бонусов",
+  });
+}
+
+
+}
+);
+
+// ==========================================
+// BONUS CALCULATOR
+// ==========================================
+
+app.post(
+"/api/bonus/calculate",
+async (req, res) => {
+try {
+const {
+price,
+category,
+clientPoints,
+} = req.body;
+
+
+  const result =
+    calculateBonusDiscount({
+      price,
+      category,
+      clientPoints,
     });
-  }
+
+  return res.json({
+    success: true,
+    result,
+  });
+} catch (error) {
+  console.error(
+    "BONUS CALCULATION ERROR:",
+    error
+  );
+
+  return res.status(500).json({
+    success: false,
+    message:
+      "Ошибка расчёта бонусов",
+  });
+}
+
+
+}
+);
+
+// ==========================================
+// 1C TEST
+// ==========================================
+
+const ONE_C_API_KEY =
+process.env.ONE_C_API_KEY ||
+"KUSAI-MAX-1C-KEY-2026";
+
+app.get(
+"/api/1c/test",
+(req, res) => {
+const apiKey =
+req.headers["x-api-key"];
+
+
+if (apiKey !== ONE_C_API_KEY) {
+  return res.status(403).json({
+    success: false,
+    message: "Нет доступа",
+  });
+}
+
+return res.json({
+  success: true,
+  message:
+    "KUSAI MAX API подключен",
+  serverTime:
+    new Date().toISOString(),
 });
 
-/* =========================================================
-   AUTH CLIENT
-========================================================= */
 
-app.post("/api/auth/login", async (req, res) => {
-  try {
-    const { name, phone } = req.body;
+}
+);
 
-    if (!name || !phone) {
-      return res.status(400).json({
-        success: false,
-        message: "Введите имя и телефон",
-      });
-    }
+// ==========================================
+// 1C CLIENTS
+// ==========================================
 
-    const snapshot = await db
+app.get(
+"/api/1c/clients",
+async (req, res) => {
+const apiKey =
+req.headers["x-api-key"];
+
+
+if (apiKey !== ONE_C_API_KEY) {
+  return res.status(403).json({
+    success: false,
+    message: "Нет доступа",
+  });
+}
+
+try {
+  const snapshot =
+    await db
       .collection("clients")
-      .where("phone", "==", phone)
-      .where("name", "==", name)
-      .limit(1)
       .get();
 
-    if (snapshot.empty) {
-      return res.status(404).json({
-        success: false,
-        message: "Клиент не найден",
-      });
-    }
+  const clients =
+    snapshot.docs.map(
+      (clientDoc) => {
+        const data =
+          clientDoc.data();
 
-    const clientDoc = snapshot.docs[0];
-    const clientData = clientDoc.data();
-
-    res.json({
-      success: true,
-      client: {
-        id: clientDoc.id,
-        name: clientData.name,
-        phone: clientData.phone,
-        points: Number(clientData.points || 0),
-        bonuses: Number(clientData.bonuses || 0),
-        status: clientData.status || "MAX START",
-        orders: Number(clientData.orders || 0),
-        createdAt: clientData.createdAt?.toDate
-          ? clientData.createdAt.toDate().toISOString()
-          : clientData.createdAt || null,
-      },
-    });
-  } catch (error) {
-    console.error("Ошибка входа клиента:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Ошибка входа",
-    });
-  }
-});
-
-app.post("/api/auth", async (req, res) => {
-  try {
-    const { name, phone } = req.body;
-
-    if (!name || !phone) {
-      return res.status(400).json({
-        success: false,
-        message: "Введите имя и телефон",
-      });
-    }
-
-    const snapshot = await db
-      .collection("clients")
-      .where("phone", "==", phone)
-      .limit(1)
-      .get();
-
-    if (!snapshot.empty) {
-      const clientDoc = snapshot.docs[0];
-      const clientData = clientDoc.data();
-
-      return res.json({
-        success: true,
-        isNew: false,
-        client: {
+        return {
           id: clientDoc.id,
-          ...clientData,
-          createdAt: clientData.createdAt?.toDate
-            ? clientData.createdAt.toDate().toISOString()
-            : clientData.createdAt || null,
-        },
-      });
-    }
+          name: data.name,
+          phone: data.phone,
+          points:
+            data.points || 0,
+          createdAt:
+            data.createdAt?.toDate
+              ? data.createdAt
+                  .toDate()
+                  .toISOString()
+              : null,
+        };
+      }
+    );
 
-    const welcomeBonus = 100000;
+  return res.json({
+    success: true,
+    count: clients.length,
+    clients,
+  });
+} catch (error) {
+  console.error(
+    "1C CLIENTS ERROR:",
+    error
+  );
 
-    const clientRef = db.collection("clients").doc();
+  return res.status(500).json({
+    success: false,
+    message:
+      "Ошибка получения клиентов",
+  });
+}
 
-    const client = {
-      name,
-      phone,
-      login: name,
-      points: welcomeBonus,
-      bonuses: welcomeBonus,
-      orders: 0,
-      status: "NEW CLIENT",
-      role: "user",
-      createdAt: new Date(),
-      source: "telegram",
-      welcomeBonus: true,
-    };
 
-    await clientRef.set(client);
+}
+);
 
-    await clientRef.collection("operations").add({
-      type: "add",
-      points: welcomeBonus,
-      reason: "Приветственные бонусы",
-      date: new Date(),
-    });
+// ==========================================
+// 1C CLIENT
+// ==========================================
 
-    res.json({
-      success: true,
-      isNew: true,
-      client: {
-        id: clientRef.id,
-        ...client,
-        createdAt: client.createdAt.toISOString(),
-      },
-    });
-  } catch (error) {
-    console.error("Ошибка авторизации:", error);
+app.get(
+"/api/1c/client",
+async (req, res) => {
+const apiKey =
+req.headers["x-api-key"];
 
-    res.status(500).json({
+
+if (apiKey !== ONE_C_API_KEY) {
+  return res.status(403).json({
+    success: false,
+    message: "Нет доступа",
+  });
+}
+
+try {
+  let phone =
+    String(
+      req.query.phone || ""
+    ).trim();
+
+  if (!phone) {
+    return res.status(400).json({
       success: false,
-      message: "Ошибка авторизации",
+      message:
+        "Не указан телефон",
     });
   }
-});
 
-/* =========================================================
-   ADMIN LOGIN
-   ВАЖНО:
-   используем коллекцию adminUsers,
-   потому что именно там у тебя находится администратор.
-========================================================= */
+  if (!phone.startsWith("+")) {
+    phone = "+" + phone;
+  }
 
-app.post("/api/admin/login", async (req, res) => {
-  try {
-    const { login, password } = req.body;
-
-    if (!login || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Введите логин и пароль",
-      });
-    }
-
-    const snapshot = await db
-      .collection("adminUsers")
-      .where("login", "==", login)
+  const snapshot =
+    await db
+      .collection("clients")
+      .where(
+        "phone",
+        "==",
+        phone
+      )
       .limit(1)
       .get();
 
-    if (snapshot.empty) {
-      return res.status(401).json({
-        success: false,
-        message: "Неверный логин или пароль",
-      });
-    }
-
-    const adminDoc = snapshot.docs[0];
-    const admin = adminDoc.data();
-
-    if (!admin.passwordHash) {
-      console.error(
-        "У администратора отсутствует passwordHash"
-      );
-
-      return res.status(500).json({
-        success: false,
-        message: "У администратора не настроен пароль",
-      });
-    }
-
-    const passwordValid = await bcrypt.compare(
-      password,
-      admin.passwordHash
-    );
-
-    if (!passwordValid) {
-      return res.status(401).json({
-        success: false,
-        message: "Неверный логин или пароль",
-      });
-    }
-
+  if (snapshot.empty) {
     return res.json({
-      success: true,
-      admin: {
-        id: adminDoc.id,
-        login: admin.login,
-        name: admin.name || "Administrator",
-        role: "admin",
-      },
-    });
-  } catch (error) {
-    console.error(
-      "Ошибка входа администратора:",
-      error
-    );
-
-    return res.status(500).json({
       success: false,
-      message: "Ошибка сервера",
+      message:
+        "Клиент не найден",
     });
   }
-});
 
-/* =========================================================
-   BONUS CALCULATOR
-========================================================= */
+  const clientDoc =
+    snapshot.docs[0];
 
-app.post("/api/bonus/calculate", async (req, res) => {
-  try {
-    const {
-      price,
-      category,
-      clientPoints,
-    } = req.body;
+  const data =
+    clientDoc.data();
 
-    const result = calculateBonusDiscount({
-      price,
-      category,
-      clientPoints,
-    });
+  return res.json({
+    success: true,
+    client: {
+      id: clientDoc.id,
+      name: data.name,
+      phone: data.phone,
+      points:
+        data.points || 0,
+      status:
+        data.status ||
+        "MAX GOLD",
+    },
+  });
+} catch (error) {
+  console.error(
+    "1C CLIENT ERROR:",
+    error
+  );
 
-    res.json({
-      success: true,
-      result,
-    });
-  } catch (error) {
-    console.error(
-      "Ошибка расчёта бонусов:",
-      error
-    );
+  return res.status(500).json({
+    success: false,
+    message:
+      "Ошибка сервера",
+  });
+}
 
-    res.status(500).json({
-      success: false,
-      message: "Ошибка расчёта бонусов",
-    });
-  }
-});
 
-/* =========================================================
-   404
-========================================================= */
+}
+);
+
+// ==========================================
+// UNKNOWN ROUTE
+// ==========================================
 
 app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: "API route not found",
-    path: req.path,
-  });
+res.status(404).json({
+success: false,
+message: "API route not found",
+path: req.path,
+});
 });
 
-/* =========================================================
-   VERCEL
-========================================================= */
+// ==========================================
+// VERCEL EXPORT
+// ==========================================
 
-// Для Vercel НЕ используем app.listen().
 export default app;

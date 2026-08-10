@@ -67,9 +67,7 @@ type AuthContextType = {
 const AuthContext =
   createContext<AuthContextType | null>(null);
 
-const API_URL =
-  import.meta.env.VITE_API_URL ||
-  "https://kusai-max-api.vercel.app";
+const API_URL = "";
 
 export function AuthProvider({
   children,
