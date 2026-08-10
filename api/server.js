@@ -1,7 +1,9 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { db } from "./firebaseAdmin.js";
 import { calculateBonusDiscount } from "./bonus.js";
+import bcrypt from "bcrypt";
 
 function validatePhone(phone) {
 
@@ -1134,152 +1136,6 @@ app.post("/api/auth/login", async (req, res) => {
 
 });
 
-app.post("/api/auth", async (req, res) => {
-  try {
-
-    const { name, phone } = req.body;
-
-
-    if (!name || !phone) {
-      return res.status(400).json({
-        success: false,
-        message: "Введите имя и телефон"
-      });
-    }
-
-
-    // Ищем клиента по телефону
-
-    const snapshot = await db
-      .collection("clients")
-      .where("phone", "==", phone)
-      .limit(1)
-      .get();
-
-
-
-    // =========================
-    // Клиент существует
-    // =========================
-
-    if (!snapshot.empty) {
-
-      const clientDoc = snapshot.docs[0];
-      const clientData = clientDoc.data();
-
-
-      return res.json({
-
-        success: true,
-
-        isNew: false,
-
-        client: {
-
-          id: clientDoc.id,
-
-          ...clientData,
-
-          createdAt:
-            clientData.createdAt?.toDate
-            ? clientData.createdAt.toDate().toISOString()
-            : clientData.createdAt
-
-        }
-
-      });
-
-    }
-
-
-
-    // =========================
-    // Новый клиент
-    // =========================
-
-
-    const welcomeBonus = 100000;
-
-
-    const clientRef =
-      db.collection("clients").doc();
-
-
-
-    const client = {
-
-      name,
-
-      phone,
-
-      points: welcomeBonus,
-
-      createdAt: new Date()
-
-    };
-
-
-    await clientRef.set(client);
-
-
-
-    // Создаем историю бонусов
-
-    await clientRef
-      .collection("operations")
-      .add({
-
-        type: "add",
-
-        points: welcomeBonus,
-
-        reason: "Приветственные бонусы",
-
-        date: new Date()
-
-      });
-
-
-
-    res.json({
-
-      success: true,
-
-      isNew: true,
-
-      client: {
-
-        id: clientRef.id,
-
-        ...client,
-
-        createdAt:
-          client.createdAt.toISOString()
-
-      }
-
-    });
-
-
-
-  } catch(error) {
-
-    console.error(
-      "Ошибка авторизации:",
-      error
-    );
-
-
-    res.status(500).json({
-
-      success:false,
-
-      message:"Ошибка авторизации"
-
-    });
-
-  }
-});
 
 app.post("/api/auth", async (req, res) => {
 
@@ -1433,6 +1289,134 @@ app.post("/api/auth", async (req, res) => {
       message:"Ошибка авторизации"
 
     });
+
+  }
+
+});
+
+// =================================
+// Вход администратора через Firebase
+// =================================
+
+app.post("/api/admin/login", async (req, res) => {
+
+  try {
+
+    const {
+      login,
+      password
+    } = req.body;
+
+
+    if (!login || !password) {
+
+      return res.status(400).json({
+
+        success:false,
+
+        message:"Введите логин и пароль"
+
+      });
+
+    }
+
+
+
+    const snapshot =
+      await db
+        .collection("admins")
+        .where(
+          "login",
+          "==",
+          login
+        )
+        .limit(1)
+        .get();
+
+
+
+    if(snapshot.empty){
+
+      return res.status(401).json({
+
+        success:false,
+
+        message:"Администратор не найден"
+
+      });
+
+    }
+
+
+
+    const adminDoc =
+      snapshot.docs[0];
+
+
+    const admin =
+      adminDoc.data();
+
+
+
+    const passwordCorrect =
+      await bcrypt.compare(
+        password,
+        admin.passwordHash
+      );
+
+
+
+    if(!passwordCorrect){
+
+      return res.status(401).json({
+
+        success:false,
+
+        message:"Неверный пароль"
+
+      });
+
+    }
+
+
+
+    res.json({
+
+      success:true,
+
+      admin:{
+
+        id:adminDoc.id,
+
+        name:admin.name,
+
+        login:admin.login,
+
+        role:"admin"
+
+      }
+
+    });
+
+
+
+  } catch(error){
+
+
+    console.error(
+      "Ошибка входа администратора:",
+      error
+    );
+
+
+    res.status(500).json({
+
+      success:false,
+
+      message:"Ошибка сервера"
+
+    });
+
 
   }
 
