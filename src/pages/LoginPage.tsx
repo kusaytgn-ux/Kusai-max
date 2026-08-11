@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { User, Phone } from "lucide-react";
@@ -14,27 +13,30 @@ function LoginPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
   async function handleLogin() {
     setError("");
 
+    const cleanPhone = phone.replace(/\D/g, "");
+
     if (!name.trim()) {
-      setError("Введите ваше имя");
+      setError("Введите имя");
       return;
     }
 
-    if (!phone.trim()) {
-      setError("Введите номер телефона");
+    if (cleanPhone.length !== 10) {
+      setError("Введите 10 цифр номера телефона");
       return;
     }
 
-    setLoading(true);
+    // Пользователь вводит только 10 цифр.
+    // Приложение автоматически добавляет +7.
+    const fullPhone = `+7${cleanPhone}`;
 
     try {
       const result = await login(
         name.trim(),
-        phone.trim()
+        fullPhone
       );
 
       if (!result.success) {
@@ -45,16 +47,26 @@ function LoginPage() {
       navigate("/");
     } catch (error) {
       console.error("Login error:", error);
-
-      setError("Ошибка входа. Попробуйте ещё раз.");
-    } finally {
-      setLoading(false);
+      setError("Ошибка входа");
     }
+  }
+
+  function handlePhoneChange(
+    e: React.ChangeEvent<HTMLInputElement>
+  ) {
+    // Оставляем только цифры.
+    // Максимум 10 цифр.
+    const digits = e.target.value
+      .replace(/\D/g, "")
+      .slice(0, 10);
+
+    setPhone(digits);
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-black px-4">
       <div className="w-full max-w-md rounded-3xl bg-zinc-900 p-8">
+        {/* Заголовок */}
         <h1 className="text-center text-4xl font-black text-white">
           Добро пожаловать
         </h1>
@@ -64,47 +76,58 @@ function LoginPage() {
         </p>
 
         <div className="mt-8 space-y-5">
+          {/* Имя */}
           <div className="relative">
             <User
-              className="absolute left-4 top-4 z-10 text-zinc-500"
+              className="absolute left-4 top-1/2 z-20 -translate-y-1/2 text-zinc-500"
               size={20}
             />
 
             <Input
-              className="pl-12"
+              className="h-12 pl-12"
               placeholder="Ваше имя"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              disabled={loading}
             />
           </div>
 
+          {/* Телефон */}
           <div className="relative">
+            {/* Иконка телефона */}
             <Phone
-              className="absolute left-4 top-4 z-10 text-zinc-500"
+              className="absolute left-4 top-1/2 z-20 -translate-y-1/2 text-zinc-500"
               size={20}
             />
 
+            {/* Фиксированный +7 */}
+            <div className="pointer-events-none absolute left-11 top-1/2 z-20 -translate-y-1/2 font-semibold text-white">
+              +7
+            </div>
+
+            {/* Поле ввода */}
             <Input
-              className="pl-12"
-              placeholder="+79991234567"
+              className="h-12 pl-20 pr-4"
+              type="tel"
+              inputMode="numeric"
+              placeholder="1234567890"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              disabled={loading}
+              onChange={handlePhoneChange}
             />
           </div>
 
+          {/* Ошибка */}
           {error && (
             <div className="rounded-xl border border-red-500 bg-red-500/10 p-3 text-center text-sm text-red-400">
               {error}
             </div>
           )}
 
+          {/* Вход */}
           <Button
             onClick={handleLogin}
-            disabled={loading}
+            className="w-full"
           >
-            {loading ? "Входим..." : "Войти"}
+            Войти
           </Button>
         </div>
       </div>

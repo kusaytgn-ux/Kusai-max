@@ -37,12 +37,7 @@ function WelcomePage() {
             Войти
           </Link>
 
-          <Link
-            to="/register"
-            className="block rounded-2xl border border-zinc-700 py-4 text-lg font-bold text-white transition hover:border-yellow-400"
-          >
-            Регистрация
-          </Link>
+          
 
         </div>
 
