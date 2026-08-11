@@ -18,7 +18,7 @@ import {
 
 import {
   collection,
-  getDocs,
+  onSnapshot,
 } from "firebase/firestore";
 
 import { db } from "../firebase/firebase";
@@ -73,32 +73,34 @@ function AdminPage() {
   ];
 
   // ==========================================
-  // Загрузка количества пользователей
+  // REALTIME КОЛИЧЕСТВО ПОЛЬЗОВАТЕЛЕЙ
   // ==========================================
 
   useEffect(() => {
-    async function loadUsersCount() {
-      try {
-        setLoadingUsers(true);
+    setLoadingUsers(true);
 
-        const snapshot = await getDocs(
-          collection(db, "clients")
-        );
+    const clientsRef = collection(db, "clients");
 
+    const unsubscribe = onSnapshot(
+      clientsRef,
+      (snapshot) => {
         setUsersCount(snapshot.size);
-      } catch (error) {
+        setLoadingUsers(false);
+      },
+      (error) => {
         console.error(
-          "Ошибка получения количества пользователей:",
+          "Ошибка realtime пользователей:",
           error
         );
 
         setUsersCount(0);
-      } finally {
         setLoadingUsers(false);
       }
-    }
+    );
 
-    loadUsersCount();
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   return (
@@ -147,7 +149,9 @@ function AdminPage() {
         {/* Контент */}
 
         <main className="flex-1 p-8">
-          {/* Dashboard */}
+          {/* ==========================================
+              DASHBOARD
+          ========================================== */}
 
           {section === "dashboard" && (
             <>
@@ -160,8 +164,16 @@ function AdminPage() {
                   </p>
 
                   <h2 className="mt-3 text-4xl font-black">
-                    {loadingUsers ? "..." : usersCount}
+                    {loadingUsers
+                      ? "..."
+                      : usersCount}
                   </h2>
+
+                  {!loadingUsers && (
+                    <p className="mt-2 text-xs text-green-400">
+                      ● Realtime
+                    </p>
+                  )}
                 </div>
 
                 {/* Заказы */}
@@ -213,13 +225,17 @@ function AdminPage() {
             </>
           )}
 
-          {/* Каталог */}
+          {/* ==========================================
+              КАТАЛОГ
+          ========================================== */}
 
           {section === "catalog" && (
             <AdminCatalog />
           )}
 
-          {/* Заказы */}
+          {/* ==========================================
+              ЗАКАЗЫ
+          ========================================== */}
 
           {section === "orders" && (
             <div className="rounded-3xl bg-zinc-900 p-8">
@@ -234,25 +250,33 @@ function AdminPage() {
             </div>
           )}
 
-          {/* Trade-In */}
+          {/* ==========================================
+              TRADE-IN
+          ========================================== */}
 
           {section === "tradein" && (
             <AdminTradeIn />
           )}
 
-          {/* Concierge */}
+          {/* ==========================================
+              CONCIERGE
+          ========================================== */}
 
           {section === "concierge" && (
             <AdminConcierge />
           )}
 
-          {/* Пользователи */}
+          {/* ==========================================
+              ПОЛЬЗОВАТЕЛИ
+          ========================================== */}
 
           {section === "users" && (
             <AdminUsers />
           )}
 
-          {/* Бонусы */}
+          {/* ==========================================
+              БОНУСЫ
+          ========================================== */}
 
           {section === "bonuses" && (
             <div className="rounded-3xl bg-zinc-900 p-8">
@@ -266,7 +290,9 @@ function AdminPage() {
             </div>
           )}
 
-          {/* Настройки */}
+          {/* ==========================================
+              НАСТРОЙКИ
+          ========================================== */}
 
           {section === "settings" && (
             <div className="rounded-3xl bg-zinc-900 p-8">
