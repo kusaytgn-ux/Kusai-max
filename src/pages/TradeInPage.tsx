@@ -27,7 +27,7 @@ type TradeInResult = {
   price: number;
   reason?: string;
 };
-
+//Цены принятия трейд ин без дефектов и с полным комплектом
 const PRICE_TABLE: Record<string, Record<string, number>> = {
   "iPhone 13 mini": {
     "128 ГБ": 13000,
