@@ -1,11 +1,12 @@
 import {
   collection,
   addDoc,
-  onSnapshot,
+  getDocs,
   deleteDoc,
   updateDoc,
   doc,
   getDoc,
+  onSnapshot,
   type Unsubscribe,
 } from "firebase/firestore";
 
@@ -22,108 +23,66 @@ import type { TradeInProduct } from "../types/TradeInProduct";
 const COLLECTION = "tradeIn";
 
 /**
- * Получить все Trade-In устройства в realtime.
+ * Получить все устройства Trade-In один раз.
  *
- * onProductsUpdate вызывается каждый раз,
- * когда в коллекции tradeIn что-то изменилось.
+ * Используется обычными страницами,
+ * которым не нужен realtime.
+ */
+export async function getTradeInProducts(): Promise<
+  TradeInProduct[]
+> {
+  const snapshot = await getDocs(
+    collection(db, COLLECTION)
+  );
+
+  return snapshot.docs.map((docItem) => ({
+    id: docItem.id,
+    ...docItem.data(),
+  })) as TradeInProduct[];
+}
+
+/**
+ * Realtime-подписка на ВСЕ устройства Trade-In.
  *
- * Возвращает функцию unsubscribe().
+ * При добавлении, изменении или удалении
+ * документа Firestore автоматически передаст
+ * новый список.
  */
 export function subscribeTradeInProducts(
-  onProductsUpdate: (products: TradeInProduct[]) => void,
+  onData: (data: TradeInProduct[]) => void,
   onError?: (error: Error) => void
 ): Unsubscribe {
-  const collectionRef = collection(db, COLLECTION);
-
   return onSnapshot(
-    collectionRef,
+    collection(db, COLLECTION),
     (snapshot) => {
-      const products = snapshot.docs.map((docItem) => ({
-        id: docItem.id,
-        ...docItem.data(),
-      })) as TradeInProduct[];
+      const products = snapshot.docs.map(
+        (docItem) => ({
+          id: docItem.id,
+          ...docItem.data(),
+        })
+      ) as TradeInProduct[];
 
-      onProductsUpdate(products);
+      onData(products);
     },
-    (error) => {
+    (firebaseError) => {
       console.error(
         "Trade-In realtime error:",
-        error
+        firebaseError
       );
 
-      onError?.(error);
+      if (onError) {
+        onError(firebaseError);
+      }
     }
   );
 }
 
 /**
- * Получить количество всех документов
- * в коллекции tradeIn в realtime.
- */
-export function subscribeTradeInCount(
-  onCountUpdate: (count: number) => void,
-  onError?: (error: Error) => void
-): Unsubscribe {
-  const collectionRef = collection(db, COLLECTION);
-
-  return onSnapshot(
-    collectionRef,
-    (snapshot) => {
-      onCountUpdate(snapshot.size);
-    },
-    (error) => {
-      console.error(
-        "Trade-In count realtime error:",
-        error
-      );
-
-      onError?.(error);
-    }
-  );
-}
-
-/**
- * Удалить Trade-In устройство.
- */
-export async function deleteTradeInProduct(
-  id: string
-) {
-  await deleteDoc(
-    doc(db, COLLECTION, id)
-  );
-}
-
-/**
- * Обновить Trade-In устройство.
- */
-export async function updateTradeInProduct(
-  id: string,
-  data: Partial<TradeInProduct>
-) {
-  await updateDoc(
-    doc(db, COLLECTION, id),
-    data
-  );
-}
-
-/**
- * Добавить Trade-In устройство.
- */
-export async function addTradeInProduct(
-  product: Omit<TradeInProduct, "id">
-) {
-  await addDoc(
-    collection(db, COLLECTION),
-    product
-  );
-}
-
-/**
- * Получить одно Trade-In устройство.
+ * Получить одно устройство Trade-In.
  */
 export async function getTradeInProduct(
   id: string
-) {
+): Promise<TradeInProduct | null> {
   const snapshot = await getDoc(
     doc(db, COLLECTION, id)
   );
@@ -139,11 +98,47 @@ export async function getTradeInProduct(
 }
 
 /**
- * Загрузить фотографию Trade-In устройства.
+ * Добавить устройство Trade-In.
+ */
+export async function addTradeInProduct(
+  product: Omit<TradeInProduct, "id">
+): Promise<void> {
+  await addDoc(
+    collection(db, COLLECTION),
+    product
+  );
+}
+
+/**
+ * Обновить устройство Trade-In.
+ */
+export async function updateTradeInProduct(
+  id: string,
+  data: Partial<TradeInProduct>
+): Promise<void> {
+  await updateDoc(
+    doc(db, COLLECTION, id),
+    data
+  );
+}
+
+/**
+ * Удалить устройство Trade-In.
+ */
+export async function deleteTradeInProduct(
+  id: string
+): Promise<void> {
+  await deleteDoc(
+    doc(db, COLLECTION, id)
+  );
+}
+
+/**
+ * Загрузить фотографию Trade-In.
  */
 export async function uploadTradeInImage(
   file: File
-) {
+): Promise<string> {
   const imageRef = ref(
     storage,
     `tradein/${Date.now()}-${file.name}`
