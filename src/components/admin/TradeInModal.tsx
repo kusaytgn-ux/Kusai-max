@@ -16,6 +16,7 @@ function TradeInModal({
     onClose,
     onSaved,
 }: Props) {
+
     const [title, setTitle] = useState("");
     const [price, setPrice] = useState("");
 
@@ -57,11 +58,12 @@ function TradeInModal({
         setWarranty(product.warranty);
         setStatus(product.status);
 
-        // Берём первую сохранённую ссылку на изображение
+        // Берём первую существующую картинку Trade-In
         setImageUrl(product.images?.[0] ?? "");
     }, [product]);
 
     async function handleSave() {
+
         if (!title.trim()) {
             alert("Введите название устройства");
             return;
@@ -73,9 +75,11 @@ function TradeInModal({
         }
 
         try {
+
             setSaving(true);
 
-            // Сохраняем ссылку как единственное изображение
+            // Если ссылка указана — сохраняем её как единственное изображение.
+            // Если поле пустое — сохраняем пустой массив.
             const images = imageUrl.trim()
                 ? [imageUrl.trim()]
                 : [];
@@ -99,35 +103,44 @@ function TradeInModal({
             };
 
             if (product) {
+
                 await updateTradeInProduct(
                     product.id,
                     data
                 );
+
             } else {
+
                 await addTradeInProduct(data);
+
             }
 
             onSaved();
 
         } catch (error) {
+
             console.error(error);
 
             alert("Ошибка сохранения");
 
         } finally {
+
             setSaving(false);
+
         }
     }
 
     return (
+
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur">
 
             <div className="w-full max-w-xl rounded-3xl bg-zinc-900 p-8">
 
                 <h2 className="text-3xl font-black text-white">
                     {product
-                        ? "Редактировать устройство"
-                        : "Новое устройство"}
+                        ? "Редактирование устройства"
+                        : "Новое устройство"
+                    }
                 </h2>
 
                 <div className="mt-8 space-y-5">
@@ -199,33 +212,35 @@ function TradeInModal({
 
                     <div className="space-y-3">
 
+                        <label className="block text-sm font-medium text-zinc-300">
+                            Ссылка на изображение
+                        </label>
+
                         <input
                             type="url"
                             value={imageUrl}
                             onChange={(e) =>
                                 setImageUrl(e.target.value)
                             }
-                            placeholder="Ссылка на изображение"
-                            className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 outline-none text-white"
+                            placeholder="https://example.com/image.jpg"
+                            className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 text-white outline-none transition focus:border-yellow-400"
                         />
 
-                        <p className="text-sm text-zinc-500">
-                            Вставьте прямую ссылку на изображение,
-                            например https://site.ru/image.jpg
-                        </p>
-
                         {imageUrl.trim() && (
+
                             <div className="overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-800">
+
                                 <img
                                     src={imageUrl}
                                     alt="Предпросмотр"
                                     className="h-48 w-full object-cover"
                                     onError={(e) => {
-                                        e.currentTarget.style.display =
-                                            "none";
+                                        e.currentTarget.style.display = "none";
                                     }}
                                 />
+
                             </div>
+
                         )}
 
                     </div>
@@ -235,12 +250,13 @@ function TradeInModal({
                         onChange={(e) =>
                             setStatus(
                                 e.target.value as
-                                    | "available"
-                                    | "sold"
+                                | "available"
+                                | "sold"
                             )
                         }
                         className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 outline-none"
                     >
+
                         <option value="available">
                             В продаже
                         </option>
@@ -248,6 +264,7 @@ function TradeInModal({
                         <option value="sold">
                             Продано
                         </option>
+
                     </select>
 
                 </div>
@@ -257,7 +274,7 @@ function TradeInModal({
                     <button
                         onClick={onClose}
                         disabled={saving}
-                        className="rounded-2xl bg-zinc-700 px-5 py-3 text-white disabled:opacity-50"
+                        className="rounded-2xl bg-zinc-700 px-5 py-3 text-white"
                     >
                         Отмена
                     </button>
@@ -269,7 +286,8 @@ function TradeInModal({
                     >
                         {saving
                             ? "Сохранить..."
-                            : "Сохранить"}
+                            : "Сохранить"
+                        }
                     </button>
 
                 </div>
@@ -277,6 +295,7 @@ function TradeInModal({
             </div>
 
         </div>
+
     );
 }
 
