@@ -1,51 +1,48 @@
-import { useMemo, useState, useRef, useEffect } from "react";
-import { Send, Trash2, Plus } from "lucide-react";
-
-import { useConcierge } from "../../store/ConciergeContext";
-
-import { db } from "../../firebase/firebase";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  query,
-  where,
-} from "firebase/firestore";
+  MessageCircle,
+  Send,
+  Trash2,
+  Plus,
+} from "lucide-react";
 
-import ChatUserCard from "./ChatUserCard";
+import { useConcierge } from "../../store/ConciergeContext";
 
 function AdminConcierge() {
   const {
     messages,
     sendAdminMessage,
+    markAdminMessagesAsRead,
+    deleteUserChat,
   } = useConcierge();
 
   const [selectedUser, setSelectedUser] =
     useState("");
 
-  const [text, setText] = useState("");
-
-  const [newUser, setNewUser] =
+  const [text, setText] =
     useState("");
 
-  const [showNewChat, setShowNewChat] =
-    useState(false);
+  const [newUserLogin, setNewUserLogin] =
+    useState("");
 
-  const [deleting, setDeleting] =
+  const [newChatOpen, setNewChatOpen] =
     useState(false);
 
   const bottomRef =
     useRef<HTMLDivElement>(null);
 
   /*
-   * ==========================================
-   * Список пользователей, с которыми уже есть
-   * сообщения
-   * ==========================================
+   * СПИСОК ПОЛЬЗОВАТЕЛЕЙ
+   *
+   * Берём всех пользователей, которые
+   * когда-либо писали или которым писал админ.
    */
-
   const users = useMemo(() => {
     const list = [
       ...new Set(
@@ -59,22 +56,68 @@ function AdminConcierge() {
   }, [messages]);
 
   /*
-   * ==========================================
-   * Сообщения выбранного пользователя
-   * ==========================================
+   * ТЕКУЩИЙ ЧАТ
    */
-
-  const chat = messages.filter(
-    (message) =>
-      message.userLogin === selectedUser
-  );
+  const chat = useMemo(() => {
+    return messages.filter(
+      (message) =>
+        message.userLogin === selectedUser
+    );
+  }, [messages, selectedUser]);
 
   /*
-   * ==========================================
-   * Автопрокрутка
-   * ==========================================
+   * ОБЩЕЕ КОЛИЧЕСТВО НЕПРОЧИТАННЫХ
+   * СООБЩЕНИЙ ОТ ПОЛЬЗОВАТЕЛЕЙ
    */
+  const totalUnread = useMemo(() => {
+    return messages.filter(
+      (message) =>
+        message.author === "user" &&
+        message.readByAdmin !== true
+    ).length;
+  }, [messages]);
 
+  /*
+   * КОЛИЧЕСТВО НЕПРОЧИТАННЫХ
+   * У КОНКРЕТНОГО ПОЛЬЗОВАТЕЛЯ
+   */
+  function getUnreadCount(
+    userLogin: string
+  ) {
+    return messages.filter(
+      (message) =>
+        message.userLogin === userLogin &&
+        message.author === "user" &&
+        message.readByAdmin !== true
+    ).length;
+  }
+
+  /*
+   * ПРИ ОТКРЫТИИ ЧАТА ПОМЕЧАЕМ
+   * СООБЩЕНИЯ ПОЛЬЗОВАТЕЛЯ ПРОЧИТАННЫМИ
+   */
+  useEffect(() => {
+    if (!selectedUser) {
+      return;
+    }
+
+    markAdminMessagesAsRead(
+      selectedUser
+    ).catch((error) => {
+      console.error(
+        "Ошибка отметки сообщений администратора:",
+        error
+      );
+    });
+  }, [
+    selectedUser,
+    messages,
+    markAdminMessagesAsRead,
+  ]);
+
+  /*
+   * ПРОКРУТКА ЧАТА ВНИЗ
+   */
   useEffect(() => {
     bottomRef.current?.scrollIntoView({
       behavior: "smooth",
@@ -82,14 +125,13 @@ function AdminConcierge() {
   }, [chat]);
 
   /*
-   * ==========================================
-   * Отправить сообщение
-   * ==========================================
+   * ОТПРАВКА СООБЩЕНИЯ
    */
-
   async function handleSend() {
+    const cleanText = text.trim();
+
     if (
-      !text.trim() ||
+      !cleanText ||
       !selectedUser
     ) {
       return;
@@ -98,7 +140,7 @@ function AdminConcierge() {
     try {
       await sendAdminMessage(
         selectedUser,
-        text.trim()
+        cleanText
       );
 
       setText("");
@@ -111,79 +153,47 @@ function AdminConcierge() {
   }
 
   /*
-   * ==========================================
-   * Начать новый чат
-   * ==========================================
+   * АДМИН НАЧИНАЕТ НОВЫЙ ЧАТ
    */
-
-  function handleStartNewChat() {
-    const login = newUser.trim();
+  async function handleStartNewChat() {
+    const login =
+      newUserLogin.trim();
 
     if (!login) {
       return;
     }
 
     setSelectedUser(login);
-    setNewUser("");
-    setShowNewChat(false);
+    setNewUserLogin("");
+    setNewChatOpen(false);
+
+    /*
+     * Если админ сразу вводит сообщение,
+     * оно отправится уже в выбранный чат.
+     */
   }
 
   /*
-   * ==========================================
-   * Удалить весь чат
-   * ==========================================
+   * УДАЛЕНИЕ ЧАТА
    */
-
   async function handleDeleteChat() {
     if (!selectedUser) {
       return;
     }
 
-    const confirmed = window.confirm(
-      `Удалить весь чат с пользователем ${selectedUser}?\n\nВсе сообщения этого чата будут удалены без возможности восстановления.`
-    );
+    const confirmed =
+      window.confirm(
+        `Удалить весь чат с пользователем ${selectedUser}?`
+      );
 
     if (!confirmed) {
       return;
     }
 
     try {
-      setDeleting(true);
-
-      /*
-       * Находим все сообщения выбранного пользователя
-       */
-
-      const q = query(
-        collection(db, "messages"),
-        where(
-          "userLogin",
-          "==",
-          selectedUser
-        )
+      await deleteUserChat(
+        selectedUser
       );
-
-      const snapshot = await getDocs(q);
-
-      /*
-       * Удаляем все документы чата
-       */
-
-      await Promise.all(
-        snapshot.docs.map((messageDoc) =>
-          deleteDoc(
-            doc(
-              db,
-              "messages",
-              messageDoc.id
-            )
-          )
-        )
-      );
-
-      /*
-       * Закрываем выбранный чат
-       */
 
       setSelectedUser("");
       setText("");
@@ -192,126 +202,223 @@ function AdminConcierge() {
         "Ошибка удаления чата:",
         error
       );
-
-      alert(
-        "Не удалось удалить чат."
-      );
-    } finally {
-      setDeleting(false);
     }
   }
 
   return (
     <div className="flex h-[80vh] overflow-hidden rounded-3xl bg-zinc-900">
 
-      {/* ===================================== */}
-      {/* Пользователи */}
-      {/* ===================================== */}
+      {/* ========================= */}
+      {/* ЛЕВАЯ ПАНЕЛЬ ПОЛЬЗОВАТЕЛЕЙ */}
+      {/* ========================= */}
 
-      <div className="w-72 border-r border-zinc-800">
+      <div className="w-80 border-r border-zinc-800">
 
-        <div className="border-b border-zinc-800 p-5">
+        <div className="flex items-center justify-between border-b border-zinc-800 p-5">
 
-          <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
 
-            <h2 className="text-2xl font-bold">
-              Клиенты
-            </h2>
+            <div className="relative">
 
-            <button
-              type="button"
-              onClick={() =>
-                setShowNewChat(
-                  !showNewChat
-                )
-              }
-              className="rounded-xl bg-yellow-400 p-2 text-black transition hover:bg-yellow-300"
-              title="Начать новый чат"
-            >
-              <Plus size={20} />
-            </button>
+              <MessageCircle
+                size={26}
+                className="text-yellow-400"
+              />
+
+              {totalUnread > 0 && (
+                <span className="absolute -right-3 -top-3 flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-xs font-bold text-white">
+                  {totalUnread > 99
+                    ? "99+"
+                    : totalUnread}
+                </span>
+              )}
+
+            </div>
+
+            <div>
+              <h2 className="text-2xl font-bold">
+                Concierge
+              </h2>
+
+              <p className="text-xs text-zinc-500">
+                {totalUnread > 0
+                  ? `${totalUnread} новых`
+                  : "Нет новых сообщений"}
+              </p>
+            </div>
 
           </div>
 
-          {/* Новый чат */}
-
-          {showNewChat && (
-            <div className="mt-4 space-y-3">
-
-              <input
-                value={newUser}
-                onChange={(e) =>
-                  setNewUser(
-                    e.target.value
-                  )
-                }
-                placeholder="Телефон пользователя"
-                className="w-full rounded-xl bg-black px-3 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-yellow-400"
-                onKeyDown={(e) => {
-                  if (
-                    e.key === "Enter"
-                  ) {
-                    handleStartNewChat();
-                  }
-                }}
-              />
-
-              <button
-                type="button"
-                onClick={
-                  handleStartNewChat
-                }
-                className="w-full rounded-xl bg-yellow-400 py-2 font-bold text-black transition hover:bg-yellow-300"
-              >
-                Открыть чат
-              </button>
-
-            </div>
-          )}
+          <button
+            type="button"
+            onClick={() =>
+              setNewChatOpen(
+                (previous) => !previous
+              )
+            }
+            className="flex h-10 w-10 items-center justify-center rounded-xl bg-yellow-400 text-black transition hover:bg-yellow-300"
+            title="Начать новый чат"
+          >
+            <Plus size={20} />
+          </button>
 
         </div>
 
-        <div className="overflow-y-auto">
+        {/* Новый чат */}
 
-          {users.length === 0 && (
+        {newChatOpen && (
+          <div className="border-b border-zinc-800 p-4">
+
+            <p className="mb-2 text-sm font-semibold text-white">
+              Новый чат
+            </p>
+
+            <input
+              value={newUserLogin}
+              onChange={(event) =>
+                setNewUserLogin(
+                  event.target.value
+                )
+              }
+              placeholder="Телефон пользователя"
+              className="w-full rounded-xl bg-black px-4 py-3 text-sm text-white outline-none ring-yellow-400 focus:ring-1"
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  handleStartNewChat();
+                }
+              }}
+            />
+
+            <button
+              type="button"
+              onClick={
+                handleStartNewChat
+              }
+              className="mt-2 w-full rounded-xl bg-yellow-400 py-3 text-sm font-bold text-black transition hover:bg-yellow-300"
+            >
+              Открыть чат
+            </button>
+
+          </div>
+        )}
+
+        {/* Пользователи */}
+
+        <div className="h-full overflow-y-auto">
+
+          {users.length === 0 ? (
             <div className="p-5 text-center text-sm text-zinc-500">
               Пока нет чатов
             </div>
+          ) : (
+            users.map((user) => {
+              const unread =
+                getUnreadCount(user);
+
+              const lastMessage =
+                [...messages]
+                  .filter(
+                    (message) =>
+                      message.userLogin ===
+                      user
+                  )
+                  .sort((a, b) => {
+                    const timeA =
+                      a.createdAt?.toMillis?.() ??
+                      0;
+
+                    const timeB =
+                      b.createdAt?.toMillis?.() ??
+                      0;
+
+                    return (
+                      timeB - timeA
+                    );
+                  })[0];
+
+              return (
+                <button
+                  type="button"
+                  key={user}
+                  onClick={() =>
+                    setSelectedUser(user)
+                  }
+                  className={`flex w-full items-center gap-3 border-b border-zinc-800 px-4 py-4 text-left transition ${
+                    selectedUser === user
+                      ? "bg-zinc-800"
+                      : "hover:bg-zinc-800/60"
+                  }`}
+                >
+
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-yellow-400 font-bold text-black">
+                    {user
+                      .charAt(0)
+                      .toUpperCase()}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+
+                    <div className="flex items-center justify-between gap-2">
+
+                      <p className="truncate font-semibold text-white">
+                        {user}
+                      </p>
+
+                      {unread > 0 && (
+                        <span className="flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-xs font-bold text-white">
+                          {unread > 99
+                            ? "99+"
+                            : unread}
+                        </span>
+                      )}
+
+                    </div>
+
+                    {lastMessage && (
+                      <p className="mt-1 truncate text-xs text-zinc-500">
+                        {lastMessage.author ===
+                        "admin"
+                          ? "Вы: "
+                          : ""}
+                        {lastMessage.text}
+                      </p>
+                    )}
+
+                  </div>
+
+                </button>
+              );
+            })
           )}
-
-          {users.map((user) => (
-
-            <ChatUserCard
-              key={user}
-              login={user}
-              selected={
-                selectedUser === user
-              }
-              onClick={() =>
-                setSelectedUser(user)
-              }
-            />
-
-          ))}
 
         </div>
 
       </div>
 
-      {/* ===================================== */}
-      {/* Чат */}
-      {/* ===================================== */}
+      {/* ========================= */}
+      {/* ПРАВАЯ ЧАСТЬ — ЧАТ */}
+      {/* ========================= */}
 
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
 
         {/* Заголовок */}
 
         <div className="flex items-center justify-between border-b border-zinc-800 p-5">
 
-          <h2 className="text-2xl font-bold">
-            {selectedUser ||
-              "Выберите пользователя"}
-          </h2>
+          <div>
+
+            <h2 className="text-2xl font-bold text-white">
+              {selectedUser ||
+                "Выберите пользователя"}
+            </h2>
+
+            {selectedUser && (
+              <p className="mt-1 text-xs text-zinc-500">
+                Concierge
+              </p>
+            )}
+
+          </div>
 
           {selectedUser && (
             <button
@@ -319,14 +426,10 @@ function AdminConcierge() {
               onClick={
                 handleDeleteChat
               }
-              disabled={deleting}
-              className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-600 text-white transition hover:bg-red-500"
+              title="Удалить чат"
             >
-              <Trash2 size={18} />
-
-              {deleting
-                ? "Удаление..."
-                : "Удалить чат"}
+              <Trash2 size={19} />
             </button>
           )}
 
@@ -336,96 +439,84 @@ function AdminConcierge() {
 
         <div className="flex-1 space-y-4 overflow-y-auto p-5">
 
-          {!selectedUser && (
+          {!selectedUser ? (
             <div className="flex h-full items-center justify-center text-zinc-500">
               Выберите пользователя
-              или начните новый чат
             </div>
-          )}
-
-          {selectedUser &&
-            chat.length === 0 && (
-              <div className="flex h-full items-center justify-center">
-
-                <div className="max-w-sm text-center">
-
-                  <p className="text-lg font-semibold text-white">
-                    Чат пока пуст
-                  </p>
-
-                  <p className="mt-2 text-sm text-zinc-500">
-                    Вы можете написать
-                    пользователю первым.
-                  </p>
-
-                </div>
-
-              </div>
-            )}
-
-          {chat.map((message) => (
-
-            <div
-              key={message.id}
-              className={`max-w-[70%] rounded-3xl px-5 py-3 ${
-                message.author ===
-                "admin"
-                  ? "ml-auto bg-yellow-400 text-black"
-                  : "bg-zinc-800 text-white"
-              }`}
-            >
-
-              <div className="flex flex-col gap-2">
+          ) : chat.length === 0 ? (
+            <div className="flex h-full items-center justify-center text-center text-zinc-500">
+              <div>
+                <MessageCircle
+                  size={45}
+                  className="mx-auto mb-4 text-zinc-700"
+                />
 
                 <p>
-                  {message.text}
+                  Чат пуст
                 </p>
 
-                <span className="text-right text-xs opacity-60">
-                  {message.createdAt?.toDate
-                    ? message.createdAt
-                        .toDate()
-                        .toLocaleTimeString(
-                          [],
-                          {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          }
-                        )
-                    : ""}
-                </span>
-
+                <p className="mt-1 text-sm">
+                  Можно написать пользователю первым
+                </p>
               </div>
-
             </div>
+          ) : (
+            <>
+              {chat.map((message) => (
+                <div
+                  key={message.id}
+                  className={`max-w-[70%] rounded-3xl px-5 py-3 ${
+                    message.author === "admin"
+                      ? "ml-auto bg-yellow-400 text-black"
+                      : "bg-zinc-800 text-white"
+                  }`}
+                >
 
-          ))}
+                  <div className="flex flex-col gap-2">
 
-          <div ref={bottomRef} />
+                    <p>
+                      {message.text}
+                    </p>
+
+                    <span className="text-right text-xs opacity-60">
+                      {message.createdAt?.toDate
+                        ? message.createdAt
+                            .toDate()
+                            .toLocaleTimeString(
+                              [],
+                              {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }
+                            )
+                        : ""}
+                    </span>
+
+                  </div>
+
+                </div>
+              ))}
+
+              <div ref={bottomRef} />
+            </>
+          )}
 
         </div>
 
-        {/* ================================= */}
-        {/* Поле отправки */}
-        {/* ================================= */}
+        {/* Поле сообщения */}
 
         {selectedUser && (
-
           <div className="flex gap-3 border-t border-zinc-800 p-5">
 
             <input
               value={text}
-              onChange={(e) =>
-                setText(
-                  e.target.value
-                )
+              onChange={(event) =>
+                setText(event.target.value)
               }
               placeholder="Введите сообщение..."
-              className="flex-1 rounded-2xl bg-black px-5 py-3 text-white outline-none focus:ring-2 focus:ring-yellow-400"
-              onKeyDown={(e) => {
-                if (
-                  e.key === "Enter"
-                ) {
+              className="flex-1 rounded-2xl bg-black px-5 py-3 text-white outline-none"
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
                   handleSend();
                 }
               }}
@@ -435,15 +526,12 @@ function AdminConcierge() {
               type="button"
               onClick={handleSend}
               disabled={!text.trim()}
-              className="rounded-2xl bg-yellow-400 px-5 transition hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-12 w-12 items-center justify-center rounded-2xl bg-yellow-400 text-black transition hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
-
-              <Send className="text-black" />
-
+              <Send size={20} />
             </button>
 
           </div>
-
         )}
 
       </div>
