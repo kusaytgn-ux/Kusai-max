@@ -1,6 +1,6 @@
 import { Bell, MessageCircle, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 import { useAuth } from "../../auth/AuthContext";
 import { useConcierge } from "../../store/ConciergeContext";

@@ -11,8 +11,6 @@ import {
   addDoc,
   onSnapshot,
   serverTimestamp,
-  query,
-  where,
   updateDoc,
   doc,
 } from "firebase/firestore";
