@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "start": "tsx scripts/production.js",
     "dev:api": "tsx api/server.js",
+    "dev:production": "tsx scripts/production.js",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
