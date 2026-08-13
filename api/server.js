@@ -5,6 +5,12 @@ import { db } from "./firebaseAdmin.js";
 import { calculateBonusDiscount } from "./bonus.js";
 import bcrypt from "bcryptjs";
 
+import {
+  getProducts,
+  getProductById,
+  testMoySklad,
+} from "./moysklad.js";
+
 function validatePhone(phone) {
 
   const regex = /^\+7\d{10}$/;
@@ -16,7 +22,9 @@ function validatePhone(phone) {
 const app = express();
 
 const PORT = 3001;
-const ONE_C_API_KEY = "KUSAI-MAX-1C-KEY-2026";
+const ONE_C_API_KEY =
+  process.env.ONE_C_API_KEY ||
+  "KUSAI-MAX-1C-KEY-2026";
 
 app.use(cors());
 app.use(express.json());
@@ -1422,6 +1430,140 @@ app.post("/api/admin/login", async (req, res) => {
 
 });
 
+// =================================
+// MOYSKLAD
+// =================================
+
+// Проверка соединения с МойСклад
+app.get("/api/moysklad/test", async (req, res) => {
+  try {
+    const result = await testMoySklad();
+
+    res.json({
+      success: true,
+      message: "МойСклад подключен",
+      ...result,
+    });
+
+  } catch (error) {
+    console.error(
+      "Ошибка подключения к МойСклад:",
+      error.response?.data || error.message
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Ошибка подключения к МойСклад",
+      error:
+        error.response?.data ||
+        error.message,
+    });
+  }
+});
+
+
+// Получить весь ассортимент
+app.get(
+  "/api/moysklad/products",
+  async (req, res) => {
+
+    try {
+
+      const products =
+        await getProducts();
+
+      res.json({
+        success: true,
+        count: products.length,
+        products,
+      });
+
+    } catch (error) {
+
+      console.error(
+        "Ошибка получения товаров из МойСклад:",
+        error.response?.data ||
+        error.message
+      );
+
+      res.status(500).json({
+
+        success: false,
+
+        message:
+          "Ошибка получения товаров из МойСклад",
+
+        error:
+          error.response?.data ||
+          error.message,
+
+      });
+
+    }
+  }
+);
+
+
+// Получить один товар
+app.get(
+  "/api/moysklad/products/:id",
+  async (req, res) => {
+
+    try {
+
+      const { id } =
+        req.params;
+
+      const product =
+        await getProductById(id);
+
+      res.json({
+
+        success: true,
+
+        product,
+
+      });
+
+    } catch (error) {
+
+      console.error(
+        "Ошибка получения товара из МойСклад:",
+        error.response?.data ||
+        error.message
+      );
+
+      if (
+        error.response?.status === 404
+      ) {
+
+        return res.status(404).json({
+
+          success: false,
+
+          message:
+            "Товар не найден в МойСклад",
+
+        });
+
+      }
+
+      res.status(500).json({
+
+        success: false,
+
+        message:
+          "Ошибка получения товара",
+
+        error:
+          error.response?.data ||
+          error.message,
+
+      });
+
+    }
+  }
+);
 
 
 app.listen(PORT, () => {
