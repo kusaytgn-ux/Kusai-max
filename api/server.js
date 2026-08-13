@@ -21,7 +21,7 @@ function validatePhone(phone) {
 
 const app = express();
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 const ONE_C_API_KEY =
   process.env.ONE_C_API_KEY ||
   "KUSAI-MAX-1C-KEY-2026";
