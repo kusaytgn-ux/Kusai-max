@@ -71,7 +71,7 @@ function AdminConcierge() {
       try {
         const snapshot =
           await getDocs(
-            collection(db, "users")
+            collection(db, "clients")
           );
 
         const names: Record<string, string> =
