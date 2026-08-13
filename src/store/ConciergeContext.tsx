@@ -55,9 +55,14 @@ export function ConciergeProvider({
   const [messages, setMessages] =
     useState<ChatMessage[]>([]);
 
+  /*
+   * REALTIME ЗАГРУЗКА СООБЩЕНИЙ
+   */
   useEffect(() => {
+    const messagesRef = collection(db, "messages");
+
     const unsubscribe = onSnapshot(
-      collection(db, "messages"),
+      messagesRef,
       (snapshot) => {
         const list: ChatMessage[] =
           snapshot.docs.map((messageDoc) => ({
@@ -68,12 +73,37 @@ export function ConciergeProvider({
             >),
           }));
 
+        /*
+         * Сортируем сообщения по времени.
+         *
+         * Важный момент:
+         * serverTimestamp() при создании документа
+         * некоторое время может быть null.
+         *
+         * Поэтому сообщение всё равно добавляется
+         * в список сразу, даже если timestamp ещё
+         * не пришёл от Firebase.
+         */
         list.sort((a, b) => {
           const timeA =
-            a.createdAt?.seconds ?? 0;
+            a.createdAt?.toMillis?.() ??
+            (a.createdAt?.seconds
+              ? a.createdAt.seconds * 1000
+              : 0);
 
           const timeB =
-            b.createdAt?.seconds ?? 0;
+            b.createdAt?.toMillis?.() ??
+            (b.createdAt?.seconds
+              ? b.createdAt.seconds * 1000
+              : 0);
+
+          /*
+           * Если Firebase ещё не установил timestamp,
+           * сохраняем стабильный порядок.
+           */
+          if (timeA === timeB) {
+            return a.id.localeCompare(b.id);
+          }
 
           return timeA - timeB;
         });
@@ -82,45 +112,78 @@ export function ConciergeProvider({
       },
       (error) => {
         console.error(
-          "Ошибка realtime Concierge:",
+          "Ошибка realtime-загрузки сообщений:",
           error
         );
       }
     );
 
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
+  /*
+   * ПОЛЬЗОВАТЕЛЬ ОТПРАВЛЯЕТ СООБЩЕНИЕ
+   */
   async function sendUserMessage(
     userLogin: string,
     text: string
   ) {
-    await addDoc(collection(db, "messages"), {
-      userLogin,
-      author: "user",
-      text,
-      createdAt: serverTimestamp(),
+    const cleanText = text.trim();
 
-      // Сообщение пользователя уже прочитано самим пользователем
-      readByUser: true,
-    });
+    if (!cleanText) return;
+
+    await addDoc(
+      collection(db, "messages"),
+      {
+        userLogin,
+        author: "user",
+        text: cleanText,
+
+        /*
+         * Пользователь своё сообщение уже прочитал.
+         * Для администратора оно является новым.
+         */
+        readByUser: true,
+
+        createdAt: serverTimestamp(),
+      }
+    );
   }
 
+  /*
+   * АДМИНИСТРАТОР ОТПРАВЛЯЕТ СООБЩЕНИЕ
+   */
   async function sendAdminMessage(
     userLogin: string,
     text: string
   ) {
-    await addDoc(collection(db, "messages"), {
-      userLogin,
-      author: "admin",
-      text,
-      createdAt: serverTimestamp(),
+    const cleanText = text.trim();
 
-      // Пользователь ещё не прочитал сообщение
-      readByUser: false,
-    });
+    if (!cleanText) return;
+
+    await addDoc(
+      collection(db, "messages"),
+      {
+        userLogin,
+        author: "admin",
+        text: cleanText,
+
+        /*
+         * Для пользователя сообщение новое.
+         */
+        readByUser: false,
+
+        createdAt: serverTimestamp(),
+      }
+    );
   }
 
+  /*
+   * ПОМЕТИТЬ СООБЩЕНИЯ АДМИНИСТРАТОРА
+   * КАК ПРОЧИТАННЫЕ ПОЛЬЗОВАТЕЛЕМ
+   */
   async function markMessagesAsRead(
     userLogin: string
   ) {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   House,
@@ -6,7 +6,6 @@ import {
   Star,
   Repeat,
   ShoppingCart,
-  MessageCircle,
 } from "lucide-react";
 
 import { collection, onSnapshot } from "firebase/firestore";
@@ -46,11 +45,9 @@ function BottomNavigation() {
   const location = useLocation();
   const { user } = useAuth();
 
-  const [unreadMessages, setUnreadMessages] = useState(0);
 
   useEffect(() => {
     if (!user?.phone) {
-      setUnreadMessages(0);
       return;
     }
 
@@ -89,7 +86,6 @@ function BottomNavigation() {
           }
         });
 
-        setUnreadMessages(unreadCount);
       },
       (error) => {
         console.error(
@@ -115,8 +111,6 @@ function BottomNavigation() {
         `concierge_read_${user.phone}`,
         Date.now().toString()
       );
-
-      setUnreadMessages(0);
     }
   }, [location.pathname, user?.phone]);
 
@@ -156,58 +150,7 @@ function BottomNavigation() {
           );
         })}
 
-        {/* Concierge */}
-        <Link
-          to="/concierge"
-          className="relative flex flex-col items-center gap-1"
-        >
-          <div className="relative">
-            <MessageCircle
-              size={22}
-              className={
-                location.pathname === "/concierge"
-                  ? "text-yellow-400"
-                  : "text-zinc-500"
-              }
-            />
-
-            {unreadMessages > 0 && (
-              <span
-                className="
-                  absolute
-                  -right-3
-                  -top-3
-                  flex
-                  min-h-[18px]
-                  min-w-[18px]
-                  items-center
-                  justify-center
-                  rounded-full
-                  bg-red-500
-                  px-1
-                  text-[10px]
-                  font-black
-                  leading-none
-                  text-white
-                "
-              >
-                {unreadMessages > 99
-                  ? "99+"
-                  : unreadMessages}
-              </span>
-            )}
-          </div>
-
-          <span
-            className={`text-xs ${
-              location.pathname === "/concierge"
-                ? "text-yellow-400"
-                : "text-zinc-500"
-            }`}
-          >
-            Concierge
-          </span>
-        </Link>
+        
       </div>
     </nav>
   );
