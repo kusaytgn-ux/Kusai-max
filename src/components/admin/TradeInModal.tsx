@@ -25,19 +25,16 @@ function TradeInModal({
     const [condition, setCondition] = useState("");
     const [warranty, setWarranty] = useState("");
 
+    const [imageUrl, setImageUrl] = useState("");
+
     const [status, setStatus] = useState<
         "available" | "sold"
     >("available");
-
-    // Ссылки на изображения
-    const [images, setImages] = useState<string[]>([]);
-    const [imageUrl, setImageUrl] = useState("");
 
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
         if (!product) {
-            // Очищаем форму при создании нового товара
             setTitle("");
             setPrice("");
             setDescription("");
@@ -45,14 +42,11 @@ function TradeInModal({
             setColor("");
             setCondition("");
             setWarranty("");
-            setStatus("available");
-            setImages([]);
             setImageUrl("");
-
+            setStatus("available");
             return;
         }
 
-        // Заполняем форму при редактировании
         setTitle(product.title);
         setPrice(product.price.toString());
 
@@ -61,43 +55,11 @@ function TradeInModal({
         setColor(product.color);
         setCondition(product.condition);
         setWarranty(product.warranty);
-
         setStatus(product.status);
 
-        setImages(product.images ?? []);
-        setImageUrl("");
+        // Берём первую сохранённую ссылку на изображение
+        setImageUrl(product.images?.[0] ?? "");
     }, [product]);
-
-    function handleAddImageUrl() {
-        const url = imageUrl.trim();
-
-        if (!url) {
-            return;
-        }
-
-        // Проверяем, что это действительно ссылка
-        try {
-            new URL(url);
-        } catch {
-            alert("Введите корректную ссылку на изображение");
-            return;
-        }
-
-        // Не добавляем одинаковую ссылку дважды
-        if (images.includes(url)) {
-            alert("Такая фотография уже добавлена");
-            return;
-        }
-
-        setImages((prev) => [...prev, url]);
-        setImageUrl("");
-    }
-
-    function handleRemoveImage(index: number) {
-        setImages((prev) =>
-            prev.filter((_, imageIndex) => imageIndex !== index)
-        );
-    }
 
     async function handleSave() {
         if (!title.trim()) {
@@ -110,27 +72,24 @@ function TradeInModal({
             return;
         }
 
-        const numericPrice = Number(price);
-
-        if (Number.isNaN(numericPrice)) {
-            alert("Цена должна быть числом");
-            return;
-        }
-
         try {
             setSaving(true);
 
+            // Сохраняем ссылку как единственное изображение
+            const images = imageUrl.trim()
+                ? [imageUrl.trim()]
+                : [];
+
             const data = {
-                title: title.trim(),
-                description: description.trim(),
-                price: numericPrice,
+                title,
+                description,
+                price: Number(price),
 
-                memory: memory.trim(),
-                color: color.trim(),
-                condition: condition.trim(),
-                warranty: warranty.trim(),
+                memory,
+                color,
+                condition,
+                warranty,
 
-                // Сохраняем ссылки на изображения
                 images,
 
                 status,
@@ -149,13 +108,12 @@ function TradeInModal({
             }
 
             onSaved();
+
         } catch (error) {
-            console.error(
-                "Ошибка сохранения Trade-In:",
-                error
-            );
+            console.error(error);
 
             alert("Ошибка сохранения");
+
         } finally {
             setSaving(false);
         }
@@ -163,11 +121,12 @@ function TradeInModal({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur">
-            <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-3xl bg-zinc-900 p-8">
+
+            <div className="w-full max-w-xl rounded-3xl bg-zinc-900 p-8">
 
                 <h2 className="text-3xl font-black text-white">
                     {product
-                        ? "Редактирование устройства"
+                        ? "Редактировать устройство"
                         : "Новое устройство"}
                 </h2>
 
@@ -179,7 +138,7 @@ function TradeInModal({
                             setTitle(e.target.value)
                         }
                         placeholder="Название устройства"
-                        className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 text-white outline-none"
+                        className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 outline-none"
                     />
 
                     <input
@@ -188,8 +147,7 @@ function TradeInModal({
                             setPrice(e.target.value)
                         }
                         placeholder="Цена"
-                        inputMode="numeric"
-                        className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 text-white outline-none"
+                        className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 outline-none"
                     />
 
                     <textarea
@@ -198,7 +156,7 @@ function TradeInModal({
                             setDescription(e.target.value)
                         }
                         placeholder="Описание"
-                        className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 text-white outline-none"
+                        className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 outline-none"
                     />
 
                     <input
@@ -207,7 +165,7 @@ function TradeInModal({
                             setMemory(e.target.value)
                         }
                         placeholder="Память (например 256 ГБ)"
-                        className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 text-white outline-none"
+                        className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 outline-none"
                     />
 
                     <input
@@ -216,7 +174,7 @@ function TradeInModal({
                             setColor(e.target.value)
                         }
                         placeholder="Цвет"
-                        className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 text-white outline-none"
+                        className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 outline-none"
                     />
 
                     <input
@@ -225,7 +183,7 @@ function TradeInModal({
                             setCondition(e.target.value)
                         }
                         placeholder="Состояние"
-                        className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 text-white outline-none"
+                        className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 outline-none"
                     />
 
                     <input
@@ -234,8 +192,43 @@ function TradeInModal({
                             setWarranty(e.target.value)
                         }
                         placeholder="Гарантия"
-                        className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 text-white outline-none"
+                        className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 outline-none"
                     />
+
+                    {/* Ссылка на изображение */}
+
+                    <div className="space-y-3">
+
+                        <input
+                            type="url"
+                            value={imageUrl}
+                            onChange={(e) =>
+                                setImageUrl(e.target.value)
+                            }
+                            placeholder="Ссылка на изображение"
+                            className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 outline-none text-white"
+                        />
+
+                        <p className="text-sm text-zinc-500">
+                            Вставьте прямую ссылку на изображение,
+                            например https://site.ru/image.jpg
+                        </p>
+
+                        {imageUrl.trim() && (
+                            <div className="overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-800">
+                                <img
+                                    src={imageUrl}
+                                    alt="Предпросмотр"
+                                    className="h-48 w-full object-cover"
+                                    onError={(e) => {
+                                        e.currentTarget.style.display =
+                                            "none";
+                                    }}
+                                />
+                            </div>
+                        )}
+
+                    </div>
 
                     <select
                         value={status}
@@ -246,7 +239,7 @@ function TradeInModal({
                                     | "sold"
                             )
                         }
-                        className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 text-white outline-none"
+                        className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 outline-none"
                     >
                         <option value="available">
                             В продаже
@@ -257,118 +250,22 @@ function TradeInModal({
                         </option>
                     </select>
 
-                    {/* ФОТО ПО ССЫЛКЕ */}
-
-                    <div className="rounded-2xl border border-zinc-700 bg-zinc-800 p-5">
-
-                        <h3 className="mb-3 text-lg font-bold text-white">
-                            Фотографии
-                        </h3>
-
-                        <div className="flex gap-3">
-
-                            <input
-                                value={imageUrl}
-                                onChange={(e) =>
-                                    setImageUrl(
-                                        e.target.value
-                                    )
-                                }
-                                onKeyDown={(e) => {
-                                    if (
-                                        e.key === "Enter"
-                                    ) {
-                                        e.preventDefault();
-                                        handleAddImageUrl();
-                                    }
-                                }}
-                                placeholder="https://site.ru/image.jpg"
-                                className="min-w-0 flex-1 rounded-2xl border border-zinc-700 bg-zinc-900 p-4 text-white outline-none"
-                            />
-
-                            <button
-                                type="button"
-                                onClick={
-                                    handleAddImageUrl
-                                }
-                                className="rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-black transition hover:bg-yellow-300"
-                            >
-                                Добавить
-                            </button>
-
-                        </div>
-
-                        {images.length > 0 && (
-                            <div className="mt-5 grid grid-cols-2 gap-3">
-
-                                {images.map(
-                                    (image, index) => (
-                                        <div
-                                            key={`${image}-${index}`}
-                                            className="relative overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-900"
-                                        >
-
-                                            <img
-                                                src={image}
-                                                alt={`Фото ${
-                                                    index + 1
-                                                }`}
-                                                className="h-40 w-full object-cover"
-                                                onError={(
-                                                    e
-                                                ) => {
-                                                    e.currentTarget.style.opacity =
-                                                        "0.3";
-                                                }}
-                                            />
-
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    handleRemoveImage(
-                                                        index
-                                                    )
-                                                }
-                                                className="absolute right-2 top-2 rounded-xl bg-red-500 px-3 py-2 text-sm font-bold text-white transition hover:bg-red-400"
-                                            >
-                                                Удалить
-                                            </button>
-
-                                        </div>
-                                    )
-                                )}
-
-                            </div>
-                        )}
-
-                        {images.length === 0 && (
-                            <p className="mt-4 text-sm text-zinc-500">
-                                Пока нет добавленных фотографий
-                            </p>
-                        )}
-
-                    </div>
-
                 </div>
-
-                {/* КНОПКИ */}
 
                 <div className="mt-8 flex justify-end gap-3">
 
                     <button
-                        type="button"
                         onClick={onClose}
                         disabled={saving}
-                        className="rounded-2xl bg-zinc-700 px-5 py-3 text-white transition hover:bg-zinc-600 disabled:opacity-50"
+                        className="rounded-2xl bg-zinc-700 px-5 py-3 text-white disabled:opacity-50"
                     >
                         Отмена
                     </button>
 
                     <button
-                        type="button"
                         onClick={handleSave}
                         disabled={saving}
-                        className="rounded-2xl bg-yellow-400 px-6 py-3 font-bold text-black transition hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded-2xl bg-yellow-400 px-6 py-3 font-bold text-black transition hover:bg-yellow-300 disabled:opacity-50"
                     >
                         {saving
                             ? "Сохранить..."
@@ -378,6 +275,7 @@ function TradeInModal({
                 </div>
 
             </div>
+
         </div>
     );
 }
