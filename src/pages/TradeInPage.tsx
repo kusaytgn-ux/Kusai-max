@@ -6,7 +6,7 @@ import BottomNavigation from "../components/navigation/BottomNavigation";
 import Button from "../components/ui/Button";
 
 import type { TradeInProduct } from "../types/TradeInProduct";
-import { getTradeInProducts } from "../services/tradeInService";
+import { subscribeTradeInProducts } from "../services/tradeInService";
 
 type ScreenCondition =
   | "perfect"
@@ -27,7 +27,8 @@ type TradeInResult = {
   price: number;
   reason?: string;
 };
-//Цены принятия трейд ин без дефектов и с полным комплектом
+
+// Цены принятия Trade-In без дефектов и с полным комплектом
 const PRICE_TABLE: Record<string, Record<string, number>> = {
   "iPhone 13 mini": {
     "128 ГБ": 13000,
@@ -201,7 +202,8 @@ function calculateTradeIn(
     return {
       accepted: false,
       price: 0,
-      reason: "Для выбранной модели такой объём памяти пока не указан.",
+      reason:
+        "Для выбранной модели такой объём памяти пока не указан.",
     };
   }
 
@@ -209,18 +211,17 @@ function calculateTradeIn(
     return {
       accepted: false,
       price: 0,
-      reason: "Экран разбит. Такое устройство не принимается в Trade-In.",
+      reason:
+        "Экран разбит. Такое устройство не принимается в Trade-In.",
     };
   }
 
   let price = modelPrices[memory];
 
-  // Коробка
   if (box === "no") {
     price -= 1000;
   }
 
-  // Аккумулятор
   if (battery < 85) {
     if (model.startsWith("iPhone 15")) {
       price -= 3500;
@@ -229,7 +230,6 @@ function calculateTradeIn(
     }
   }
 
-  // Экран
   const screenOption = SCREEN_OPTIONS.find(
     (item) => item.value === screen
   );
@@ -238,7 +238,6 @@ function calculateTradeIn(
     price -= screenOption.deduction;
   }
 
-  // Корпус
   const bodyOption = BODY_OPTIONS.find(
     (item) => item.value === body
   );
@@ -254,19 +253,33 @@ function calculateTradeIn(
 }
 
 function TradeInPage() {
-  const [products, setProducts] = useState<TradeInProduct[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [products, setProducts] =
+    useState<TradeInProduct[]>([]);
 
-  const [showEstimator, setShowEstimator] = useState(false);
-  const [step, setStep] = useState(1);
+  const [loading, setLoading] =
+    useState(true);
 
-  const [model, setModel] = useState("");
-  const [memory, setMemory] = useState("");
-  const [battery, setBattery] = useState("");
+  const [showEstimator, setShowEstimator] =
+    useState(false);
+
+  const [step, setStep] =
+    useState(1);
+
+  const [model, setModel] =
+    useState("");
+
+  const [memory, setMemory] =
+    useState("");
+
+  const [battery, setBattery] =
+    useState("");
+
   const [screen, setScreen] =
     useState<ScreenCondition | "">("");
+
   const [body, setBody] =
     useState<BodyCondition | "">("");
+
   const [box, setBox] =
     useState<BoxCondition | "">("");
 
@@ -275,23 +288,38 @@ function TradeInPage() {
 
   const navigate = useNavigate();
 
+  /*
+   * REALTIME Trade-In
+   *
+   * Подписываемся на коллекцию.
+   *
+   * ВАЖНО:
+   * unsubscribe вызывается автоматически,
+   * когда пользователь уходит со страницы.
+   */
   useEffect(() => {
-    loadProducts();
-  }, []);
+    setLoading(true);
 
-  async function loadProducts() {
-    try {
-      const data = await getTradeInProducts();
-      setProducts(data);
-    } catch (error) {
-      console.error(
-        "Ошибка загрузки Trade-In:",
-        error
+    const unsubscribe =
+      subscribeTradeInProducts(
+        (data) => {
+          setProducts(data);
+          setLoading(false);
+        },
+        (error) => {
+          console.error(
+            "Ошибка realtime Trade-In:",
+            error
+          );
+
+          setLoading(false);
+        }
       );
-    } finally {
-      setLoading(false);
-    }
-  }
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   function startEstimator() {
     setShowEstimator(true);
@@ -327,14 +355,15 @@ function TradeInPage() {
       return;
     }
 
-    const calculation = calculateTradeIn(
-      model,
-      memory,
-      batteryValue,
-      screen as ScreenCondition,
-      body as BodyCondition,
-      box as BoxCondition
-    );
+    const calculation =
+      calculateTradeIn(
+        model,
+        memory,
+        batteryValue,
+        screen as ScreenCondition,
+        body as BodyCondition,
+        box as BoxCondition
+      );
 
     setResult(calculation);
   }
@@ -364,7 +393,9 @@ function TradeInPage() {
   const selectedMemoryOptions =
     model && PRICE_TABLE[model]
       ? MEMORY_OPTIONS.filter(
-          (item) => PRICE_TABLE[model][item] !== undefined
+          (item) =>
+            PRICE_TABLE[model][item] !==
+            undefined
         )
       : [];
 
@@ -379,8 +410,6 @@ function TradeInPage() {
           Обменяйте своё устройство или выберите
           проверенную технику.
         </p>
-
-        {/* Оценка устройства */}
 
         <div className="mt-8 rounded-3xl bg-zinc-900 p-6">
           <div className="flex items-center gap-4">
@@ -410,8 +439,6 @@ function TradeInPage() {
           </div>
         </div>
 
-        {/* Список устройств */}
-
         <h2 className="mt-10 text-2xl font-bold">
           Устройства Trade-In
         </h2>
@@ -439,7 +466,9 @@ function TradeInPage() {
               <div
                 key={product.id}
                 onClick={() =>
-                  navigate(`/tradein/${product.id}`)
+                  navigate(
+                    `/tradein/${product.id}`
+                  )
                 }
                 className="cursor-pointer overflow-hidden rounded-3xl bg-zinc-900 transition hover:scale-[1.02]"
               >
@@ -507,13 +536,9 @@ function TradeInPage() {
         )}
       </div>
 
-      {/* Модальное окно оценки */}
-
       {showEstimator && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 px-5 backdrop-blur-sm">
           <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl bg-zinc-900 p-6">
-            {/* Верхняя панель */}
-
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-zinc-500">
@@ -532,8 +557,6 @@ function TradeInPage() {
                 <X size={20} />
               </button>
             </div>
-
-            {/* Результат */}
 
             {result ? (
               <div className="mt-8">
@@ -601,8 +624,6 @@ function TradeInPage() {
               </div>
             ) : (
               <>
-                {/* Прогресс */}
-
                 <div className="mt-6 flex gap-2">
                   {Array.from({
                     length: 6,
@@ -618,8 +639,6 @@ function TradeInPage() {
                   ))}
                 </div>
 
-                {/* Шаг 1 */}
-
                 {step === 1 && (
                   <div className="mt-8">
                     <h3 className="text-2xl font-bold">
@@ -627,28 +646,24 @@ function TradeInPage() {
                     </h3>
 
                     <div className="mt-5 grid gap-3">
-                      {MODELS.map(
-                        (item) => (
-                          <button
-                            key={item}
-                            onClick={() =>
-                              setModel(item)
-                            }
-                            className={`rounded-2xl border p-4 text-left font-semibold transition ${
-                              model === item
-                                ? "border-yellow-400 bg-yellow-400 text-black"
-                                : "border-zinc-700 bg-zinc-800 hover:border-zinc-500"
-                            }`}
-                          >
-                            {item}
-                          </button>
-                        )
-                      )}
+                      {MODELS.map((item) => (
+                        <button
+                          key={item}
+                          onClick={() =>
+                            setModel(item)
+                          }
+                          className={`rounded-2xl border p-4 text-left font-semibold transition ${
+                            model === item
+                              ? "border-yellow-400 bg-yellow-400 text-black"
+                              : "border-zinc-700 bg-zinc-800 hover:border-zinc-500"
+                          }`}
+                        >
+                          {item}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 )}
-
-                {/* Шаг 2 */}
 
                 {step === 2 && (
                   <div className="mt-8">
@@ -676,8 +691,6 @@ function TradeInPage() {
                     />
                   </div>
                 )}
-
-                {/* Шаг 3 */}
 
                 {step === 3 && (
                   <div className="mt-8">
@@ -710,8 +723,6 @@ function TradeInPage() {
                   </div>
                 )}
 
-                {/* Шаг 4 */}
-
                 {step === 4 && (
                   <div className="mt-8">
                     <h3 className="text-2xl font-bold">
@@ -743,8 +754,6 @@ function TradeInPage() {
                     </div>
                   </div>
                 )}
-
-                {/* Шаг 5 */}
 
                 {step === 5 && (
                   <div className="mt-8">
@@ -782,8 +791,6 @@ function TradeInPage() {
                   </div>
                 )}
 
-                {/* Шаг 6 */}
-
                 {step === 6 && (
                   <div className="mt-8">
                     <h3 className="text-2xl font-bold">
@@ -811,8 +818,6 @@ function TradeInPage() {
                     </div>
                   </div>
                 )}
-
-                {/* Кнопки */}
 
                 <div className="mt-8 flex gap-3">
                   {step > 1 && (

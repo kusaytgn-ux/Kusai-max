@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+
 import { useCart } from "../store/CartContext";
 
 import Header from "../components/layout/Header";
@@ -8,36 +9,110 @@ import ProductGallery from "../components/product/ProductGallery";
 import Button from "../components/ui/Button";
 
 import type { TradeInProduct } from "../types/TradeInProduct";
-import { getTradeInProduct } from "../services/tradeInService";
 
-
+import {
+  subscribeTradeInProduct,
+} from "../services/tradeInService";
 
 function TradeInProductPage() {
-    console.log("TradeInProductPage render");
-    const { id } = useParams();
+  const { id } = useParams();
+
   const navigate = useNavigate();
-  const { addToCart} = useCart();
 
-  const [product, setProduct] = useState<TradeInProduct | null>(null);
-  const [loading, setLoading] = useState(true);
-  
+  const { addToCart } = useCart();
+
+  const [product, setProduct] =
+    useState<TradeInProduct | null>(null);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  /*
+   * REALTIME-подписка на конкретное устройство.
+   *
+   * Теперь:
+   *
+   * изменение устройства
+   *       ↓
+   * Firestore
+   *       ↓
+   * onSnapshot
+   *       ↓
+   * setProduct
+   *       ↓
+   * экран обновляется
+   *
+   * Если администратор удалит устройство,
+   * onData получит null.
+   */
   useEffect(() => {
-    loadProduct();
-  }, []);
+    if (!id) {
+      setProduct(null);
+      setLoading(false);
+      return;
+    }
 
-  
+    setLoading(true);
 
-  async function loadProduct() {
-    if (!id) return;
+    const unsubscribe =
+      subscribeTradeInProduct(
+        id,
+        (data) => {
+          setProduct(data);
+          setLoading(false);
+        },
+        (error) => {
+          console.error(
+            "Ошибка realtime Trade-In устройства:",
+            error
+          );
 
-    const data = await getTradeInProduct(id);
+          setProduct(null);
+          setLoading(false);
+        }
+      );
 
-    setProduct(data);
+    return () => {
+      unsubscribe();
+    };
+  }, [id]);
 
-    setLoading(false);
+  function handleBuy() {
+    if (!product) return;
+
+    /*
+     * На всякий случай проверяем,
+     * что устройство всё ещё существует.
+     *
+     * Если администратор удалил его,
+     * realtime уже установит product = null.
+     */
+    addToCart({
+      id: product.id,
+      type: "tradein",
+      title: product.title,
+      price: product.price,
+      image: product.images[0],
+    });
+
+    navigate("/cart");
   }
 
-  
+  function handleConsultation() {
+    if (!product) return;
+
+    navigate("/concierge", {
+      state: {
+        message: `Здравствуйте!
+
+Меня заинтересовало устройство Trade-In:
+
+📱 ${product.title}
+
+Хотел бы получить консультацию по нему.`,
+      },
+    });
+  }
 
   if (loading) {
     return (
@@ -49,68 +124,52 @@ function TradeInProductPage() {
 
   if (!product) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-black text-white">
-        Устройство не найдено
+      <div className="flex min-h-screen flex-col items-center justify-center bg-black px-5 text-center text-white">
+        <h1 className="text-2xl font-bold">
+          Устройство не найдено
+        </h1>
+
+        <p className="mt-3 text-zinc-400">
+          Возможно, устройство уже было удалено
+          из Trade-In.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => navigate("/tradein")}
+          className="mt-6 rounded-2xl bg-yellow-400 px-6 py-3 font-bold text-black"
+        >
+          Вернуться в Trade-In
+        </button>
       </div>
     );
   }
 
-  function handleBuy(){
-    if (!product) return;
-
-    addToCart({
-      id:product.id,
-      type:"tradein",
-      title: product.title,
-      price: product.price,
-      image: product.images[0],
-    });
-
-    navigate("/cart");
-  }
-
-  function handleConsultation() {
-    navigate("/concierge", {
-      state: {
-        message: `Здравствуйте!
-
-  Меня заинтересовало устройство Trade-In:
-
-  📱 ${product?.title}
-
-  Хотел бы получить консультацию по нему.`,
-      },
-    });
-  }
-
   return (
     <div className="min-h-screen bg-black pb-28">
-
       <Header />
 
       <main className="mx-auto max-w-md px-5 py-5">
- 
         <ProductGallery
           images={product.images}
           title={product.title}
         />
 
         <div className="mt-6">
-
           <h1 className="text-3xl font-black text-white">
             {product.title}
           </h1>
 
           <p className="mt-5 text-4xl font-black text-yellow-400">
-            {product.price.toLocaleString("ru-RU")} ₽
+            {product.price.toLocaleString(
+              "ru-RU"
+            )}{" "}
+            ₽
           </p>
-
         </div>
 
         <div className="mt-6 rounded-3xl bg-zinc-900 p-5">
-
           <div className="flex justify-between">
-
             <span className="text-zinc-400">
               Память
             </span>
@@ -118,11 +177,9 @@ function TradeInProductPage() {
             <span className="text-white">
               {product.memory}
             </span>
-
           </div>
 
           <div className="mt-4 flex justify-between">
-
             <span className="text-zinc-400">
               Цвет
             </span>
@@ -130,11 +187,9 @@ function TradeInProductPage() {
             <span className="text-white">
               {product.color}
             </span>
-
           </div>
 
           <div className="mt-4 flex justify-between">
-
             <span className="text-zinc-400">
               Состояние
             </span>
@@ -142,11 +197,9 @@ function TradeInProductPage() {
             <span className="text-white">
               {product.condition}
             </span>
-
           </div>
 
           <div className="mt-4 flex justify-between">
-
             <span className="text-zinc-400">
               Гарантия
             </span>
@@ -154,13 +207,10 @@ function TradeInProductPage() {
             <span className="text-white">
               {product.warranty}
             </span>
-
           </div>
-
         </div>
 
         <div className="mt-6 rounded-3xl bg-zinc-900 p-5">
-
           <h2 className="text-xl font-bold text-white">
             Описание
           </h2>
@@ -168,25 +218,22 @@ function TradeInProductPage() {
           <p className="mt-4 leading-7 text-zinc-300">
             {product.description}
           </p>
-
         </div>
 
         <div className="mt-8 space-y-3">
-
           <Button onClick={handleBuy}>
             Купить
           </Button>
 
-          <Button onClick={handleConsultation}>
+          <Button
+            onClick={handleConsultation}
+          >
             Получить консультацию
           </Button>
-
         </div>
-
       </main>
 
       <BottomNavigation />
-
     </div>
   );
 }

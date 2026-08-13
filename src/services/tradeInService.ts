@@ -25,8 +25,8 @@ const COLLECTION = "tradeIn";
 /**
  * Получить все устройства Trade-In один раз.
  *
- * Используется обычными страницами,
- * которым не нужен realtime.
+ * Оставляем эту функцию для других мест проекта,
+ * где realtime не нужен.
  */
 export async function getTradeInProducts(): Promise<
   TradeInProduct[]
@@ -42,11 +42,12 @@ export async function getTradeInProducts(): Promise<
 }
 
 /**
- * Realtime-подписка на ВСЕ устройства Trade-In.
+ * Realtime-подписка на все устройства Trade-In.
  *
- * При добавлении, изменении или удалении
- * документа Firestore автоматически передаст
- * новый список.
+ * Срабатывает сразу при:
+ * - добавлении устройства;
+ * - изменении устройства;
+ * - удалении устройства.
  */
 export function subscribeTradeInProducts(
   onData: (data: TradeInProduct[]) => void,
@@ -70,15 +71,15 @@ export function subscribeTradeInProducts(
         firebaseError
       );
 
-      if (onError) {
-        onError(firebaseError);
-      }
+      onError?.(firebaseError);
     }
   );
 }
 
 /**
- * Получить одно устройство Trade-In.
+ * Получить одно устройство Trade-In один раз.
+ *
+ * Оставляем для совместимости с другими частями проекта.
  */
 export async function getTradeInProduct(
   id: string
@@ -95,6 +96,46 @@ export async function getTradeInProduct(
     id: snapshot.id,
     ...snapshot.data(),
   } as TradeInProduct;
+}
+
+/**
+ * Realtime-подписка на одно устройство Trade-In.
+ *
+ * Если устройство изменили —
+ * пользователь сразу получает новые данные.
+ *
+ * Если устройство удалили —
+ * onData получает null.
+ */
+export function subscribeTradeInProduct(
+  id: string,
+  onData: (
+    data: TradeInProduct | null
+  ) => void,
+  onError?: (error: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    doc(db, COLLECTION, id),
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        onData(null);
+        return;
+      }
+
+      onData({
+        id: snapshot.id,
+        ...snapshot.data(),
+      } as TradeInProduct);
+    },
+    (firebaseError) => {
+      console.error(
+        "Trade-In product realtime error:",
+        firebaseError
+      );
+
+      onError?.(firebaseError);
+    }
+  );
 }
 
 /**
