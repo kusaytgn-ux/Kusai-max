@@ -8,18 +8,23 @@ import {
 import {
   MessageCircle,
   Send,
-  Trash2,
   Plus,
+  Trash2,
+  X,
 } from "lucide-react";
 
 import { useConcierge } from "../../store/ConciergeContext";
+
+import ChatUserCard from "./ChatUserCard";
 
 function AdminConcierge() {
   const {
     messages,
     sendAdminMessage,
-    markAdminMessagesAsRead,
-    deleteUserChat,
+    markMessagesAsRead,
+    deleteChat,
+    getUnreadForAdmin,
+    getTotalUnreadForAdmin,
   } = useConcierge();
 
   const [selectedUser, setSelectedUser] =
@@ -28,119 +33,139 @@ function AdminConcierge() {
   const [text, setText] =
     useState("");
 
-  const [newUserLogin, setNewUserLogin] =
+  const [newUser, setNewUser] =
     useState("");
 
-  const [newChatOpen, setNewChatOpen] =
+  const [showNewChat, setShowNewChat] =
+    useState(false);
+
+  const [deleteConfirm, setDeleteConfirm] =
     useState(false);
 
   const bottomRef =
     useRef<HTMLDivElement>(null);
 
   /*
-   * СПИСОК ПОЛЬЗОВАТЕЛЕЙ
+   * Получаем пользователей из сообщений.
    *
-   * Берём всех пользователей, которые
-   * когда-либо писали или которым писал админ.
+   * Set убирает дубликаты.
    */
   const users = useMemo(() => {
     const list = [
       ...new Set(
         messages
-          .map((message) => message.userLogin)
+          .map(
+            (message) =>
+              message.userLogin
+          )
           .filter(Boolean)
       ),
     ];
 
-    return list;
+    /*
+     * Сначала пользователи с последними
+     * сообщениями.
+     */
+    return list.sort((a, b) => {
+      const lastA = [...messages]
+        .reverse()
+        .find(
+          (message) =>
+            message.userLogin === a
+        );
+
+      const lastB = [...messages]
+        .reverse()
+        .find(
+          (message) =>
+            message.userLogin === b
+        );
+
+      const timeA =
+        lastA?.createdAt?.toMillis?.() ??
+        lastA?.createdAt?.seconds ??
+        0;
+
+      const timeB =
+        lastB?.createdAt?.toMillis?.() ??
+        lastB?.createdAt?.seconds ??
+        0;
+
+      return timeB - timeA;
+    });
   }, [messages]);
 
   /*
-   * ТЕКУЩИЙ ЧАТ
+   * Сообщения выбранного пользователя.
    */
-  const chat = useMemo(() => {
-    return messages.filter(
-      (message) =>
-        message.userLogin === selectedUser
-    );
-  }, [messages, selectedUser]);
+  const chat = useMemo(
+    () =>
+      messages.filter(
+        (message) =>
+          message.userLogin ===
+          selectedUser
+      ),
+    [messages, selectedUser]
+  );
 
   /*
-   * ОБЩЕЕ КОЛИЧЕСТВО НЕПРОЧИТАННЫХ
-   * СООБЩЕНИЙ ОТ ПОЛЬЗОВАТЕЛЕЙ
+   * Общее количество новых сообщений.
    */
-  const totalUnread = useMemo(() => {
-    return messages.filter(
-      (message) =>
-        message.author === "user" &&
-        message.readByAdmin !== true
-    ).length;
-  }, [messages]);
+  const totalUnread =
+    getTotalUnreadForAdmin();
 
   /*
-   * КОЛИЧЕСТВО НЕПРОЧИТАННЫХ
-   * У КОНКРЕТНОГО ПОЛЬЗОВАТЕЛЯ
-   */
-  function getUnreadCount(
-    userLogin: string
-  ) {
-    return messages.filter(
-      (message) =>
-        message.userLogin === userLogin &&
-        message.author === "user" &&
-        message.readByAdmin !== true
-    ).length;
-  }
-
-  /*
-   * ПРИ ОТКРЫТИИ ЧАТА ПОМЕЧАЕМ
-   * СООБЩЕНИЯ ПОЛЬЗОВАТЕЛЯ ПРОЧИТАННЫМИ
+   * Автоматическая прокрутка чата вниз.
    */
   useEffect(() => {
     if (!selectedUser) {
       return;
     }
 
-    markAdminMessagesAsRead(
-      selectedUser
+    bottomRef.current?.scrollIntoView({
+      behavior: "smooth",
+    });
+  }, [chat, selectedUser]);
+
+  /*
+   * Когда админ открывает чат —
+   * сообщения пользователя становятся прочитанными.
+   */
+  useEffect(() => {
+    if (!selectedUser) {
+      return;
+    }
+
+    markMessagesAsRead(
+      selectedUser,
+      "user"
     ).catch((error) => {
       console.error(
-        "Ошибка отметки сообщений администратора:",
+        "Ошибка отметки сообщений:",
         error
       );
     });
   }, [
     selectedUser,
     messages,
-    markAdminMessagesAsRead,
+    markMessagesAsRead,
   ]);
 
   /*
-   * ПРОКРУТКА ЧАТА ВНИЗ
-   */
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({
-      behavior: "smooth",
-    });
-  }, [chat]);
-
-  /*
-   * ОТПРАВКА СООБЩЕНИЯ
+   * Отправка сообщения.
    */
   async function handleSend() {
-    const cleanText = text.trim();
-
     if (
-      !cleanText ||
-      !selectedUser
+      !text.trim() ||
+      !selectedUser.trim()
     ) {
       return;
     }
 
     try {
       await sendAdminMessage(
-        selectedUser,
-        cleanText
+        selectedUser.trim(),
+        text.trim()
       );
 
       setText("");
@@ -153,50 +178,37 @@ function AdminConcierge() {
   }
 
   /*
-   * АДМИН НАЧИНАЕТ НОВЫЙ ЧАТ
+   * Начать новый чат первым.
    */
-  async function handleStartNewChat() {
+  function handleStartNewChat() {
     const login =
-      newUserLogin.trim();
+      newUser.trim();
 
     if (!login) {
       return;
     }
 
     setSelectedUser(login);
-    setNewUserLogin("");
-    setNewChatOpen(false);
-
-    /*
-     * Если админ сразу вводит сообщение,
-     * оно отправится уже в выбранный чат.
-     */
+    setNewUser("");
+    setShowNewChat(false);
   }
 
   /*
-   * УДАЛЕНИЕ ЧАТА
+   * Удаление чата.
    */
   async function handleDeleteChat() {
     if (!selectedUser) {
       return;
     }
 
-    const confirmed =
-      window.confirm(
-        `Удалить весь чат с пользователем ${selectedUser}?`
-      );
-
-    if (!confirmed) {
-      return;
-    }
-
     try {
-      await deleteUserChat(
+      await deleteChat(
         selectedUser
       );
 
       setSelectedUser("");
       setText("");
+      setDeleteConfirm(false);
     } catch (error) {
       console.error(
         "Ошибка удаления чата:",
@@ -206,84 +218,326 @@ function AdminConcierge() {
   }
 
   return (
-    <div className="flex h-[80vh] overflow-hidden rounded-3xl bg-zinc-900">
+    <div className="flex h-[80vh] min-h-0 overflow-hidden rounded-3xl bg-zinc-900">
 
       {/* ========================= */}
-      {/* ЛЕВАЯ ПАНЕЛЬ ПОЛЬЗОВАТЕЛЕЙ */}
+      {/* ЛЕВАЯ КОЛОНКА */}
       {/* ========================= */}
 
-      <div className="w-80 border-r border-zinc-800">
+      <div className="flex w-80 min-h-0 shrink-0 flex-col border-r border-zinc-800">
 
-        <div className="flex items-center justify-between border-b border-zinc-800 p-5">
+        {/* Заголовок */}
+        <div className="flex shrink-0 items-center justify-between border-b border-zinc-800 p-5">
 
           <div className="flex items-center gap-3">
 
-            <div className="relative">
-
-              <MessageCircle
-                size={26}
-                className="text-yellow-400"
-              />
-
-              {totalUnread > 0 && (
-                <span className="absolute -right-3 -top-3 flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-xs font-bold text-white">
-                  {totalUnread > 99
-                    ? "99+"
-                    : totalUnread}
-                </span>
-              )}
-
-            </div>
+            <MessageCircle
+              size={32}
+              className="text-yellow-400"
+            />
 
             <div>
-              <h2 className="text-2xl font-bold">
+
+              <h2 className="text-2xl font-bold text-white">
                 Concierge
               </h2>
 
-              <p className="text-xs text-zinc-500">
+              <p className="text-sm text-zinc-500">
                 {totalUnread > 0
-                  ? `${totalUnread} новых`
+                  ? `${totalUnread} новых сообщений`
                   : "Нет новых сообщений"}
               </p>
+
             </div>
+
+            {totalUnread > 0 && (
+              <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-red-500 px-2 text-sm font-bold text-white">
+                {totalUnread}
+              </span>
+            )}
 
           </div>
 
+          {/* Новый чат */}
           <button
             type="button"
             onClick={() =>
-              setNewChatOpen(
-                (previous) => !previous
-              )
+              setShowNewChat(true)
             }
-            className="flex h-10 w-10 items-center justify-center rounded-xl bg-yellow-400 text-black transition hover:bg-yellow-300"
-            title="Начать новый чат"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-yellow-400 text-black transition hover:scale-105"
+            title="Новый чат"
           >
-            <Plus size={20} />
+            <Plus size={26} />
           </button>
 
         </div>
 
-        {/* Новый чат */}
+        {/* Список пользователей */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
 
-        {newChatOpen && (
-          <div className="border-b border-zinc-800 p-4">
+          {users.length === 0 ? (
 
-            <p className="mb-2 text-sm font-semibold text-white">
-              Новый чат
-            </p>
+            <div className="p-6 text-center text-zinc-500">
+              Пока нет чатов
+            </div>
+
+          ) : (
+
+            users.map((user) => {
+
+              const unread =
+                getUnreadForAdmin(
+                  user
+                );
+
+              return (
+                <div
+                  key={user}
+                  className="relative"
+                >
+
+                  <ChatUserCard
+                    key={user}
+                    login={user}
+                    selected={
+                      selectedUser ===
+                      user
+                    }
+                    onClick={() => {
+                      setSelectedUser(
+                        user
+                      );
+                    }}
+                  />
+
+                  {/* Непрочитанные */}
+                  {unread > 0 && (
+                    <span className="pointer-events-none absolute right-4 top-1/2 flex h-7 min-w-7 -translate-y-1/2 items-center justify-center rounded-full bg-red-500 px-2 text-xs font-bold text-white">
+                      {unread}
+                    </span>
+                  )}
+
+                </div>
+              );
+            })
+
+          )}
+
+        </div>
+
+      </div>
+
+      {/* ========================= */}
+      {/* ПРАВАЯ КОЛОНКА */}
+      {/* ========================= */}
+
+      <div className="flex min-w-0 min-h-0 flex-1 flex-col">
+
+        {/* Заголовок чата */}
+        <div className="flex shrink-0 items-center justify-between border-b border-zinc-800 p-5">
+
+          <div>
+
+            <h2 className="text-2xl font-bold text-white">
+              {selectedUser ||
+                "Выберите пользователя"}
+            </h2>
+
+            {selectedUser && (
+              <p className="mt-1 text-sm text-zinc-500">
+                {chat.length} сообщений
+              </p>
+            )}
+
+          </div>
+
+          {/* Удаление */}
+          {selectedUser && (
+            <button
+              type="button"
+              onClick={() =>
+                setDeleteConfirm(true)
+              }
+              className="flex h-11 w-11 items-center justify-center rounded-2xl bg-zinc-800 text-red-400 transition hover:bg-red-500 hover:text-white"
+              title="Удалить чат"
+            >
+              <Trash2 size={20} />
+            </button>
+          )}
+
+        </div>
+
+        {/* Сообщения */}
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+
+          {!selectedUser ? (
+
+            <div className="flex h-full items-center justify-center">
+
+              <p className="text-xl text-zinc-600">
+                Выберите пользователя
+              </p>
+
+            </div>
+
+          ) : chat.length === 0 ? (
+
+            <div className="flex h-full items-center justify-center">
+
+              <p className="text-zinc-500">
+                Сообщений пока нет.
+                <br />
+                Напишите пользователю первым.
+              </p>
+
+            </div>
+
+          ) : (
+
+            <div className="space-y-4">
+
+              {chat.map((message) => (
+
+                <div
+                  key={message.id}
+                  className={`flex ${
+                    message.author ===
+                    "admin"
+                      ? "justify-end"
+                      : "justify-start"
+                  }`}
+                >
+
+                  <div
+                    className={`max-w-[70%] rounded-3xl px-5 py-3 ${
+                      message.author ===
+                      "admin"
+                        ? "bg-yellow-400 text-black"
+                        : "bg-zinc-800 text-white"
+                    }`}
+                  >
+
+                    <p>
+                      {message.text}
+                    </p>
+
+                    <span
+                      className={`mt-2 block text-right text-xs opacity-60`}
+                    >
+                      {message.createdAt
+                        ?.toDate
+                        ? message.createdAt
+                            .toDate()
+                            .toLocaleTimeString(
+                              [],
+                              {
+                                hour: "2-digit",
+                                minute:
+                                  "2-digit",
+                              }
+                            )
+                        : ""}
+                    </span>
+
+                  </div>
+
+                </div>
+
+              ))}
+
+              <div
+                ref={bottomRef}
+              />
+
+            </div>
+
+          )}
+
+        </div>
+
+        {/* Поле отправки */}
+        {selectedUser && (
+          <div className="flex shrink-0 gap-3 border-t border-zinc-800 p-5">
 
             <input
-              value={newUserLogin}
+              value={text}
               onChange={(event) =>
-                setNewUserLogin(
+                setText(
                   event.target.value
                 )
               }
-              placeholder="Телефон пользователя"
-              className="w-full rounded-xl bg-black px-4 py-3 text-sm text-white outline-none ring-yellow-400 focus:ring-1"
+              placeholder="Введите сообщение..."
+              className="min-w-0 flex-1 rounded-2xl bg-black px-5 py-3 text-white outline-none"
               onKeyDown={(event) => {
-                if (event.key === "Enter") {
+                if (
+                  event.key ===
+                  "Enter"
+                ) {
+                  handleSend();
+                }
+              }}
+            />
+
+            <button
+              type="button"
+              onClick={handleSend}
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-yellow-400 text-black transition hover:scale-105"
+              title="Отправить"
+            >
+              <Send size={20} />
+            </button>
+
+          </div>
+        )}
+
+      </div>
+
+      {/* ========================= */}
+      {/* НОВЫЙ ЧАТ */}
+      {/* ========================= */}
+
+      {showNewChat && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-5">
+
+          <div className="w-full max-w-md rounded-3xl bg-zinc-900 p-6 shadow-2xl">
+
+            <div className="mb-5 flex items-center justify-between">
+
+              <h3 className="text-2xl font-bold text-white">
+                Новый чат
+              </h3>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShowNewChat(false)
+                }
+                className="rounded-xl p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+              >
+                <X size={20} />
+              </button>
+
+            </div>
+
+            <p className="mb-4 text-sm text-zinc-500">
+              Введите телефон или логин пользователя.
+            </p>
+
+            <input
+              autoFocus
+              value={newUser}
+              onChange={(event) =>
+                setNewUser(
+                  event.target.value
+                )
+              }
+              placeholder="+79000000000"
+              className="w-full rounded-2xl bg-black px-5 py-4 text-white outline-none"
+              onKeyDown={(event) => {
+                if (
+                  event.key ===
+                  "Enter"
+                ) {
                   handleStartNewChat();
                 }
               }}
@@ -294,247 +548,66 @@ function AdminConcierge() {
               onClick={
                 handleStartNewChat
               }
-              className="mt-2 w-full rounded-xl bg-yellow-400 py-3 text-sm font-bold text-black transition hover:bg-yellow-300"
+              className="mt-4 w-full rounded-2xl bg-yellow-400 py-4 font-bold text-black transition hover:scale-[1.01]"
             >
               Открыть чат
             </button>
 
           </div>
-        )}
 
-        {/* Пользователи */}
+        </div>
+      )}
 
-        <div className="h-full overflow-y-auto">
+      {/* ========================= */}
+      {/* ПОДТВЕРЖДЕНИЕ УДАЛЕНИЯ */}
+      {/* ========================= */}
 
-          {users.length === 0 ? (
-            <div className="p-5 text-center text-sm text-zinc-500">
-              Пока нет чатов
-            </div>
-          ) : (
-            users.map((user) => {
-              const unread =
-                getUnreadCount(user);
+      {deleteConfirm &&
+        selectedUser && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-5">
 
-              const lastMessage =
-                [...messages]
-                  .filter(
-                    (message) =>
-                      message.userLogin ===
-                      user
-                  )
-                  .sort((a, b) => {
-                    const timeA =
-                      a.createdAt?.toMillis?.() ??
-                      0;
+            <div className="w-full max-w-md rounded-3xl bg-zinc-900 p-6 shadow-2xl">
 
-                    const timeB =
-                      b.createdAt?.toMillis?.() ??
-                      0;
+              <h3 className="text-2xl font-bold text-white">
+                Удалить чат?
+              </h3>
 
-                    return (
-                      timeB - timeA
-                    );
-                  })[0];
+              <p className="mt-3 text-zinc-400">
+                Все сообщения пользователя{" "}
+                <span className="font-bold text-white">
+                  {selectedUser}
+                </span>{" "}
+                будут удалены без возможности восстановления.
+              </p>
 
-              return (
+              <div className="mt-6 flex gap-3">
+
                 <button
                   type="button"
-                  key={user}
                   onClick={() =>
-                    setSelectedUser(user)
+                    setDeleteConfirm(false)
                   }
-                  className={`flex w-full items-center gap-3 border-b border-zinc-800 px-4 py-4 text-left transition ${
-                    selectedUser === user
-                      ? "bg-zinc-800"
-                      : "hover:bg-zinc-800/60"
-                  }`}
+                  className="flex-1 rounded-2xl bg-zinc-800 py-3 font-bold text-white hover:bg-zinc-700"
                 >
-
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-yellow-400 font-bold text-black">
-                    {user
-                      .charAt(0)
-                      .toUpperCase()}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-
-                    <div className="flex items-center justify-between gap-2">
-
-                      <p className="truncate font-semibold text-white">
-                        {user}
-                      </p>
-
-                      {unread > 0 && (
-                        <span className="flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-xs font-bold text-white">
-                          {unread > 99
-                            ? "99+"
-                            : unread}
-                        </span>
-                      )}
-
-                    </div>
-
-                    {lastMessage && (
-                      <p className="mt-1 truncate text-xs text-zinc-500">
-                        {lastMessage.author ===
-                        "admin"
-                          ? "Вы: "
-                          : ""}
-                        {lastMessage.text}
-                      </p>
-                    )}
-
-                  </div>
-
+                  Отмена
                 </button>
-              );
-            })
-          )}
 
-        </div>
-
-      </div>
-
-      {/* ========================= */}
-      {/* ПРАВАЯ ЧАСТЬ — ЧАТ */}
-      {/* ========================= */}
-
-      <div className="flex min-w-0 flex-1 flex-col">
-
-        {/* Заголовок */}
-
-        <div className="flex items-center justify-between border-b border-zinc-800 p-5">
-
-          <div>
-
-            <h2 className="text-2xl font-bold text-white">
-              {selectedUser ||
-                "Выберите пользователя"}
-            </h2>
-
-            {selectedUser && (
-              <p className="mt-1 text-xs text-zinc-500">
-                Concierge
-              </p>
-            )}
-
-          </div>
-
-          {selectedUser && (
-            <button
-              type="button"
-              onClick={
-                handleDeleteChat
-              }
-              className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-600 text-white transition hover:bg-red-500"
-              title="Удалить чат"
-            >
-              <Trash2 size={19} />
-            </button>
-          )}
-
-        </div>
-
-        {/* Сообщения */}
-
-        <div className="flex-1 space-y-4 overflow-y-auto p-5">
-
-          {!selectedUser ? (
-            <div className="flex h-full items-center justify-center text-zinc-500">
-              Выберите пользователя
-            </div>
-          ) : chat.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-center text-zinc-500">
-              <div>
-                <MessageCircle
-                  size={45}
-                  className="mx-auto mb-4 text-zinc-700"
-                />
-
-                <p>
-                  Чат пуст
-                </p>
-
-                <p className="mt-1 text-sm">
-                  Можно написать пользователю первым
-                </p>
-              </div>
-            </div>
-          ) : (
-            <>
-              {chat.map((message) => (
-                <div
-                  key={message.id}
-                  className={`max-w-[70%] rounded-3xl px-5 py-3 ${
-                    message.author === "admin"
-                      ? "ml-auto bg-yellow-400 text-black"
-                      : "bg-zinc-800 text-white"
-                  }`}
+                <button
+                  type="button"
+                  onClick={
+                    handleDeleteChat
+                  }
+                  className="flex-1 rounded-2xl bg-red-500 py-3 font-bold text-white hover:bg-red-600"
                 >
+                  Удалить
+                </button>
 
-                  <div className="flex flex-col gap-2">
+              </div>
 
-                    <p>
-                      {message.text}
-                    </p>
-
-                    <span className="text-right text-xs opacity-60">
-                      {message.createdAt?.toDate
-                        ? message.createdAt
-                            .toDate()
-                            .toLocaleTimeString(
-                              [],
-                              {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }
-                            )
-                        : ""}
-                    </span>
-
-                  </div>
-
-                </div>
-              ))}
-
-              <div ref={bottomRef} />
-            </>
-          )}
-
-        </div>
-
-        {/* Поле сообщения */}
-
-        {selectedUser && (
-          <div className="flex gap-3 border-t border-zinc-800 p-5">
-
-            <input
-              value={text}
-              onChange={(event) =>
-                setText(event.target.value)
-              }
-              placeholder="Введите сообщение..."
-              className="flex-1 rounded-2xl bg-black px-5 py-3 text-white outline-none"
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  handleSend();
-                }
-              }}
-            />
-
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={!text.trim()}
-              className="flex h-12 w-12 items-center justify-center rounded-2xl bg-yellow-400 text-black transition hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Send size={20} />
-            </button>
+            </div>
 
           </div>
         )}
-
-      </div>
 
     </div>
   );

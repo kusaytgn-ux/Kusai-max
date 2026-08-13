@@ -27,10 +27,10 @@ export type ChatMessage = {
   text: string;
   createdAt?: any;
 
-  // Прочитано пользователем
+  // Прочитано ли сообщение админа пользователем
   readByUser?: boolean;
 
-  // Прочитано администратором
+  // Прочитано ли сообщение пользователя администратором
   readByAdmin?: boolean;
 };
 
@@ -48,16 +48,23 @@ type ConciergeContextType = {
   ) => Promise<void>;
 
   markMessagesAsRead: (
+    userLogin: string,
+    author?: "user" | "admin"
+  ) => Promise<void>;
+
+  deleteChat: (
     userLogin: string
   ) => Promise<void>;
 
-  markAdminMessagesAsRead: (
+  getUnreadForUser: (
     userLogin: string
-  ) => Promise<void>;
+  ) => number;
 
-  deleteUserChat: (
+  getUnreadForAdmin: (
     userLogin: string
-  ) => Promise<void>;
+  ) => number;
+
+  getTotalUnreadForAdmin: () => number;
 };
 
 const ConciergeContext =
@@ -72,10 +79,11 @@ export function ConciergeProvider({
     useState<ChatMessage[]>([]);
 
   /*
-   * REALTIME ЗАГРУЗКА ВСЕХ СООБЩЕНИЙ
+   * REALTIME ЗАГРУЗКА СООБЩЕНИЙ
    */
   useEffect(() => {
-    const messagesRef = collection(db, "messages");
+    const messagesRef =
+      collection(db, "messages");
 
     const messagesQuery = query(
       messagesRef,
@@ -95,9 +103,11 @@ export function ConciergeProvider({
           }));
 
         /*
-         * Если createdAt временно null из-за
-         * serverTimestamp(), сортировка всё равно
-         * не ломается.
+         * serverTimestamp() может быть null
+         * непосредственно после создания сообщения.
+         *
+         * Поэтому дополнительно сортируем
+         * сообщения на клиенте.
          */
         list.sort((a, b) => {
           const timeA =
@@ -119,17 +129,25 @@ export function ConciergeProvider({
           return timeA - timeB;
         });
 
+        /*
+         * ВАЖНО:
+         * onSnapshot срабатывает сразу после addDoc.
+         * Поэтому сообщение появляется у второй стороны
+         * сразу, а не после отправки следующего сообщения.
+         */
         setMessages(list);
       },
       (error) => {
         console.error(
-          "Ошибка realtime-загрузки Concierge:",
+          "Ошибка realtime-загрузки сообщений:",
           error
         );
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   /*
@@ -141,7 +159,9 @@ export function ConciergeProvider({
   ) {
     const cleanText = text.trim();
 
-    if (!cleanText) return;
+    if (!cleanText || !userLogin) {
+      return;
+    }
 
     await addDoc(
       collection(db, "messages"),
@@ -150,10 +170,10 @@ export function ConciergeProvider({
         author: "user",
         text: cleanText,
 
-        // Пользователь своё сообщение прочитал
+        // Пользователь своё сообщение уже написал
         readByUser: true,
 
-        // Администратор ещё не прочитал
+        // Для администратора сообщение новое
         readByAdmin: false,
 
         createdAt: serverTimestamp(),
@@ -164,9 +184,8 @@ export function ConciergeProvider({
   /*
    * АДМИНИСТРАТОР ОТПРАВЛЯЕТ СООБЩЕНИЕ
    *
-   * Администратор может написать первым.
-   * Для этого пользователь должен просто
-   * существовать в поле userLogin.
+   * Админ может отправить сообщение даже если
+   * у пользователя раньше не было сообщений.
    */
   async function sendAdminMessage(
     userLogin: string,
@@ -174,14 +193,14 @@ export function ConciergeProvider({
   ) {
     const cleanText = text.trim();
 
-    if (!cleanText || !userLogin.trim()) {
+    if (!cleanText || !userLogin) {
       return;
     }
 
     await addDoc(
       collection(db, "messages"),
       {
-        userLogin: userLogin.trim(),
+        userLogin,
         author: "admin",
         text: cleanText,
 
@@ -197,16 +216,53 @@ export function ConciergeProvider({
   }
 
   /*
-   * ПОЛЬЗОВАТЕЛЬ ПРОЧИТАЛ СООБЩЕНИЯ АДМИНА
+   * ПОМЕТИТЬ СООБЩЕНИЯ ПРОЧИТАННЫМИ
+   *
+   * author:
+   * "admin" -> пользователь прочитал сообщения админа
+   * "user"  -> админ прочитал сообщения пользователя
+   *
+   * Если author не передан — помечаем оба типа.
    */
   async function markMessagesAsRead(
-    userLogin: string
+    userLogin: string,
+    author?: "user" | "admin"
   ) {
+    if (!userLogin) {
+      return;
+    }
+
     const unreadMessages = messages.filter(
-      (message) =>
-        message.userLogin === userLogin &&
-        message.author === "admin" &&
-        message.readByUser !== true
+      (message) => {
+        if (message.userLogin !== userLogin) {
+          return false;
+        }
+
+        if (author === "admin") {
+          return (
+            message.author === "admin" &&
+            message.readByUser !== true
+          );
+        }
+
+        if (author === "user") {
+          return (
+            message.author === "user" &&
+            message.readByAdmin !== true
+          );
+        }
+
+        return (
+          (
+            message.author === "admin" &&
+            message.readByUser !== true
+          ) ||
+          (
+            message.author === "user" &&
+            message.readByAdmin !== true
+          )
+        );
+      }
     );
 
     if (unreadMessages.length === 0) {
@@ -214,74 +270,102 @@ export function ConciergeProvider({
     }
 
     await Promise.all(
-      unreadMessages.map((message) =>
-        updateDoc(
-          doc(db, "messages", message.id),
-          {
+      unreadMessages.map((message) => {
+        const messageRef = doc(
+          db,
+          "messages",
+          message.id
+        );
+
+        if (message.author === "admin") {
+          return updateDoc(messageRef, {
             readByUser: true,
-          }
-        )
-      )
+          });
+        }
+
+        return updateDoc(messageRef, {
+          readByAdmin: true,
+        });
+      })
     );
   }
 
   /*
-   * АДМИНИСТРАТОР ПРОЧИТАЛ СООБЩЕНИЯ ПОЛЬЗОВАТЕЛЯ
+   * УДАЛЕНИЕ ВСЕГО ЧАТА
+   *
+   * Удаляем все сообщения конкретного пользователя
+   * одним batch-запросом.
    */
-  async function markAdminMessagesAsRead(
+  async function deleteChat(
     userLogin: string
   ) {
-    const unreadMessages = messages.filter(
-      (message) =>
-        message.userLogin === userLogin &&
-        message.author === "user" &&
-        message.readByAdmin !== true
-    );
-
-    if (unreadMessages.length === 0) {
+    if (!userLogin) {
       return;
     }
 
-    await Promise.all(
-      unreadMessages.map((message) =>
-        updateDoc(
-          doc(db, "messages", message.id),
-          {
-            readByAdmin: true,
-          }
-        )
-      )
-    );
-  }
-
-  /*
-   * УДАЛЕНИЕ ВСЕГО ЧАТА ПОЛЬЗОВАТЕЛЯ
-   */
-  async function deleteUserChat(
-    userLogin: string
-  ) {
-    const userMessages = messages.filter(
+    const chatMessages = messages.filter(
       (message) =>
         message.userLogin === userLogin
     );
 
-    if (userMessages.length === 0) {
+    if (chatMessages.length === 0) {
       return;
     }
 
-    /*
-     * Используем batch, чтобы удалить все
-     * сообщения одного пользователя.
-     */
     const batch = writeBatch(db);
 
-    userMessages.forEach((message) => {
-      batch.delete(
-        doc(db, "messages", message.id)
+    chatMessages.forEach((message) => {
+      const messageRef = doc(
+        db,
+        "messages",
+        message.id
       );
+
+      batch.delete(messageRef);
     });
 
     await batch.commit();
+  }
+
+  /*
+   * НОВЫЕ СООБЩЕНИЯ ДЛЯ ПОЛЬЗОВАТЕЛЯ
+   */
+  function getUnreadForUser(
+    userLogin: string
+  ) {
+    return messages.filter(
+      (message) =>
+        message.userLogin === userLogin &&
+        message.author === "admin" &&
+        message.readByUser !== true
+    ).length;
+  }
+
+  /*
+   * НОВЫЕ СООБЩЕНИЯ ОТ ПОЛЬЗОВАТЕЛЯ
+   * ДЛЯ АДМИНИСТРАТОРА
+   */
+  function getUnreadForAdmin(
+    userLogin: string
+  ) {
+    return messages.filter(
+      (message) =>
+        message.userLogin === userLogin &&
+        message.author === "user" &&
+        message.readByAdmin !== true
+    ).length;
+  }
+
+  /*
+   * ОБЩЕЕ КОЛИЧЕСТВО НЕПРОЧИТАННЫХ
+   * ДЛЯ АДМИНИСТРАТОРА
+   */
+  function getTotalUnreadForAdmin() {
+    return messages.filter(
+      (message) =>
+        message.author === "user" &&
+        message.readByAdmin !== true
+    ).length;
   }
 
   return (
@@ -291,8 +375,10 @@ export function ConciergeProvider({
         sendUserMessage,
         sendAdminMessage,
         markMessagesAsRead,
-        markAdminMessagesAsRead,
-        deleteUserChat,
+        deleteChat,
+        getUnreadForUser,
+        getUnreadForAdmin,
+        getTotalUnreadForAdmin,
       }}
     >
       {children}
