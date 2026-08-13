@@ -5,9 +5,8 @@ import { db } from "../api/firebaseAdmin.js";
 
 const app = express();
 
-const PORT = process.env.PORT || 3002;
+const PORT = process.env.PORT || 3001;
 
-// Ключ для доступа 1С
 const ONE_C_API_KEY =
   process.env.ONE_C_API_KEY || "KUSAI-MAX-1C-KEY-2026";
 
@@ -30,7 +29,7 @@ app.get("/", (req, res) => {
 
 /*
 |--------------------------------------------------------------------------
-| Проверка доступа 1С
+| Авторизация 1С
 |--------------------------------------------------------------------------
 */
 
@@ -53,7 +52,7 @@ function check1CAccess(req, res) {
 |--------------------------------------------------------------------------
 | GET /api/1c/test
 |
-| Проверка соединения 1С с KUSAI MAX API
+| Проверка подключения 1С → Render API
 |--------------------------------------------------------------------------
 */
 
@@ -73,7 +72,7 @@ app.get("/api/1c/test", (req, res) => {
 |--------------------------------------------------------------------------
 | GET /api/1c/clients
 |
-| Получение всех клиентов из Firestore
+| Получение всех клиентов
 |--------------------------------------------------------------------------
 */
 
@@ -83,7 +82,9 @@ app.get("/api/1c/clients", async (req, res) => {
   }
 
   try {
-    const snapshot = await db.collection("clients").get();
+    const snapshot = await db
+      .collection("clients")
+      .get();
 
     const clients = [];
 
@@ -95,8 +96,7 @@ app.get("/api/1c/clients", async (req, res) => {
         name: data.name || "",
         phone: data.phone || "",
         points: Number(data.points || 0),
-        status: data.status || "MAX GOLD",
-
+        status: data.status || "NEW CLIENT",
         createdAt: data.createdAt?.toDate
           ? data.createdAt.toDate().toISOString()
           : data.createdAt || null,
@@ -109,7 +109,10 @@ app.get("/api/1c/clients", async (req, res) => {
       clients,
     });
   } catch (error) {
-    console.error("Ошибка получения клиентов для 1С:", error);
+    console.error(
+      "Ошибка выгрузки клиентов для 1С:",
+      error
+    );
 
     res.status(500).json({
       success: false,
@@ -120,9 +123,9 @@ app.get("/api/1c/clients", async (req, res) => {
 
 /*
 |--------------------------------------------------------------------------
-| GET /api/1c/client?phone=+79991234567
+| GET /api/1c/client?phone=...
 |
-| Поиск одного клиента по телефону
+| Поиск клиента по номеру телефона
 |--------------------------------------------------------------------------
 */
 
@@ -132,7 +135,9 @@ app.get("/api/1c/client", async (req, res) => {
   }
 
   try {
-    let phone = String(req.query.phone || "").trim();
+    let phone = String(
+      req.query.phone || ""
+    ).trim();
 
     if (!phone) {
       return res.status(400).json({
@@ -163,21 +168,22 @@ app.get("/api/1c/client", async (req, res) => {
 
     res.json({
       success: true,
-
       client: {
         id: doc.id,
         name: data.name || "",
         phone: data.phone || "",
         points: Number(data.points || 0),
-        status: data.status || "MAX GOLD",
-
+        status: data.status || "NEW CLIENT",
         createdAt: data.createdAt?.toDate
           ? data.createdAt.toDate().toISOString()
           : data.createdAt || null,
       },
     });
   } catch (error) {
-    console.error("Ошибка поиска клиента для 1С:", error);
+    console.error(
+      "Ошибка поиска клиента:",
+      error
+    );
 
     res.status(500).json({
       success: false,
@@ -188,79 +194,275 @@ app.get("/api/1c/client", async (req, res) => {
 
 /*
 |--------------------------------------------------------------------------
-| GET /api/1c/client/:id
+| POST /api/1c/bonus/add
 |
-| Получение клиента по ID Firestore
+| Начисление бонусов клиенту из 1С
+|
+| Body:
+|
+| {
+|   "phone": "+79064142361",
+|   "points": 500,
+|   "reason": "Покупка"
+| }
 |--------------------------------------------------------------------------
 */
 
-app.get("/api/1c/client/:id", async (req, res) => {
+app.post("/api/1c/bonus/add", async (req, res) => {
   if (!check1CAccess(req, res)) {
     return;
   }
 
   try {
-    const { id } = req.params;
+    let phone = String(
+      req.body.phone || ""
+    ).trim();
 
-    const clientRef = db.collection("clients").doc(id);
-    const clientDoc = await clientRef.get();
+    const points = Number(req.body.points);
+    const reason =
+      String(req.body.reason || "").trim() ||
+      "Начисление бонусов из 1С";
 
-    if (!clientDoc.exists) {
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        message: "Не указан телефон",
+      });
+    }
+
+    if (!phone.startsWith("+")) {
+      phone = "+" + phone;
+    }
+
+    if (
+      !Number.isFinite(points) ||
+      points <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Количество бонусов должно быть больше 0",
+      });
+    }
+
+    const snapshot = await db
+      .collection("clients")
+      .where("phone", "==", phone)
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) {
       return res.status(404).json({
         success: false,
         message: "Клиент не найден",
       });
     }
 
-    const data = clientDoc.data();
+    const clientDoc = snapshot.docs[0];
+    const clientRef = clientDoc.ref;
+    const client = clientDoc.data();
+
+    const currentPoints =
+      Number(client.points || 0);
+
+    const newPoints =
+      currentPoints + points;
+
+    await clientRef.update({
+      points: newPoints,
+    });
+
+    await clientRef
+      .collection("operations")
+      .add({
+        type: "add",
+        points,
+        reason,
+        source: "1C",
+        date: new Date(),
+      });
 
     res.json({
       success: true,
-
+      message: "Бонусы начислены",
       client: {
         id: clientDoc.id,
-        name: data.name || "",
-        phone: data.phone || "",
-        points: Number(data.points || 0),
-        status: data.status || "MAX GOLD",
-
-        createdAt: data.createdAt?.toDate
-          ? data.createdAt.toDate().toISOString()
-          : data.createdAt || null,
+        name: client.name || "",
+        phone: client.phone || phone,
       },
+      operation: {
+        type: "add",
+        points,
+        reason,
+      },
+      previousPoints: currentPoints,
+      points: newPoints,
     });
   } catch (error) {
-    console.error("Ошибка получения клиента для 1С:", error);
+    console.error(
+      "Ошибка начисления бонусов из 1С:",
+      error
+    );
 
     res.status(500).json({
       success: false,
-      message: "Ошибка получения клиента",
+      message: "Ошибка начисления бонусов",
     });
   }
 });
 
 /*
 |--------------------------------------------------------------------------
-| Обработка неизвестных маршрутов
+| POST /api/1c/bonus/remove
+|
+| Списание бонусов клиенту из 1С
+|
+| Body:
+|
+| {
+|   "phone": "+79064142361",
+|   "points": 500,
+|   "reason": "Оплата бонусами"
+| }
 |--------------------------------------------------------------------------
 */
 
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: "Метод API не найден",
-    path: req.originalUrl,
-  });
-});
+app.post(
+  "/api/1c/bonus/remove",
+  async (req, res) => {
+    if (!check1CAccess(req, res)) {
+      return;
+    }
+
+    try {
+      let phone = String(
+        req.body.phone || ""
+      ).trim();
+
+      const points = Number(
+        req.body.points
+      );
+
+      const reason =
+        String(
+          req.body.reason || ""
+        ).trim() ||
+        "Списание бонусов из 1С";
+
+      if (!phone) {
+        return res.status(400).json({
+          success: false,
+          message: "Не указан телефон",
+        });
+      }
+
+      if (!phone.startsWith("+")) {
+        phone = "+" + phone;
+      }
+
+      if (
+        !Number.isFinite(points) ||
+        points <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Количество бонусов должно быть больше 0",
+        });
+      }
+
+      const snapshot = await db
+        .collection("clients")
+        .where("phone", "==", phone)
+        .limit(1)
+        .get();
+
+      if (snapshot.empty) {
+        return res.status(404).json({
+          success: false,
+          message: "Клиент не найден",
+        });
+      }
+
+      const clientDoc =
+        snapshot.docs[0];
+
+      const clientRef =
+        clientDoc.ref;
+
+      const client =
+        clientDoc.data();
+
+      const currentPoints =
+        Number(client.points || 0);
+
+      if (points > currentPoints) {
+        return res.status(400).json({
+          success: false,
+          message: "Недостаточно бонусов",
+          points: currentPoints,
+        });
+      }
+
+      const newPoints =
+        currentPoints - points;
+
+      await clientRef.update({
+        points: newPoints,
+      });
+
+      await clientRef
+        .collection("operations")
+        .add({
+          type: "remove",
+          points,
+          reason,
+          source: "1C",
+          date: new Date(),
+        });
+
+      res.json({
+        success: true,
+        message: "Бонусы списаны",
+        client: {
+          id: clientDoc.id,
+          name: client.name || "",
+          phone: client.phone || phone,
+        },
+        operation: {
+          type: "remove",
+          points,
+          reason,
+        },
+        previousPoints: currentPoints,
+        points: newPoints,
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка списания бонусов из 1С:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message: "Ошибка списания бонусов",
+      });
+    }
+  }
+);
 
 /*
 |--------------------------------------------------------------------------
-| Запуск сервера
+| Запуск production API
 |--------------------------------------------------------------------------
 */
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(
-    `Production API запущен на порту ${PORT}`
-  );
-});
+app.listen(
+  PORT,
+  "0.0.0.0",
+  () => {
+    console.log(
+      `Production API запущен на порту ${PORT}`
+    );
+  }
+);
