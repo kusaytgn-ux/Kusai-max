@@ -11,10 +11,10 @@ import {
   addDoc,
   onSnapshot,
   serverTimestamp,
-  doc,
-  writeBatch,
   query,
-  orderBy,
+  where,
+  updateDoc,
+  doc,
 } from "firebase/firestore";
 
 import { db } from "../firebase/firebase";
@@ -25,14 +25,11 @@ export type ChatMessage = {
   author: "user" | "admin";
   text: string;
   createdAt?: any;
-  read?: boolean;
+  readByUser?: boolean;
 };
 
 type ConciergeContextType = {
   messages: ChatMessage[];
-
-  unreadAdminCount: number;
-  unreadUserCount: number;
 
   sendUserMessage: (
     userLogin: string,
@@ -44,11 +41,7 @@ type ConciergeContextType = {
     text: string
   ) => Promise<void>;
 
-  markAdminMessagesAsRead: (
-    userLogin?: string
-  ) => Promise<void>;
-
-  markUserMessagesAsRead: (
+  markMessagesAsRead: (
     userLogin: string
   ) => Promise<void>;
 };
@@ -64,20 +57,9 @@ export function ConciergeProvider({
   const [messages, setMessages] =
     useState<ChatMessage[]>([]);
 
-  /*
-   * =========================================================
-   * REALTIME СООБЩЕНИЯ
-   * =========================================================
-   */
-
   useEffect(() => {
-    const messagesQuery = query(
-      collection(db, "messages"),
-      orderBy("createdAt", "asc")
-    );
-
     const unsubscribe = onSnapshot(
-      messagesQuery,
+      collection(db, "messages"),
       (snapshot) => {
         const list: ChatMessage[] =
           snapshot.docs.map((messageDoc) => ({
@@ -88,11 +70,21 @@ export function ConciergeProvider({
             >),
           }));
 
+        list.sort((a, b) => {
+          const timeA =
+            a.createdAt?.seconds ?? 0;
+
+          const timeB =
+            b.createdAt?.seconds ?? 0;
+
+          return timeA - timeB;
+        });
+
         setMessages(list);
       },
       (error) => {
         console.error(
-          "Ошибка realtime-загрузки сообщений:",
+          "Ошибка realtime Concierge:",
           error
         );
       }
@@ -101,178 +93,69 @@ export function ConciergeProvider({
     return unsubscribe;
   }, []);
 
-  /*
-   * =========================================================
-   * НЕПРОЧИТАННЫЕ ДЛЯ АДМИНИСТРАТОРА
-   * =========================================================
-   */
-
-  const unreadAdminCount = messages.filter(
-    (message) =>
-      message.author === "user" &&
-      message.read === false
-  ).length;
-
-  /*
-   * =========================================================
-   * НЕПРОЧИТАННЫЕ ДЛЯ ПОЛЬЗОВАТЕЛЯ
-   * =========================================================
-   */
-
-  const unreadUserCount = messages.filter(
-    (message) =>
-      message.author === "admin" &&
-      message.read === false
-  ).length;
-
-  /*
-   * =========================================================
-   * ПОЛЬЗОВАТЕЛЬ ОТПРАВЛЯЕТ СООБЩЕНИЕ
-   * =========================================================
-   */
-
   async function sendUserMessage(
     userLogin: string,
     text: string
   ) {
-    const trimmedText = text.trim();
+    await addDoc(collection(db, "messages"), {
+      userLogin,
+      author: "user",
+      text,
+      createdAt: serverTimestamp(),
 
-    if (!trimmedText) {
-      return;
-    }
-
-    await addDoc(
-      collection(db, "messages"),
-      {
-        userLogin,
-        author: "user",
-        text: trimmedText,
-        read: false,
-        createdAt: serverTimestamp(),
-      }
-    );
+      // Сообщение пользователя уже прочитано самим пользователем
+      readByUser: true,
+    });
   }
-
-  /*
-   * =========================================================
-   * АДМИНИСТРАТОР ОТПРАВЛЯЕТ СООБЩЕНИЕ
-   * =========================================================
-   */
 
   async function sendAdminMessage(
     userLogin: string,
     text: string
   ) {
-    const trimmedText = text.trim();
+    await addDoc(collection(db, "messages"), {
+      userLogin,
+      author: "admin",
+      text,
+      createdAt: serverTimestamp(),
 
-    if (!trimmedText) {
-      return;
-    }
-
-    await addDoc(
-      collection(db, "messages"),
-      {
-        userLogin,
-        author: "admin",
-        text: trimmedText,
-        read: false,
-        createdAt: serverTimestamp(),
-      }
-    );
-  }
-
-  /*
-   * =========================================================
-   * АДМИН ПРОЧИТАЛ СООБЩЕНИЯ
-   * =========================================================
-   */
-
-  async function markAdminMessagesAsRead(
-    userLogin?: string
-  ) {
-    const unreadMessages = messages.filter(
-      (message) =>
-        message.author === "user" &&
-        message.read === false &&
-        (!userLogin ||
-          message.userLogin === userLogin)
-    );
-
-    if (unreadMessages.length === 0) {
-      return;
-    }
-
-    const batch = writeBatch(db);
-
-    unreadMessages.forEach((message) => {
-      const messageRef = doc(
-        db,
-        "messages",
-        message.id
-      );
-
-      batch.update(messageRef, {
-        read: true,
-      });
+      // Пользователь ещё не прочитал сообщение
+      readByUser: false,
     });
-
-    await batch.commit();
   }
 
-  /*
-   * =========================================================
-   * ПОЛЬЗОВАТЕЛЬ ПРОЧИТАЛ ОТВЕТЫ АДМИНИСТРАТОРА
-   * =========================================================
-   */
-
-  async function markUserMessagesAsRead(
+  async function markMessagesAsRead(
     userLogin: string
   ) {
-    if (!userLogin) {
-      return;
-    }
-
     const unreadMessages = messages.filter(
       (message) =>
+        message.userLogin === userLogin &&
         message.author === "admin" &&
-        message.read === false &&
-        message.userLogin === userLogin
+        message.readByUser !== true
     );
 
     if (unreadMessages.length === 0) {
       return;
     }
 
-    const batch = writeBatch(db);
-
-    unreadMessages.forEach((message) => {
-      const messageRef = doc(
-        db,
-        "messages",
-        message.id
-      );
-
-      batch.update(messageRef, {
-        read: true,
-      });
-    });
-
-    await batch.commit();
+    await Promise.all(
+      unreadMessages.map((message) =>
+        updateDoc(
+          doc(db, "messages", message.id),
+          {
+            readByUser: true,
+          }
+        )
+      )
+    );
   }
 
   return (
     <ConciergeContext.Provider
       value={{
         messages,
-
-        unreadAdminCount,
-        unreadUserCount,
-
         sendUserMessage,
         sendAdminMessage,
-
-        markAdminMessagesAsRead,
-        markUserMessagesAsRead,
+        markMessagesAsRead,
       }}
     >
       {children}
