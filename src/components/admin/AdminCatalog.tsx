@@ -26,7 +26,7 @@ function AdminCatalog() {
 
   async function loadProducts() {
     const data =await getProducts();
-    setProducts(data);
+    setProducts(data.products);
   }
 
   return (

@@ -29,13 +29,12 @@ function CatalogPage() {
     useState("Популярные");
 
   const {
-    products,
-    loading,
-    loadingMore,
-    hasMore,
-    error,
-    loadMore,
-  } = useProducts();
+  products,
+  loading,
+  loadingMore,
+  hasMore,
+  loadMore,
+} = useProducts();
 
   /*
   |--------------------------------------------------------------------------
@@ -140,7 +139,7 @@ function CatalogPage() {
   |--------------------------------------------------------------------------
   */
 
-  if (error && products.length === 0) {
+  if ( products.length === 0) {
     return (
       <div className="min-h-screen bg-black">
         <Header />
@@ -151,9 +150,7 @@ function CatalogPage() {
               Не удалось загрузить каталог
             </h2>
 
-            <p className="mt-2 text-zinc-400">
-              {error}
-            </p>
+           
 
             <button
               onClick={() =>
@@ -307,12 +304,6 @@ function CatalogPage() {
             </p>
           )}
 
-        {error &&
-          products.length > 0 && (
-            <p className="mt-5 text-center text-sm text-red-400">
-              {error}
-            </p>
-          )}
 
       </main>
 

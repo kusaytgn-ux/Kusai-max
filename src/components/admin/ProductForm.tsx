@@ -61,6 +61,7 @@ function ProductForm({ product, onSave }: Props) {
       memory,
       color,
       warranty: "12 месяцев",
+      hidden: false,
     };
 
 console.log("NEW PRODUCT", newProduct);

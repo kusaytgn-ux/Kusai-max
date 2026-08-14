@@ -1,33 +1,26 @@
 import {
   collection,
+  addDoc,
   getDocs,
-  limit,
-  orderBy,
+  deleteDoc,
+  updateDoc,
+  doc,
+  getDoc,
+  onSnapshot,
   query,
+  orderBy,
+  limit,
   startAfter,
-  where,
-  type DocumentData,
   type QueryDocumentSnapshot,
+  type DocumentData,
 } from "firebase/firestore";
 
 import { db } from "../firebase/firebase";
 import type { Product } from "../types/Product";
 
 const COLLECTION = "products";
-export const PRODUCTS_PAGE_SIZE = 20;
 
-const productsCollection = collection(db, COLLECTION);
-
-function mapProduct(
-  item: QueryDocumentSnapshot<DocumentData>
-): Product {
-  const data = item.data();
-
-  return {
-    id: item.id,
-    ...data,
-  } as Product;
-}
+const productsRef = collection(db, COLLECTION);
 
 /*
 |--------------------------------------------------------------------------
@@ -36,17 +29,24 @@ function mapProduct(
 */
 
 export async function getProducts(
-  pageSize: number = PRODUCTS_PAGE_SIZE
-) {
-  const productsQuery = query(
-    productsCollection,
+  pageSize = 20
+): Promise<{
+  products: Product[];
+  lastDoc: QueryDocumentSnapshot<DocumentData> | null;
+  hasMore: boolean;
+}> {
+  const q = query(
+    productsRef,
     orderBy("title"),
     limit(pageSize)
   );
 
-  const snapshot = await getDocs(productsQuery);
+  const snapshot = await getDocs(q);
 
-  const products = snapshot.docs.map(mapProduct);
+  const products = snapshot.docs.map((item) => ({
+    id: item.id,
+    ...item.data(),
+  })) as Product[];
 
   const lastDoc =
     snapshot.docs.length > 0
@@ -68,18 +68,25 @@ export async function getProducts(
 
 export async function getNextProducts(
   lastDoc: QueryDocumentSnapshot<DocumentData>,
-  pageSize: number = PRODUCTS_PAGE_SIZE
-) {
-  const productsQuery = query(
-    productsCollection,
+  pageSize = 20
+): Promise<{
+  products: Product[];
+  lastDoc: QueryDocumentSnapshot<DocumentData> | null;
+  hasMore: boolean;
+}> {
+  const q = query(
+    productsRef,
     orderBy("title"),
     startAfter(lastDoc),
     limit(pageSize)
   );
 
-  const snapshot = await getDocs(productsQuery);
+  const snapshot = await getDocs(q);
 
-  const products = snapshot.docs.map(mapProduct);
+  const products = snapshot.docs.map((item) => ({
+    id: item.id,
+    ...item.data(),
+  })) as Product[];
 
   const newLastDoc =
     snapshot.docs.length > 0
@@ -95,17 +102,39 @@ export async function getNextProducts(
 
 /*
 |--------------------------------------------------------------------------
-| Получить товар по ID
+| Realtime подписка
 |--------------------------------------------------------------------------
 */
 
-export async function getProduct(id: string) {
-  const { doc: firestoreDoc, getDoc } = await import(
-    "firebase/firestore"
+export function subscribeProducts(
+  callback: (products: Product[]) => void
+) {
+  const q = query(
+    productsRef,
+    orderBy("title")
   );
 
+  return onSnapshot(q, (snapshot) => {
+    const products = snapshot.docs.map((item) => ({
+      id: item.id,
+      ...item.data(),
+    })) as Product[];
+
+    callback(products);
+  });
+}
+
+/*
+|--------------------------------------------------------------------------
+| Получить один товар
+|--------------------------------------------------------------------------
+*/
+
+export async function getProduct(
+  id: string
+): Promise<Product | null> {
   const snapshot = await getDoc(
-    firestoreDoc(db, COLLECTION, id)
+    doc(db, COLLECTION, id)
   );
 
   if (!snapshot.exists()) {
@@ -120,36 +149,65 @@ export async function getProduct(id: string) {
 
 /*
 |--------------------------------------------------------------------------
-| Получить товары по категории
-|
-| Используется, если позже понадобится серверная
-| фильтрация категорий.
+| Добавить товар
 |--------------------------------------------------------------------------
 */
 
-export async function getProductsByCategory(
-  category: string,
-  pageSize: number = PRODUCTS_PAGE_SIZE
+export async function addProduct(
+  product: Omit<Product, "id">
 ) {
-  const productsQuery = query(
-    productsCollection,
-    where("category", "==", category),
-    orderBy("title"),
-    limit(pageSize)
+  await addDoc(productsRef, {
+    ...product,
+
+    // Если hidden не передали — товар показываем
+    hidden: product.hidden ?? false,
+  });
+}
+
+/*
+|--------------------------------------------------------------------------
+| Обновить товар
+|--------------------------------------------------------------------------
+*/
+
+export async function updateProduct(
+  id: string,
+  product: Partial<Product>
+) {
+  await updateDoc(
+    doc(db, COLLECTION, id),
+    product
   );
+}
 
-  const snapshot = await getDocs(productsQuery);
+/*
+|--------------------------------------------------------------------------
+| Удалить товар
+|--------------------------------------------------------------------------
+*/
 
-  const products = snapshot.docs.map(mapProduct);
+export async function deleteProduct(
+  id: string
+) {
+  await deleteDoc(
+    doc(db, COLLECTION, id)
+  );
+}
 
-  const lastDoc =
-    snapshot.docs.length > 0
-      ? snapshot.docs[snapshot.docs.length - 1]
-      : null;
+/*
+|--------------------------------------------------------------------------
+| Скрыть / показать товар
+|--------------------------------------------------------------------------
+*/
 
-  return {
-    products,
-    lastDoc,
-    hasMore: snapshot.docs.length === pageSize,
-  };
+export async function toggleProductHidden(
+  id: string,
+  hidden: boolean
+) {
+  await updateDoc(
+    doc(db, COLLECTION, id),
+    {
+      hidden,
+    }
+  );
 }
