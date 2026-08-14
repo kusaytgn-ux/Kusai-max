@@ -29,6 +29,10 @@ async function syncMoySkladProductsToFirebase() {
   console.log("======================================");
 
   try {
+    // ---------------------------------
+    // 1. Получаем товары из МойСклад
+    // ---------------------------------
+
     console.log("1. Получаем товары из МойСклад...");
 
     const products = await getProducts();
@@ -37,13 +41,97 @@ async function syncMoySkladProductsToFirebase() {
       `2. Получено товаров из МойСклад: ${products.length}`
     );
 
+    if (!products.length) {
+      return {
+        success: true,
+        count: 0,
+        created: 0,
+        updated: 0,
+        message: "МойСклад не вернул товары",
+      };
+    }
+
+    // ---------------------------------
+    // 2. Собираем ID товаров
+    // ---------------------------------
+
+    const productIds = products
+      .map((product) => product?.id)
+      .filter(Boolean);
+
+    console.log(
+      `3. ID товаров собрано: ${productIds.length}`
+    );
+
+    // ---------------------------------
+    // 3. Получаем существующие товары
+    //    из Firebase пачками
+    // ---------------------------------
+
+    console.log(
+      "4. Получаем существующие товары из Firebase..."
+    );
+
+    const existingProducts = new Map();
+
+    const firestoreReadBatchSize = 300;
+
+    for (
+      let i = 0;
+      i < productIds.length;
+      i += firestoreReadBatchSize
+    ) {
+      const idsChunk = productIds.slice(
+        i,
+        i + firestoreReadBatchSize
+      );
+
+      const refs = idsChunk.map((id) =>
+        db.collection("products").doc(id)
+      );
+
+      const snapshots =
+        await db.getAll(...refs);
+
+      for (const snapshot of snapshots) {
+        if (snapshot.exists) {
+          existingProducts.set(
+            snapshot.id,
+            snapshot.data()
+          );
+        }
+      }
+
+      console.log(
+        `Firebase: проверено ${Math.min(
+          i + idsChunk.length,
+          productIds.length
+        )} / ${productIds.length}`
+      );
+    }
+
+    console.log(
+      `5. Существующих товаров в Firebase: ${existingProducts.size}`
+    );
+
+    // ---------------------------------
+    // 4. Записываем товары
+    // ---------------------------------
+
     let created = 0;
     let updated = 0;
 
-    const batchSize = 400;
+    const firestoreWriteBatchSize = 400;
 
-    for (let i = 0; i < products.length; i += batchSize) {
-      const chunk = products.slice(i, i + batchSize);
+    for (
+      let i = 0;
+      i < products.length;
+      i += firestoreWriteBatchSize
+    ) {
+      const chunk = products.slice(
+        i,
+        i + firestoreWriteBatchSize
+      );
 
       const batch = db.batch();
 
@@ -52,49 +140,132 @@ async function syncMoySkladProductsToFirebase() {
           continue;
         }
 
-        // Используем ID МойСклад как ID документа Firebase
         const productRef = db
           .collection("products")
           .doc(product.id);
 
-        const existingDoc = await productRef.get();
+        const existingProduct =
+          existingProducts.get(product.id);
+
+        // ---------------------------------
+        // Сохраняем данные сайта
+        // ---------------------------------
 
         const firebaseProduct = {
-          ...product,
+          // Постоянный ID МойСклад
+          id: product.id,
 
-          // ВАЖНО:
-          // новые товары по умолчанию видимы
-          hidden: existingDoc.exists
-            ? Boolean(existingDoc.data()?.hidden ?? false)
-            : false,
-
-          // Пока картинок нет
-          images: existingDoc.exists
-            ? existingDoc.data()?.images || []
-            : [],
-
-          // Совместимость с текущим ProductCard
+          // Основная информация
           title: product.name || "",
+          name: product.name || "",
 
-          // Если цена отсутствует
-          price: Number(product.price || 0),
+          description:
+            product.description || "",
 
-          // Пока эти поля могут отсутствовать в МойСклад
-          rating: existingDoc.exists
-            ? Number(existingDoc.data()?.rating || 0)
-            : 0,
+          category:
+            product.category || null,
 
-          reviews: existingDoc.exists
-            ? Number(existingDoc.data()?.reviews || 0)
-            : 0,
+          // Цена
+          price:
+            Number(product.price || 0),
 
-          delivery: existingDoc.exists
-            ? existingDoc.data()?.delivery || "Уточняется"
-            : "Уточняется",
+          // Идентификаторы
+          article:
+            product.article || null,
 
+          code:
+            product.code || null,
+
+          externalCode:
+            product.externalCode || null,
+
+          barcode:
+            product.barcode || null,
+
+          // Остатки
+          stock:
+            Number(product.stock || 0),
+
+          reserve:
+            Number(product.reserve || 0),
+
+          inTransit:
+            Number(product.inTransit || 0),
+
+          quantity:
+            Number(product.quantity || 0),
+
+          // Наличие
           inStock:
             Number(product.stock || 0) > 0 ||
             Number(product.quantity || 0) > 0,
+
+          // Архив
+          archived:
+            Boolean(product.archived),
+
+          // Характеристики
+          characteristics:
+            Array.isArray(product.characteristics)
+              ? product.characteristics
+              : [],
+
+          // Варианты
+          variantsCount:
+            Number(product.variantsCount || 0),
+
+          // Вес
+          weight:
+            product.weight ?? null,
+
+          // Объём
+          volume:
+            product.volume ?? null,
+
+          // Дата обновления МойСклад
+          updated:
+            product.updated || null,
+
+          // ---------------------------------
+          // Поля сайта
+          // ---------------------------------
+
+          // Сохраняем существующий hidden.
+          // Для нового товара false.
+          hidden:
+            existingProduct
+              ? Boolean(
+                  existingProduct.hidden ?? false
+                )
+              : false,
+
+          // Картинки пока не загружаем.
+          // Если они уже были добавлены вручную —
+          // сохраняем их.
+          images:
+            existingProduct?.images || [],
+
+          // Рейтинг сохраняем.
+          rating:
+            existingProduct
+              ? Number(
+                  existingProduct.rating || 0
+                )
+              : 0,
+
+          // Отзывы сохраняем.
+          reviews:
+            existingProduct
+              ? Number(
+                  existingProduct.reviews || 0
+                )
+              : 0,
+
+          // Доставка сохраняется,
+          // если она уже была в Firebase.
+          delivery:
+            existingProduct?.delivery ||
+            "Уточняется",
         };
 
         batch.set(
@@ -105,7 +276,7 @@ async function syncMoySkladProductsToFirebase() {
           }
         );
 
-        if (existingDoc.exists) {
+        if (existingProduct) {
           updated++;
         } else {
           created++;
@@ -115,17 +286,30 @@ async function syncMoySkladProductsToFirebase() {
       await batch.commit();
 
       console.log(
-        `Firebase: обработано ${Math.min(
+        `Firebase: записано ${Math.min(
           i + chunk.length,
           products.length
         )} / ${products.length}`
       );
     }
 
+    // ---------------------------------
+    // 5. Результат
+    // ---------------------------------
+
     console.log("======================================");
-    console.log("FIREBASE: СИНХРОНИЗАЦИЯ ЗАВЕРШЕНА");
-    console.log(`Создано: ${created}`);
-    console.log(`Обновлено: ${updated}`);
+    console.log(
+      "FIREBASE: СИНХРОНИЗАЦИЯ ЗАВЕРШЕНА"
+    );
+    console.log(
+      `Всего товаров: ${products.length}`
+    );
+    console.log(
+      `Создано: ${created}`
+    );
+    console.log(
+      `Обновлено: ${updated}`
+    );
     console.log("======================================");
 
     return {
@@ -137,7 +321,12 @@ async function syncMoySkladProductsToFirebase() {
 
   } catch (error) {
     console.error(
-      "FIREBASE: ОШИБКА СИНХРОНИЗАЦИИ:",
+      "FIREBASE: ОШИБКА СИНХРОНИЗАЦИИ:"
+    );
+
+    console.error(
+      error.response?.data ||
+      error.message ||
       error
     );
 

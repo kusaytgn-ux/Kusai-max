@@ -54,7 +54,6 @@ export async function getAssortment() {
       "/entity/assortment",
       {
         auth: getAuth(),
-
         params: {
           limit,
           offset,
@@ -104,7 +103,6 @@ async function getStockByType(
   }
 
   const chunkSize = 50;
-
   const result = [];
 
   for (
@@ -163,7 +161,7 @@ async function getStockByType(
 
       console.error(
         error.response?.data ||
-          error.message
+        error.message
       );
 
       throw error;
@@ -251,45 +249,10 @@ function createStockMap(
 // ============================================================
 // ЦЕНА
 // ============================================================
-//
-// МойСклад хранит цены в КОПЕЙКАХ.
-//
-// Например:
-//
-// 4599000 -> 45990.00 ₽
-// 4599123 -> 45991.23 ₽
-//
-// Поэтому здесь делим value на 100.
-// ============================================================
-
-function convertPrice(value) {
-  if (
-    value === null ||
-    value === undefined ||
-    value === ""
-  ) {
-    return null;
-  }
-
-  const numericValue =
-    Number(value);
-
-  if (!Number.isFinite(numericValue)) {
-    return null;
-  }
-
-  return numericValue / 100;
-}
-
-// ============================================================
-// ПОЛУЧИТЬ ПРОДАЖНУЮ ЦЕНУ
-// ============================================================
 
 function getSalePrice(item) {
   if (
-    !Array.isArray(
-      item.salePrices
-    ) ||
+    !Array.isArray(item.salePrices) ||
     item.salePrices.length === 0
   ) {
     return null;
@@ -302,9 +265,224 @@ function getSalePrice(item) {
     return null;
   }
 
-  return convertPrice(
-    price.value
+  /*
+   * МойСклад хранит цену в копейках.
+   *
+   * Например:
+   * 4599000 -> 45990.00 ₽
+   * 4599999 -> 45999.99 ₽
+   */
+
+  const rawPrice =
+    Number(price.value || 0);
+
+  if (!Number.isFinite(rawPrice)) {
+    return null;
+  }
+
+  return rawPrice / 100;
+}
+
+// ============================================================
+// ПАМЯТЬ
+// ============================================================
+
+function extractMemory(name) {
+  if (!name) {
+    return null;
+  }
+
+  const text = String(name);
+
+  /*
+   * Ищем:
+   *
+   * 64GB
+   * 128GB
+   * 256GB
+   * 512GB
+   * 1TB
+   * 2TB
+   *
+   * а также варианты:
+   *
+   * 64 GB
+   * 128 GB
+   * 256 GB
+   * 512 GB
+   * 1 TB
+   * 2 TB
+   */
+
+  const match = text.match(
+    /(?:^|[\s(/_-])(\d+(?:\.\d+)?)\s*(GB|TB)(?=$|[\s)/_-])/i
   );
+
+  if (!match) {
+    return null;
+  }
+
+  const value =
+    match[1];
+
+  const unit =
+    match[2].toUpperCase();
+
+  return `${value} ${unit}`;
+}
+
+// ============================================================
+// ЦВЕТ
+// ============================================================
+
+function extractColor(name) {
+  if (!name) {
+    return null;
+  }
+
+  const text = String(name)
+    .replace(/\s+/g, " ")
+    .trim();
+
+  /*
+   * Сначала проверяем составные цвета,
+   * чтобы "Titanium Black" не превратился
+   * просто в "Black".
+   */
+
+  const colors = [
+    "Titanium Black",
+    "Titanium Gray",
+    "Titanium Grey",
+    "Titanium Blue",
+    "Titanium White",
+    "Titanium Silver",
+    "Natural Titanium",
+    "Desert Titanium",
+    "White Titanium",
+    "Space Black",
+    "Deep Purple",
+    "Graphite Gray",
+    "Graphite Grey",
+    "Mystic Bronze",
+    "Phantom Black",
+    "Phantom Silver",
+    "Phantom White",
+    "Phantom Violet",
+    "Cloud Navy",
+    "Sky Blue",
+    "Ice Blue",
+    "Ocean Blue",
+    "Forest Green",
+    "Mint Green",
+    "Lime Green",
+    "Space Gray",
+    "Space Grey",
+    "Rose Gold",
+    "Gold",
+    "Silver",
+    "Black",
+    "White",
+    "Red",
+    "Blue",
+    "Green",
+    "Yellow",
+    "Orange",
+    "Purple",
+    "Violet",
+    "Pink",
+    "Gray",
+    "Grey",
+    "Midnight",
+    "Starlight",
+    "Natural",
+    "Cream",
+    "Beige",
+    "Coral",
+    "Teal",
+    "Navy",
+    "Lavender",
+    "Graphite",
+    "Bronze",
+    "Brown",
+    "Titanium",
+  ];
+
+  /*
+   * Ищем цвет преимущественно в конце названия.
+   */
+
+  const lowerText =
+    text.toLowerCase();
+
+  for (const color of colors) {
+    const lowerColor =
+      color.toLowerCase();
+
+    if (
+      lowerText.endsWith(
+        lowerColor
+      )
+    ) {
+      return color;
+    }
+  }
+
+  /*
+   * Если после памяти идёт цвет,
+   * например:
+   *
+   * iPhone 17 256GB Black
+   */
+
+  const memoryMatch =
+    text.match(
+      /(\d+(?:\.\d+)?)\s*(GB|TB)/i
+    );
+
+  if (memoryMatch) {
+    const memoryEnd =
+      memoryMatch.index +
+      memoryMatch[0].length;
+
+    const afterMemory =
+      text
+        .slice(memoryEnd)
+        .trim()
+        .replace(
+          /^[\/|,-]+/,
+          ""
+        )
+        .trim();
+
+    for (const color of colors) {
+      if (
+        afterMemory
+          .toLowerCase()
+          .startsWith(
+            color.toLowerCase()
+          )
+      ) {
+        return color;
+      }
+    }
+  }
+
+  return null;
+}
+
+// ============================================================
+// ХАРАКТЕРИСТИКИ ИЗ НАЗВАНИЯ
+// ============================================================
+
+function extractCharacteristics(name) {
+  return {
+    memory:
+      extractMemory(name),
+
+    color:
+      extractColor(name),
+  };
 }
 
 // ============================================================
@@ -313,9 +491,7 @@ function getSalePrice(item) {
 
 function getBarcode(item) {
   if (
-    !Array.isArray(
-      item.barcodes
-    ) ||
+    !Array.isArray(item.barcodes) ||
     item.barcodes.length === 0
   ) {
     return null;
@@ -353,57 +529,56 @@ function normalizeProduct(
   item,
   stockMaps
 ) {
-  const id = item.id;
+  const id =
+    item.id;
 
   const type =
     getItemType(item);
+
+  const name =
+    item.name || "";
 
   const parentProduct =
     item.product?.meta?.href ||
     null;
 
-  // Получаем цену
-  const price =
+  const characteristics =
+    extractCharacteristics(
+      name
+    );
+
+  const salePrice =
     getSalePrice(item);
 
-  // Минимальная цена
-  const minPrice =
-    item.minPrice?.value !== undefined
-      ? convertPrice(
-          item.minPrice.value
-        )
-      : null;
-
-  // Закупочная цена
-  const buyPrice =
-    item.buyPrice?.value !== undefined
-      ? convertPrice(
-          item.buyPrice.value
-        )
-      : null;
-
   return {
-    // Постоянный ID МойСклада
+    // Постоянный ID МойСклад
     id,
 
     // Основная информация
-    name:
-      item.name || "",
+    name,
 
     description:
       item.description ||
       item.descriptionShort ||
       "",
 
-    // ========================================================
-    // ЦЕНЫ В РУБЛЯХ
-    // ========================================================
+    // Цена в рублях
+    price:
+      salePrice,
 
-    price,
+    minPrice:
+      item.minPrice?.value !== undefined
+        ? Number(
+            item.minPrice.value
+          ) / 100
+        : null,
 
-    minPrice,
-
-    buyPrice,
+    buyPrice:
+      item.buyPrice?.value !== undefined
+        ? Number(
+            item.buyPrice.value
+          ) / 100
+        : null,
 
     // Идентификаторы
     article:
@@ -465,6 +640,14 @@ function normalizeProduct(
           )
         : [],
 
+    // Отдельные характеристики
+    // для карточки товара
+    memory:
+      characteristics.memory,
+
+    color:
+      characteristics.color,
+
     // Варианты
     variantsCount:
       item.variantsCount || 0,
@@ -493,22 +676,15 @@ function normalizeProduct(
 
 export async function getProducts() {
   console.log("");
-
   console.log(
     "======================================"
   );
-
   console.log(
     "MOYSKLAD: НАЧАЛО ПОЛУЧЕНИЯ ТОВАРОВ"
   );
-
   console.log(
     "======================================"
   );
-
-  // ----------------------------------------------------------
-  // 1. Получаем ассортимент
-  // ----------------------------------------------------------
 
   console.log(
     "1. Получаем ассортимент..."
@@ -524,10 +700,6 @@ export async function getProducts() {
     `2. Ассортимент получен: ${rows.length}`
   );
 
-  // ----------------------------------------------------------
-  // 2. Собираем ID
-  // ----------------------------------------------------------
-
   const assortmentIds =
     rows
       .map(
@@ -539,10 +711,6 @@ export async function getProducts() {
     `3. ID товаров собрано: ${assortmentIds.length}`
   );
 
-  // ----------------------------------------------------------
-  // 3. Получаем остатки
-  // ----------------------------------------------------------
-
   console.log(
     "4. Получаем остатки..."
   );
@@ -551,10 +719,6 @@ export async function getProducts() {
     await getAllStocks(
       assortmentIds
     );
-
-  // ----------------------------------------------------------
-  // 4. Создаём карты остатков
-  // ----------------------------------------------------------
 
   console.log(
     "5. Создаём карты остатков..."
@@ -585,10 +749,6 @@ export async function getProducts() {
         "quantity"
       ),
   };
-
-  // ----------------------------------------------------------
-  // 5. Нормализуем товары
-  // ----------------------------------------------------------
 
   console.log(
     "6. Обрабатываем товары..."
@@ -645,9 +805,6 @@ export async function getProductById(
 
   const item =
     response.data;
-
-  // Получаем только остатки.
-  // Изображения НЕ запрашиваем.
 
   const stocks =
     await getAllStocks([id]);
@@ -707,6 +864,7 @@ export async function testMoySklad() {
       status:
         response.status,
     };
+
   } catch (error) {
     console.error(
       "=== МОЙСКЛАД ERROR ==="
