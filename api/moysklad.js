@@ -26,7 +26,8 @@ const moysklad = axios.create({
   headers: {
     Accept: "application/json;charset=utf-8",
     "Accept-Encoding": "gzip",
-    "X-Lognex-Remap-Beta-Feature": "assortmentWithoutStock",
+    "X-Lognex-Remap-Beta-Feature":
+      "assortmentWithoutStock",
   },
 });
 
@@ -35,7 +36,9 @@ const moysklad = axios.create({
 // ============================================================
 
 export async function getAssortment() {
-  console.log("=== MOYSKLAD: получаем весь ассортимент ===");
+  console.log(
+    "=== MOYSKLAD: получаем весь ассортимент ==="
+  );
 
   const allRows = [];
 
@@ -59,7 +62,8 @@ export async function getAssortment() {
       }
     );
 
-    const rows = response.data?.rows || [];
+    const rows =
+      response.data?.rows || [];
 
     console.log(
       `MOYSKLAD: получено товаров: ${rows.length}`
@@ -152,7 +156,6 @@ async function getStockByType(
       await new Promise((resolve) =>
         setTimeout(resolve, 300)
       );
-
     } catch (error) {
       console.error(
         `MOYSKLAD: ошибка остатков "${stockType}", пачка ${batchNumber}`
@@ -160,7 +163,7 @@ async function getStockByType(
 
       console.error(
         error.response?.data ||
-        error.message
+          error.message
       );
 
       throw error;
@@ -248,6 +251,39 @@ function createStockMap(
 // ============================================================
 // ЦЕНА
 // ============================================================
+//
+// МойСклад хранит цены в КОПЕЙКАХ.
+//
+// Например:
+//
+// 4599000 -> 45990.00 ₽
+// 4599123 -> 45991.23 ₽
+//
+// Поэтому здесь делим value на 100.
+// ============================================================
+
+function convertPrice(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return null;
+  }
+
+  const numericValue =
+    Number(value);
+
+  if (!Number.isFinite(numericValue)) {
+    return null;
+  }
+
+  return numericValue / 100;
+}
+
+// ============================================================
+// ПОЛУЧИТЬ ПРОДАЖНУЮ ЦЕНУ
+// ============================================================
 
 function getSalePrice(item) {
   if (
@@ -266,8 +302,8 @@ function getSalePrice(item) {
     return null;
   }
 
-  return Number(
-    price.value || 0
+  return convertPrice(
+    price.value
   );
 }
 
@@ -326,6 +362,26 @@ function normalizeProduct(
     item.product?.meta?.href ||
     null;
 
+  // Получаем цену
+  const price =
+    getSalePrice(item);
+
+  // Минимальная цена
+  const minPrice =
+    item.minPrice?.value !== undefined
+      ? convertPrice(
+          item.minPrice.value
+        )
+      : null;
+
+  // Закупочная цена
+  const buyPrice =
+    item.buyPrice?.value !== undefined
+      ? convertPrice(
+          item.buyPrice.value
+        )
+      : null;
+
   return {
     // Постоянный ID МойСклада
     id,
@@ -339,22 +395,15 @@ function normalizeProduct(
       item.descriptionShort ||
       "",
 
-    // Цена
-    price: Number(rawPrice || 0) / 100,
+    // ========================================================
+    // ЦЕНЫ В РУБЛЯХ
+    // ========================================================
 
-    minPrice:
-      item.minPrice?.value !== undefined
-        ? Number(
-            item.minPrice.value
-          )
-        : null,
+    price,
 
-    buyPrice:
-      item.buyPrice?.value !== undefined
-        ? Number(
-            item.buyPrice.value
-          )
-        : null,
+    minPrice,
+
+    buyPrice,
 
     // Идентификаторы
     article:
@@ -444,18 +493,21 @@ function normalizeProduct(
 
 export async function getProducts() {
   console.log("");
+
   console.log(
     "======================================"
   );
+
   console.log(
     "MOYSKLAD: НАЧАЛО ПОЛУЧЕНИЯ ТОВАРОВ"
   );
+
   console.log(
     "======================================"
   );
 
   // ----------------------------------------------------------
-  // 1. Получаем весь ассортимент
+  // 1. Получаем ассортимент
   // ----------------------------------------------------------
 
   console.log(
@@ -595,7 +647,7 @@ export async function getProductById(
     response.data;
 
   // Получаем только остатки.
-  // Изображения здесь НЕ запрашиваем.
+  // Изображения НЕ запрашиваем.
 
   const stocks =
     await getAllStocks([id]);
@@ -655,7 +707,6 @@ export async function testMoySklad() {
       status:
         response.status,
     };
-
   } catch (error) {
     console.error(
       "=== МОЙСКЛАД ERROR ==="
