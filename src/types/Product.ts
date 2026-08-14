@@ -1,8 +1,8 @@
 export interface Product {
   id: string;
+
   title: string;
   price: number;
-  
   images: string[];
 
   category: string;
@@ -19,4 +19,7 @@ export interface Product {
   memory: string;
   color: string;
   warranty: string;
+
+  // Показывать ли товар пользователям
+  hidden: boolean;
 }

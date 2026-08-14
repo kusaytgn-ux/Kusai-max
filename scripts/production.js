@@ -2,6 +2,11 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { db } from "../api/firebaseAdmin.js";
+import {
+  getProducts,
+  getProductById,
+  testMoySklad,
+} from "../api/moysklad.js";
 
 const app = express();
 
@@ -450,6 +455,258 @@ app.post(
     }
   }
 );
+/*
+|--------------------------------------------------------------------------
+| MOYSKLAD → FIREBASE
+|
+| Получение товаров из МойСклад
+| и сохранение в коллекцию products
+|--------------------------------------------------------------------------
+*/
+
+app.get("/api/moysklad/products", async (req, res) => {
+  console.log("");
+  console.log("======================================");
+  console.log("MOYSKLAD → FIREBASE: СИНХРОНИЗАЦИЯ");
+  console.log("======================================");
+
+  try {
+    console.log("1. Получаем товары из МойСклад...");
+
+    const moySkladProducts = await getProducts();
+
+    console.log(
+      `2. Получено товаров из МойСклад: ${moySkladProducts.length}`
+    );
+
+    const productsCollection = db.collection("products");
+
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Сохраняем товары
+    |--------------------------------------------------------------------------
+    */
+
+    for (const product of moySkladProducts) {
+      try {
+        if (!product.id) {
+          console.log(
+            "Пропущен товар без ID:",
+            product.name
+          );
+
+          skipped++;
+          continue;
+        }
+
+        const productRef =
+          productsCollection.doc(String(product.id));
+
+        const productDoc =
+          await productRef.get();
+
+        /*
+        |--------------------------------------------------------------------------
+        | Формируем товар Firebase
+        |--------------------------------------------------------------------------
+        |
+        | Картинки пока НЕ добавляем.
+        |
+        */
+
+        const firebaseProduct = {
+          id: String(product.id),
+
+          title: product.name || "",
+
+          description:
+            product.description || "",
+
+          price:
+            Number(product.price || 0),
+
+          category:
+            product.category || "",
+
+          article:
+            product.article || null,
+
+          code:
+            product.code || null,
+
+          externalCode:
+            product.externalCode || null,
+
+          barcode:
+            product.barcode || null,
+
+          stock:
+            Number(product.stock || 0),
+
+          reserve:
+            Number(product.reserve || 0),
+
+          inTransit:
+            Number(product.inTransit || 0),
+
+          quantity:
+            Number(product.quantity || 0),
+
+          inStock:
+            Number(product.quantity || 0) > 0,
+
+          /*
+          |--------------------------------------------------------------------------
+          | Пока картинок нет
+          |--------------------------------------------------------------------------
+          */
+
+          images: [],
+
+          /*
+          |--------------------------------------------------------------------------
+          | Скрытие товара
+          |--------------------------------------------------------------------------
+          |
+          | Главное:
+          | новый товар автоматически hidden: false
+          |
+          */
+
+          hidden: false,
+
+          /*
+          |--------------------------------------------------------------------------
+          | Дополнительные поля для сайта
+          |--------------------------------------------------------------------------
+          */
+
+          rating:
+            product.rating || 0,
+
+          reviews:
+            product.reviews || 0,
+
+          badge:
+            product.badge || null,
+
+          delivery:
+            product.delivery || "Уточняется",
+
+          updated:
+            product.updated || null,
+
+          syncedAt:
+            new Date(),
+        };
+
+        /*
+        |--------------------------------------------------------------------------
+        | Создание / обновление
+        |--------------------------------------------------------------------------
+        */
+
+        if (!productDoc.exists) {
+
+          await productRef.set(
+            firebaseProduct
+          );
+
+          created++;
+
+          console.log(
+            `Создан: ${product.name}`
+          );
+
+        } else {
+
+          await productRef.update(
+            firebaseProduct
+          );
+
+          updated++;
+
+          console.log(
+            `Обновлён: ${product.name}`
+          );
+        }
+
+      } catch (productError) {
+
+        skipped++;
+
+        console.error(
+          `Ошибка сохранения товара ${product.name}:`,
+          productError.message
+        );
+      }
+    }
+
+    console.log("");
+    console.log("======================================");
+    console.log("СИНХРОНИЗАЦИЯ ЗАВЕРШЕНА");
+    console.log("======================================");
+
+    console.log(
+      `Создано: ${created}`
+    );
+
+    console.log(
+      `Обновлено: ${updated}`
+    );
+
+    console.log(
+      `Пропущено: ${skipped}`
+    );
+
+    console.log(
+      `Всего из МойСклад: ${moySkladProducts.length}`
+    );
+
+    console.log("======================================");
+    console.log("");
+
+    res.json({
+      success: true,
+
+      message:
+        "Товары успешно синхронизированы с Firebase",
+
+      moySkladCount:
+        moySkladProducts.length,
+
+      created,
+
+      updated,
+
+      skipped,
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Ошибка синхронизации МойСклад → Firebase:",
+      error
+    );
+
+    res.status(500).json({
+
+      success: false,
+
+      message:
+        "Ошибка синхронизации товаров",
+
+      error:
+        error?.message || String(error),
+
+    });
+  }
+});
+
 
 /*
 |--------------------------------------------------------------------------

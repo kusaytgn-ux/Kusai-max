@@ -24,67 +24,194 @@ const moysklad = axios.create({
   baseURL: MOYSKLAD_API_URL,
   timeout: 30000,
   headers: {
-    Accept: "application/json",
+    Accept: "application/json;charset=utf-8",
     "Accept-Encoding": "gzip",
     "X-Lognex-Remap-Beta-Feature": "assortmentWithoutStock",
   },
 });
 
-// ---------------------------------------------
-// Получить весь ассортимент
-// ---------------------------------------------
+// ============================================================
+// ПОЛУЧИТЬ ВЕСЬ АССОРТИМЕНТ
+// ============================================================
 
 export async function getAssortment() {
-  const response = await moysklad.get("/entity/assortment", {
-    auth: getAuth(),
-    params: {
-      limit: 1000,
-    },
-  });
+  console.log("=== MOYSKLAD: получаем весь ассортимент ===");
 
-  return response.data;
+  const allRows = [];
+
+  const limit = 1000;
+  let offset = 0;
+
+  while (true) {
+    console.log(
+      `MOYSKLAD: запрашиваем ассортимент offset=${offset}, limit=${limit}`
+    );
+
+    const response = await moysklad.get(
+      "/entity/assortment",
+      {
+        auth: getAuth(),
+
+        params: {
+          limit,
+          offset,
+        },
+      }
+    );
+
+    const rows = response.data?.rows || [];
+
+    console.log(
+      `MOYSKLAD: получено товаров: ${rows.length}`
+    );
+
+    allRows.push(...rows);
+
+    if (rows.length < limit) {
+      break;
+    }
+
+    offset += limit;
+
+    await new Promise((resolve) =>
+      setTimeout(resolve, 300)
+    );
+  }
+
+  console.log(
+    `=== MOYSKLAD: всего товаров получено: ${allRows.length} ===`
+  );
+
+  return {
+    rows: allRows,
+  };
 }
 
-// ---------------------------------------------
-// Получить остатки
-// ---------------------------------------------
+// ============================================================
+// ПОЛУЧИТЬ ОСТАТКИ
+// ============================================================
 
-async function getStockByType(stockType, assortmentIds) {
+async function getStockByType(
+  stockType,
+  assortmentIds
+) {
   if (!assortmentIds.length) {
     return [];
   }
 
-  const response = await moysklad.get(
-    "/report/stock/all/current",
-    {
-      auth: getAuth(),
+  const chunkSize = 50;
 
-      params: {
-        stockType,
-        filter: `assortmentId=${assortmentIds.join(",")}`,
-      },
+  const result = [];
+
+  for (
+    let i = 0;
+    i < assortmentIds.length;
+    i += chunkSize
+  ) {
+    const chunk =
+      assortmentIds.slice(
+        i,
+        i + chunkSize
+      );
+
+    const batchNumber =
+      Math.floor(i / chunkSize) + 1;
+
+    console.log(
+      `MOYSKLAD: ${stockType}, пачка ${batchNumber}, товаров: ${chunk.length}`
+    );
+
+    try {
+      const response =
+        await moysklad.get(
+          "/report/stock/all/current",
+          {
+            auth: getAuth(),
+
+            headers: {
+              Accept:
+                "application/json;charset=utf-8",
+            },
+
+            params: {
+              stockType,
+
+              filter:
+                `assortmentId=${chunk.join(",")}`,
+            },
+          }
+        );
+
+      const rows =
+        response.data?.rows || [];
+
+      if (Array.isArray(rows)) {
+        result.push(...rows);
+      }
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, 300)
+      );
+
+    } catch (error) {
+      console.error(
+        `MOYSKLAD: ошибка остатков "${stockType}", пачка ${batchNumber}`
+      );
+
+      console.error(
+        error.response?.data ||
+        error.message
+      );
+
+      throw error;
     }
+  }
+
+  console.log(
+    `=== MOYSKLAD: остатки "${stockType}" получены: ${result.length} ===`
   );
 
-  return response.data;
+  return result;
 }
 
-// ---------------------------------------------
-// Получить все типы остатков
-// ---------------------------------------------
+// ============================================================
+// ПОЛУЧИТЬ ВСЕ ТИПЫ ОСТАТКОВ
+// ============================================================
 
-export async function getAllStocks(assortmentIds) {
-  const [
-    stock,
-    reserve,
-    inTransit,
-    quantity,
-  ] = await Promise.all([
-    getStockByType("stock", assortmentIds),
-    getStockByType("reserve", assortmentIds),
-    getStockByType("inTransit", assortmentIds),
-    getStockByType("quantity", assortmentIds),
-  ]);
+export async function getAllStocks(
+  assortmentIds
+) {
+  console.log(
+    "=== MOYSKLAD: начинаем получение всех остатков ==="
+  );
+
+  const stock =
+    await getStockByType(
+      "stock",
+      assortmentIds
+    );
+
+  const reserve =
+    await getStockByType(
+      "reserve",
+      assortmentIds
+    );
+
+  const inTransit =
+    await getStockByType(
+      "inTransit",
+      assortmentIds
+    );
+
+  const quantity =
+    await getStockByType(
+      "quantity",
+      assortmentIds
+    );
+
+  console.log(
+    "=== MOYSKLAD: все остатки получены ==="
+  );
 
   return {
     stock,
@@ -94,11 +221,14 @@ export async function getAllStocks(assortmentIds) {
   };
 }
 
-// ---------------------------------------------
-// Превращаем остатки в удобную Map
-// ---------------------------------------------
+// ============================================================
+// СОЗДАТЬ MAP ОСТАТКОВ
+// ============================================================
 
-function createStockMap(rows, field) {
+function createStockMap(
+  rows,
+  field
+) {
   const map = new Map();
 
   for (const row of rows || []) {
@@ -115,40 +245,48 @@ function createStockMap(rows, field) {
   return map;
 }
 
-// ---------------------------------------------
-// Извлекаем цену
-// ---------------------------------------------
+// ============================================================
+// ЦЕНА
+// ============================================================
 
 function getSalePrice(item) {
   if (
-    !Array.isArray(item.salePrices) ||
+    !Array.isArray(
+      item.salePrices
+    ) ||
     item.salePrices.length === 0
   ) {
     return null;
   }
 
-  const price = item.salePrices[0];
+  const price =
+    item.salePrices[0];
 
   if (!price) {
     return null;
   }
 
-  return Number(price.value || 0);
+  return Number(
+    price.value || 0
+  );
 }
 
-// ---------------------------------------------
-// Извлекаем штрихкод
-// ---------------------------------------------
+// ============================================================
+// ШТРИХКОД
+// ============================================================
 
 function getBarcode(item) {
   if (
-    !Array.isArray(item.barcodes) ||
+    !Array.isArray(
+      item.barcodes
+    ) ||
     item.barcodes.length === 0
   ) {
     return null;
   }
 
-  const barcode = item.barcodes[0];
+  const barcode =
+    item.barcodes[0];
 
   if (!barcode) {
     return null;
@@ -163,97 +301,86 @@ function getBarcode(item) {
   );
 }
 
-// ---------------------------------------------
-// Определяем тип позиции
-// ---------------------------------------------
+// ============================================================
+// ТИП ПОЗИЦИИ
+// ============================================================
 
 function getItemType(item) {
   return item?.meta?.type || null;
 }
 
-// ---------------------------------------------
-// Изображения
-// ---------------------------------------------
-
-async function getImages(item) {
-  if (!item?.images?.meta?.href) {
-    return [];
-  }
-
-  try {
-    const response = await moysklad.get(
-      item.images.meta.href,
-      {
-        auth: getAuth(),
-      }
-    );
-
-    return response.data?.rows || [];
-  } catch (error) {
-    console.error(
-      `Ошибка получения изображений ${item.id}:`,
-      error.message
-    );
-
-    return [];
-  }
-}
-
-// ---------------------------------------------
-// Нормализация товара
-// ---------------------------------------------
+// ============================================================
+// НОРМАЛИЗАЦИЯ ТОВАРА
+// ============================================================
 
 function normalizeProduct(
   item,
-  stockMaps,
-  images
+  stockMaps
 ) {
   const id = item.id;
 
-  const type = getItemType(item);
+  const type =
+    getItemType(item);
 
   const parentProduct =
-    item.product?.meta?.href || null;
+    item.product?.meta?.href ||
+    null;
 
   return {
+    // Постоянный ID МойСклада
     id,
 
-    name: item.name || "",
+    // Основная информация
+    name:
+      item.name || "",
 
     description:
       item.description ||
       item.descriptionShort ||
       "",
 
-    price: getSalePrice(item),
+    // Цена
+    price: Number(rawPrice || 0) / 100,
 
     minPrice:
       item.minPrice?.value !== undefined
-        ? Number(item.minPrice.value)
+        ? Number(
+            item.minPrice.value
+          )
         : null,
 
     buyPrice:
       item.buyPrice?.value !== undefined
-        ? Number(item.buyPrice.value)
+        ? Number(
+            item.buyPrice.value
+          )
         : null,
 
-    article: item.article || null,
+    // Идентификаторы
+    article:
+      item.article || null,
 
-    code: item.code || null,
+    code:
+      item.code || null,
 
     externalCode:
       item.externalCode || null,
 
-    barcode: getBarcode(item),
+    barcode:
+      getBarcode(item),
 
+    // Тип
     type,
 
+    // Архив
     archived:
       Boolean(item.archived),
 
+    // Категория
     category:
       item.pathName || null,
 
+    // Остатки
     stock:
       stockMaps.stock.get(id) || 0,
 
@@ -266,106 +393,190 @@ function normalizeProduct(
     quantity:
       stockMaps.quantity.get(id) || 0,
 
-    images,
-
+    // Связанный товар
     product:
       parentProduct,
 
+    // Характеристики
     characteristics:
-      Array.isArray(item.characteristics)
+      Array.isArray(
+        item.characteristics
+      )
         ? item.characteristics.map(
             (characteristic) => ({
-              id: characteristic.id,
-              name: characteristic.name,
-              value: characteristic.value,
+              id:
+                characteristic.id,
+
+              name:
+                characteristic.name,
+
+              value:
+                characteristic.value,
             })
           )
         : [],
 
+    // Варианты
     variantsCount:
       item.variantsCount || 0,
 
+    // Вес
     weight:
       item.weight !== undefined
         ? Number(item.weight)
         : null,
 
+    // Объём
     volume:
       item.volume !== undefined
         ? Number(item.volume)
         : null,
 
+    // Дата изменения
     updated:
       item.updated || null,
   };
 }
 
-// ---------------------------------------------
-// Главная функция синхронизации
-// ---------------------------------------------
+// ============================================================
+// ПОЛУЧИТЬ ВСЕ ТОВАРЫ
+// ============================================================
 
 export async function getProducts() {
+  console.log("");
+  console.log(
+    "======================================"
+  );
+  console.log(
+    "MOYSKLAD: НАЧАЛО ПОЛУЧЕНИЯ ТОВАРОВ"
+  );
+  console.log(
+    "======================================"
+  );
+
+  // ----------------------------------------------------------
+  // 1. Получаем весь ассортимент
+  // ----------------------------------------------------------
+
+  console.log(
+    "1. Получаем ассортимент..."
+  );
+
   const assortment =
     await getAssortment();
 
   const rows =
     assortment?.rows || [];
 
+  console.log(
+    `2. Ассортимент получен: ${rows.length}`
+  );
+
+  // ----------------------------------------------------------
+  // 2. Собираем ID
+  // ----------------------------------------------------------
+
   const assortmentIds =
     rows
-      .map((item) => item.id)
+      .map(
+        (item) => item.id
+      )
       .filter(Boolean);
+
+  console.log(
+    `3. ID товаров собрано: ${assortmentIds.length}`
+  );
+
+  // ----------------------------------------------------------
+  // 3. Получаем остатки
+  // ----------------------------------------------------------
+
+  console.log(
+    "4. Получаем остатки..."
+  );
 
   const stocks =
     await getAllStocks(
       assortmentIds
     );
 
+  // ----------------------------------------------------------
+  // 4. Создаём карты остатков
+  // ----------------------------------------------------------
+
+  console.log(
+    "5. Создаём карты остатков..."
+  );
+
   const stockMaps = {
-    stock: createStockMap(
-      stocks.stock,
-      "stock"
-    ),
+    stock:
+      createStockMap(
+        stocks.stock,
+        "stock"
+      ),
 
-    reserve: createStockMap(
-      stocks.reserve,
-      "reserve"
-    ),
+    reserve:
+      createStockMap(
+        stocks.reserve,
+        "reserve"
+      ),
 
-    inTransit: createStockMap(
-      stocks.inTransit,
-      "inTransit"
-    ),
+    inTransit:
+      createStockMap(
+        stocks.inTransit,
+        "inTransit"
+      ),
 
-    quantity: createStockMap(
-      stocks.quantity,
-      "quantity"
-    ),
+    quantity:
+      createStockMap(
+        stocks.quantity,
+        "quantity"
+      ),
   };
 
-  // Получаем изображения параллельно
-  const products =
-    await Promise.all(
-      rows.map(async (item) => {
-        const images =
-          await getImages(item);
+  // ----------------------------------------------------------
+  // 5. Нормализуем товары
+  // ----------------------------------------------------------
 
-        return normalizeProduct(
+  console.log(
+    "6. Обрабатываем товары..."
+  );
+
+  const products =
+    rows.map(
+      (item) =>
+        normalizeProduct(
           item,
-          stockMaps,
-          images
-        );
-      })
+          stockMaps
+        )
     );
+
+  console.log(
+    `7. Товары полностью обработаны: ${products.length}`
+  );
+
+  console.log(
+    "======================================"
+  );
+
+  console.log(
+    "MOYSKLAD: ПОЛУЧЕНИЕ ТОВАРОВ ЗАВЕРШЕНО"
+  );
+
+  console.log(
+    "======================================"
+  );
 
   return products;
 }
 
-// ---------------------------------------------
-// Получить один товар
-// ---------------------------------------------
+// ============================================================
+// ПОЛУЧИТЬ ОДИН ТОВАР
+// ============================================================
 
-export async function getProductById(id) {
+export async function getProductById(
+  id
+) {
   if (!id) {
     throw new Error(
       "Не указан ID товара"
@@ -383,59 +594,97 @@ export async function getProductById(id) {
   const item =
     response.data;
 
+  // Получаем только остатки.
+  // Изображения здесь НЕ запрашиваем.
+
   const stocks =
     await getAllStocks([id]);
 
   const stockMaps = {
-    stock: createStockMap(
-      stocks.stock,
-      "stock"
-    ),
+    stock:
+      createStockMap(
+        stocks.stock,
+        "stock"
+      ),
 
-    reserve: createStockMap(
-      stocks.reserve,
-      "reserve"
-    ),
+    reserve:
+      createStockMap(
+        stocks.reserve,
+        "reserve"
+      ),
 
-    inTransit: createStockMap(
-      stocks.inTransit,
-      "inTransit"
-    ),
+    inTransit:
+      createStockMap(
+        stocks.inTransit,
+        "inTransit"
+      ),
 
-    quantity: createStockMap(
-      stocks.quantity,
-      "quantity"
-    ),
+    quantity:
+      createStockMap(
+        stocks.quantity,
+        "quantity"
+      ),
   };
-
-  const images =
-    await getImages(item);
 
   return normalizeProduct(
     item,
-    stockMaps,
-    images
+    stockMaps
   );
 }
 
-// ---------------------------------------------
-// Проверка соединения
-// ---------------------------------------------
+// ============================================================
+// ПРОВЕРКА СОЕДИНЕНИЯ
+// ============================================================
 
 export async function testMoySklad() {
-  const response =
-    await moysklad.get(
-      "/entity/assortment",
-      {
-        auth: getAuth(),
-        params: {
-          limit: 1,
-        },
-      }
+  try {
+    const response =
+      await moysklad.get(
+        "/entity/assortment",
+        {
+          auth: getAuth(),
+
+          params: {
+            limit: 1,
+          },
+        }
+      );
+
+    return {
+      success: true,
+      status:
+        response.status,
+    };
+
+  } catch (error) {
+    console.error(
+      "=== МОЙСКЛАД ERROR ==="
     );
 
-  return {
-    success: true,
-    status: response.status,
-  };
+    console.error(
+      "status:",
+      error.response?.status
+    );
+
+    console.error(
+      "data:",
+      error.response?.data
+    );
+
+    console.error(
+      "headers:",
+      error.response?.headers
+    );
+
+    console.error(
+      "message:",
+      error.message
+    );
+
+    console.error(
+      "======================"
+    );
+
+    throw error;
+  }
 }

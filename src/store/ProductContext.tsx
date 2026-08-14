@@ -1,87 +1,189 @@
 import {
   createContext,
+  useCallback,
   useContext,
-  useEffect,
-  useMemo,
   useState,
   type ReactNode,
 } from "react";
 
-import type { Product } from "../types/Product";
-import { subscribeProducts } from "../services/productService"
-
 import {
   getProducts,
-  addProduct,
-  updateProduct,
-  deleteProduct,
+  getNextProducts,
+  PRODUCTS_PAGE_SIZE,
 } from "../services/productService";
+
+import type { Product } from "../types/Product";
 
 type ProductContextType = {
   products: Product[];
-  addProduct: (product: Omit<Product, "id">) => Promise<void>;
-  updateProduct: (product: Product) => Promise<void>;
-  deleteProduct: (id: string) => Promise<void>;
+  loading: boolean;
+  loadingMore: boolean;
+  hasMore: boolean;
+  error: string | null;
+  loadMore: () => Promise<void>;
   reloadProducts: () => Promise<void>;
 };
 
-const ProductContext = createContext<ProductContextType | null>(null);
-
-export function ProductProvider({
-  children,
-}: {
-  children: ReactNode;
-}) {
-  const [products, setProducts] = useState<Product[]>([]);
-
-  async function reloadProducts() {
-    const data = await getProducts();
-    setProducts(data);
-  }
-
- useEffect(() => {
-  const unsubscribe = subscribeProducts(setProducts);
-
-  return () => unsubscribe();
-}, []);
-
-  async function handleAddProduct(
-    product: Omit<Product, "id">
-  ) {
-    await addProduct(product);
-    
-  }
-
-  async function handleUpdateProduct(product: Product) {
-    await updateProduct(product.id, product);
-    
-  }
-
-  async function handleDeleteProduct(id: string) {
-    await deleteProduct(id);
-    
-  }
-
-  const value = useMemo(
-    () => ({
-      products,
-      addProduct: handleAddProduct,
-      updateProduct: handleUpdateProduct,
-      deleteProduct: handleDeleteProduct,
-      reloadProducts,
-    }),
-    [products]
+const ProductContext =
+  createContext<ProductContextType | undefined>(
+    undefined
   );
 
+type Props = {
+  children: ReactNode;
+};
+
+export function ProductProvider({ children }: Props) {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [lastDoc, setLastDoc] =
+    useState<any>(null);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Первичная загрузка
+  |--------------------------------------------------------------------------
+  */
+
+  const loadProducts = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const result =
+        await getProducts(PRODUCTS_PAGE_SIZE);
+
+      setProducts(result.products);
+      setLastDoc(result.lastDoc);
+      setHasMore(result.hasMore);
+    } catch (error) {
+      console.error(
+        "Ошибка загрузки товаров:",
+        error
+      );
+
+      setError(
+        "Не удалось загрузить товары"
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Загрузить ещё
+  |--------------------------------------------------------------------------
+  */
+
+  const loadMore = useCallback(async () => {
+    if (
+      loadingMore ||
+      !hasMore ||
+      !lastDoc
+    ) {
+      return;
+    }
+
+    try {
+      setLoadingMore(true);
+      setError(null);
+
+      const result =
+        await getNextProducts(
+          lastDoc,
+          PRODUCTS_PAGE_SIZE
+        );
+
+      setProducts((current) => {
+        const existingIds =
+          new Set(
+            current.map(
+              (product) => product.id
+            )
+          );
+
+        const newProducts =
+          result.products.filter(
+            (product) =>
+              !existingIds.has(product.id)
+          );
+
+        return [
+          ...current,
+          ...newProducts,
+        ];
+      });
+
+      setLastDoc(result.lastDoc);
+      setHasMore(result.hasMore);
+    } catch (error) {
+      console.error(
+        "Ошибка загрузки следующих товаров:",
+        error
+      );
+
+      setError(
+        "Не удалось загрузить следующие товары"
+      );
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [
+    lastDoc,
+    hasMore,
+    loadingMore,
+  ]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Повторная загрузка каталога
+  |--------------------------------------------------------------------------
+  */
+
+  const reloadProducts =
+    useCallback(async () => {
+      setProducts([]);
+      setLastDoc(null);
+      setHasMore(true);
+
+      await loadProducts();
+    }, [loadProducts]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Загружаем первую страницу при создании Context
+  |--------------------------------------------------------------------------
+  */
+
+  useState(() => {
+    loadProducts();
+  });
+
   return (
-    <ProductContext.Provider value={value}>
+    <ProductContext.Provider
+      value={{
+        products,
+        loading,
+        loadingMore,
+        hasMore,
+        error,
+        loadMore,
+        reloadProducts,
+      }}
+    >
       {children}
     </ProductContext.Provider>
   );
 }
 
 export function useProducts() {
-  const context = useContext(ProductContext);
+  const context =
+    useContext(ProductContext);
 
   if (!context) {
     throw new Error(
