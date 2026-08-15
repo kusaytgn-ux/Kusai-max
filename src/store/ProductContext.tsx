@@ -1,50 +1,53 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 
-import type { QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
-
-import type { Product } from "../types/Product";
+import type {
+  DocumentData,
+  QueryDocumentSnapshot,
+} from "firebase/firestore";
 
 import {
   getProducts,
   getNextProducts,
+  subscribeProducts,
 } from "../services/productService";
 
+import type { Product } from "../types/Product";
 
-type ProductContextType = {
+interface ProductContextType {
   products: Product[];
 
   loading: boolean;
   loadingMore: boolean;
-
   hasMore: boolean;
 
+  error: string | null;
+
   loadMore: () => Promise<void>;
-
   refreshProducts: () => Promise<void>;
-};
-
+}
 
 const ProductContext =
   createContext<ProductContextType | undefined>(
     undefined
   );
 
-
-type ProductProviderProps = {
+interface ProductProviderProps {
   children: ReactNode;
-};
+}
 
+const PAGE_SIZE = 20;
 
 export function ProductProvider({
   children,
 }: ProductProviderProps) {
-
   const [products, setProducts] =
     useState<Product[]>([]);
 
@@ -57,155 +60,196 @@ export function ProductProvider({
   const [hasMore, setHasMore] =
     useState(true);
 
-  const [lastDoc, setLastDoc] =
-    useState<
-      QueryDocumentSnapshot<DocumentData> | null
-    >(null);
+  const [error, setError] =
+    useState<string | null>(null);
 
+  const [lastDoc, setLastDoc] =
+    useState<QueryDocumentSnapshot<DocumentData> | null>(
+      null
+    );
 
   /*
   |--------------------------------------------------------------------------
-  | Первичная загрузка
+  | Защита от параллельных запросов
+  |--------------------------------------------------------------------------
+  */
+
+  const loadingMoreRef =
+    useRef(false);
+
+  const hasMoreRef =
+    useRef(true);
+
+  const lastDocRef =
+    useRef<QueryDocumentSnapshot<DocumentData> | null>(
+      null
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Первая загрузка
   |--------------------------------------------------------------------------
   */
 
   const loadInitialProducts =
-    async () => {
+    useCallback(async () => {
+      setLoading(true);
+      setError(null);
 
       try {
+        const page =
+          await getProducts(PAGE_SIZE);
 
-        setLoading(true);
+        setProducts(page.products);
 
-        const result =
-          await getProducts(20);
+        setLastDoc(page.lastDoc);
 
+        setHasMore(page.hasMore);
 
-        const visibleProducts =
-          result.products.filter(
-            (product) =>
-              product.hidden !== true
-          );
+        lastDocRef.current =
+          page.lastDoc;
 
+        hasMoreRef.current =
+          page.hasMore;
 
-        setProducts(
-          visibleProducts
-        );
-
-
-        setLastDoc(
-          result.lastDoc
-        );
-
-
-        setHasMore(
-          result.hasMore
-        );
-
-
-      } catch (error) {
-
+      } catch (err) {
         console.error(
-          "Ошибка загрузки товаров:",
-          error
+          "Ошибка первой загрузки товаров:",
+          err
+        );
+
+        setError(
+          "Не удалось загрузить товары"
         );
 
         setProducts([]);
 
+        setLastDoc(null);
+
         setHasMore(false);
 
+        lastDocRef.current = null;
+
+        hasMoreRef.current = false;
+
       } finally {
-
         setLoading(false);
-
       }
-
-    };
-
+    }, []);
 
   /*
   |--------------------------------------------------------------------------
-  | Загрузка следующих 20 товаров
+  | Загрузить следующую страницу
   |--------------------------------------------------------------------------
   */
 
   const loadMore =
-    async () => {
-
+    useCallback(async (): Promise<void> => {
       if (
-        loadingMore ||
-        !hasMore ||
-        !lastDoc
+        loadingMoreRef.current ||
+        !hasMoreRef.current ||
+        !lastDocRef.current
       ) {
         return;
       }
 
+      loadingMoreRef.current = true;
+
+      setLoadingMore(true);
 
       try {
-
-        setLoadingMore(true);
-
-
-        const result =
+        const page =
           await getNextProducts(
-            lastDoc,
-            20
+            lastDocRef.current,
+            PAGE_SIZE
           );
 
+        setProducts((current) => {
+          const existingIds =
+            new Set(
+              current.map(
+                (product) => product.id
+              )
+            );
 
-        const visibleProducts =
-          result.products.filter(
-            (product) =>
-              product.hidden !== true
+          const newProducts =
+            page.products.filter(
+              (product) =>
+                !existingIds.has(
+                  product.id
+                )
+            );
+
+          return [
+            ...current,
+            ...newProducts,
+          ];
+        });
+
+        /*
+         * Если пришли товары —
+         * запоминаем новый последний документ.
+         */
+
+        if (page.products.length > 0) {
+          lastDocRef.current =
+            page.lastDoc;
+
+          setLastDoc(
+            page.lastDoc
           );
+        }
 
-
-        setProducts(
-          (currentProducts) => [
-            ...currentProducts,
-            ...visibleProducts,
-          ]
-        );
-
-
-        setLastDoc(
-          result.lastDoc
-        );
-
+        hasMoreRef.current =
+          page.hasMore;
 
         setHasMore(
-          result.hasMore
+          page.hasMore
         );
 
-
-      } catch (error) {
-
+      } catch (err) {
         console.error(
-          "Ошибка загрузки следующих товаров:",
-          error
+          "Ошибка загрузки следующей страницы:",
+          err
+        );
+
+        setError(
+          "Не удалось загрузить следующие товары"
         );
 
       } finally {
+        loadingMoreRef.current = false;
 
         setLoadingMore(false);
-
       }
-
-    };
-
+    }, []);
 
   /*
   |--------------------------------------------------------------------------
-  | Полное обновление первой страницы
+  | Полное обновление каталога
   |--------------------------------------------------------------------------
   */
 
   const refreshProducts =
-    async () => {
+    useCallback(async () => {
+      setProducts([]);
+
+      setLastDoc(null);
+
+      setHasMore(true);
+
+      setError(null);
+
+      lastDocRef.current = null;
+
+      hasMoreRef.current = true;
+
+      loadingMoreRef.current = false;
 
       await loadInitialProducts();
-
-    };
-
+    }, [
+      loadInitialProducts,
+    ]);
 
   /*
   |--------------------------------------------------------------------------
@@ -214,25 +258,107 @@ export function ProductProvider({
   */
 
   useEffect(() => {
-
     loadInitialProducts();
+  }, [
+    loadInitialProducts,
+  ]);
 
-  }, []);
+  /*
+  |--------------------------------------------------------------------------
+  | Автоматическая пагинация
+  |--------------------------------------------------------------------------
+  |
+  | Пользователь просто листает каталог.
+  | Кнопка "Загрузить ещё" больше не нужна.
+  |
+  */
 
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    if (!hasMore) {
+      return;
+    }
+
+    const handleScroll = () => {
+      const scrollTop =
+        window.scrollY;
+
+      const viewportHeight =
+        window.innerHeight;
+
+      const documentHeight =
+        document.documentElement
+          .scrollHeight;
+
+      const distanceToBottom =
+        documentHeight -
+        (scrollTop +
+          viewportHeight);
+
+      /*
+       * Подгружаем товары заранее,
+       * когда осталось 1000px до конца.
+       */
+
+      if (
+        distanceToBottom < 1000
+      ) {
+        void loadMore();
+      }
+    };
+
+    window.addEventListener(
+      "scroll",
+      handleScroll,
+      {
+        passive: true,
+      }
+    );
+
+    /*
+     * Проверяем сразу после загрузки.
+     *
+     * Если 20 товаров физически не заполнили
+     * экран, следующая страница загрузится сама.
+     */
+
+    handleScroll();
+
+    return () => {
+      window.removeEventListener(
+        "scroll",
+        handleScroll
+      );
+    };
+  }, [
+    loading,
+    hasMore,
+    loadMore,
+    products.length,
+  ]);
 
   /*
   |--------------------------------------------------------------------------
   | Realtime обновления
+  |--------------------------------------------------------------------------
   |
   | ВАЖНО:
-  | subscribeProducts получает весь каталог.
-  | Поэтому НЕ используем его для основного каталога,
-  | иначе снова загрузим все 1966 товаров.
+  | Не заменяем здесь весь каталог результатом
+  | subscribeProducts(), иначе realtime-подписка
+  | сломает пагинацию.
   |
-  | Основной каталог работает через pagination.
-  |--------------------------------------------------------------------------
+  | Поэтому realtime подписку сейчас НЕ используем.
+  |
   */
 
+  /*
+  |--------------------------------------------------------------------------
+  | Context
+  |--------------------------------------------------------------------------
+  */
 
   return (
     <ProductContext.Provider
@@ -240,13 +366,12 @@ export function ProductProvider({
         products,
 
         loading,
-
         loadingMore,
-
         hasMore,
 
-        loadMore,
+        error,
 
+        loadMore,
         refreshProducts,
       }}
     >
@@ -255,7 +380,6 @@ export function ProductProvider({
   );
 }
 
-
 /*
 |--------------------------------------------------------------------------
 | Hook
@@ -263,20 +387,16 @@ export function ProductProvider({
 */
 
 export function useProducts() {
-
   const context =
-    useContext(ProductContext);
-
+    useContext(
+      ProductContext
+    );
 
   if (!context) {
-
     throw new Error(
       "useProducts должен использоваться внутри ProductProvider"
     );
-
   }
 
-
   return context;
-
 }

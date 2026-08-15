@@ -19,8 +19,109 @@ import { db } from "../firebase/firebase";
 import type { Product } from "../types/Product";
 
 const COLLECTION = "products";
+const PAGE_SIZE = 20;
 
 const productsRef = collection(db, COLLECTION);
+
+/*
+|--------------------------------------------------------------------------
+| Тип страницы товаров
+|--------------------------------------------------------------------------
+*/
+
+export interface ProductsPage {
+  products: Product[];
+  lastDoc: QueryDocumentSnapshot<DocumentData> | null;
+  hasMore: boolean;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Нормализация товара
+|
+| Firebase может содержать дополнительные поля.
+| Здесь оставляем только то, что ожидает Product.
+|--------------------------------------------------------------------------
+*/
+
+function normalizeProduct(
+  id: string,
+  data: DocumentData
+): Product {
+  return {
+    id,
+
+    title: String(
+      data.title ??
+        data.name ??
+        ""
+    ),
+
+    price: Number(
+      data.price ?? 0
+    ),
+
+    images: Array.isArray(data.images)
+      ? data.images.filter(
+          (image: unknown): image is string =>
+            typeof image === "string"
+        )
+      : [],
+
+    category: String(
+      data.category ?? ""
+    ),
+
+    badge:
+      data.badge === "Хит" ||
+      data.badge === "Новинка" ||
+      data.badge === "Акция"
+        ? data.badge
+        : undefined,
+
+    rating: Number(
+      data.rating ?? 0
+    ),
+
+    reviews: Number(
+      data.reviews ?? 0
+    ),
+
+    delivery: String(
+      data.delivery ??
+        "Уточняется"
+    ),
+
+    inStock:
+      typeof data.inStock === "boolean"
+        ? data.inStock
+        : Number(
+            data.stock ??
+              data.quantity ??
+              0
+          ) > 0,
+
+    description: String(
+      data.description ?? ""
+    ),
+
+    memory: String(
+      data.memory ?? ""
+    ),
+
+    color: String(
+      data.color ?? ""
+    ),
+
+    warranty: String(
+      data.warranty ?? ""
+    ),
+
+    hidden: Boolean(
+      data.hidden ?? false
+    ),
+  };
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -29,99 +130,189 @@ const productsRef = collection(db, COLLECTION);
 */
 
 export async function getProducts(
-  pageSize = 20
-): Promise<{
-  products: Product[];
-  lastDoc: QueryDocumentSnapshot<DocumentData> | null;
-  hasMore: boolean;
-}> {
+  pageSize: number = PAGE_SIZE
+): Promise<ProductsPage> {
   const q = query(
     productsRef,
-    orderBy("title"),
+
+    orderBy("title", "asc"),
+
     limit(pageSize)
   );
 
-  const snapshot = await getDocs(q);
+  const snapshot =
+    await getDocs(q);
 
-  const products = snapshot.docs.map((item) => ({
-    id: item.id,
-    ...item.data(),
-  })) as Product[];
+  const products =
+    snapshot.docs.map((item) =>
+      normalizeProduct(
+        item.id,
+        item.data()
+      )
+    );
 
   const lastDoc =
     snapshot.docs.length > 0
-      ? snapshot.docs[snapshot.docs.length - 1]
+      ? snapshot.docs[
+          snapshot.docs.length - 1
+        ]
       : null;
 
   return {
     products,
     lastDoc,
-    hasMore: snapshot.docs.length === pageSize,
+
+    hasMore:
+      snapshot.docs.length === pageSize,
   };
 }
 
 /*
 |--------------------------------------------------------------------------
-| Получить следующую страницу
+| Получить следующую страницу товаров
 |--------------------------------------------------------------------------
 */
 
 export async function getNextProducts(
   lastDoc: QueryDocumentSnapshot<DocumentData>,
-  pageSize = 20
-): Promise<{
-  products: Product[];
-  lastDoc: QueryDocumentSnapshot<DocumentData> | null;
-  hasMore: boolean;
-}> {
+  pageSize: number = PAGE_SIZE
+): Promise<ProductsPage> {
   const q = query(
     productsRef,
-    orderBy("title"),
+
+    orderBy("title", "asc"),
+
     startAfter(lastDoc),
+
     limit(pageSize)
   );
 
-  const snapshot = await getDocs(q);
+  const snapshot =
+    await getDocs(q);
 
-  const products = snapshot.docs.map((item) => ({
-    id: item.id,
-    ...item.data(),
-  })) as Product[];
+  const products =
+    snapshot.docs.map((item) =>
+      normalizeProduct(
+        item.id,
+        item.data()
+      )
+    );
 
   const newLastDoc =
     snapshot.docs.length > 0
-      ? snapshot.docs[snapshot.docs.length - 1]
+      ? snapshot.docs[
+          snapshot.docs.length - 1
+        ]
       : lastDoc;
 
   return {
     products,
     lastDoc: newLastDoc,
-    hasMore: snapshot.docs.length === pageSize,
+
+    hasMore:
+      snapshot.docs.length === pageSize,
   };
 }
 
 /*
 |--------------------------------------------------------------------------
-| Realtime подписка
+| Получить ВСЕ категории
+|
+| ВАЖНО:
+| Категории загружаются отдельным запросом.
+| Поэтому они доступны сразу, независимо от пагинации товаров.
+|--------------------------------------------------------------------------
+*/
+
+export async function getAllCategories(): Promise<string[]> {
+  const q = query(
+    productsRef
+  );
+
+  const snapshot =
+    await getDocs(q);
+
+  const categories =
+    new Set<string>();
+
+  snapshot.docs.forEach((item) => {
+    const data =
+      item.data();
+
+    // Скрытые товары не должны
+    // добавлять категории в каталог.
+    if (
+      Boolean(
+        data.hidden ?? false
+      )
+    ) {
+      return;
+    }
+
+    const category =
+      String(
+        data.category ?? ""
+      ).trim();
+
+    if (category) {
+      categories.add(
+        category
+      );
+    }
+  });
+
+  return Array.from(
+    categories
+  ).sort(
+    (a, b) =>
+      a.localeCompare(
+        b,
+        "ru"
+      )
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Realtime подписка на товары
 |--------------------------------------------------------------------------
 */
 
 export function subscribeProducts(
-  callback: (products: Product[]) => void
+  callback: (
+    products: Product[]
+  ) => void
 ) {
   const q = query(
     productsRef,
-    orderBy("title")
+
+    orderBy(
+      "title",
+      "asc"
+    )
   );
 
-  return onSnapshot(q, (snapshot) => {
-    const products = snapshot.docs.map((item) => ({
-      id: item.id,
-      ...item.data(),
-    })) as Product[];
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const products =
+        snapshot.docs
+          .map((item) =>
+            normalizeProduct(
+              item.id,
+              item.data()
+            )
+          )
+          .filter(
+            (product) =>
+              !product.hidden
+          );
 
-    callback(products);
-  });
+      callback(
+        products
+      );
+    }
+  );
 }
 
 /*
@@ -133,18 +324,25 @@ export function subscribeProducts(
 export async function getProduct(
   id: string
 ): Promise<Product | null> {
-  const snapshot = await getDoc(
-    doc(db, COLLECTION, id)
-  );
+  const snapshot =
+    await getDoc(
+      doc(
+        db,
+        COLLECTION,
+        id
+      )
+    );
 
-  if (!snapshot.exists()) {
+  if (
+    !snapshot.exists()
+  ) {
     return null;
   }
 
-  return {
-    id: snapshot.id,
-    ...snapshot.data(),
-  } as Product;
+  return normalizeProduct(
+    snapshot.id,
+    snapshot.data()
+  );
 }
 
 /*
@@ -155,13 +353,17 @@ export async function getProduct(
 
 export async function addProduct(
   product: Omit<Product, "id">
-) {
-  await addDoc(productsRef, {
-    ...product,
+): Promise<void> {
+  await addDoc(
+    productsRef,
+    {
+      ...product,
 
-    // Если hidden не передали — товар показываем
-    hidden: product.hidden ?? false,
-  });
+      hidden:
+        product.hidden ??
+        false,
+    }
+  );
 }
 
 /*
@@ -173,9 +375,13 @@ export async function addProduct(
 export async function updateProduct(
   id: string,
   product: Partial<Product>
-) {
+): Promise<void> {
   await updateDoc(
-    doc(db, COLLECTION, id),
+    doc(
+      db,
+      COLLECTION,
+      id
+    ),
     product
   );
 }
@@ -188,9 +394,13 @@ export async function updateProduct(
 
 export async function deleteProduct(
   id: string
-) {
+): Promise<void> {
   await deleteDoc(
-    doc(db, COLLECTION, id)
+    doc(
+      db,
+      COLLECTION,
+      id
+    )
   );
 }
 
@@ -203,9 +413,13 @@ export async function deleteProduct(
 export async function toggleProductHidden(
   id: string,
   hidden: boolean
-) {
+): Promise<void> {
   await updateDoc(
-    doc(db, COLLECTION, id),
+    doc(
+      db,
+      COLLECTION,
+      id
+    ),
     {
       hidden,
     }
