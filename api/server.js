@@ -1,9 +1,11 @@
 import "dotenv/config";
+
 import express from "express";
 import cors from "cors";
+import bcrypt from "bcryptjs";
+
 import { db } from "./firebaseAdmin.js";
 import { calculateBonusDiscount } from "./bonus.js";
-import bcrypt from "bcryptjs";
 
 import {
   getProducts,
@@ -11,31 +13,387 @@ import {
   testMoySklad,
 } from "./moysklad.js";
 
+const app = express();
+
+const PORT = process.env.PORT || 3001;
+
+const ONE_C_API_KEY =
+  process.env.ONE_C_API_KEY ||
+  "KUSAI-MAX-1C-KEY-2026";
+
+const PRODUCTS_COLLECTION = "products";
+const CLIENTS_COLLECTION = "clients";
+const ADMINS_COLLECTION = "admins";
+
+app.use(cors());
+app.use(express.json());
+
+/*
+|--------------------------------------------------------------------------
+| ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+|--------------------------------------------------------------------------
+*/
+
 function validatePhone(phone) {
+  const normalized = String(phone || "").trim();
 
-  const regex = /^\+7\d{10}$/;
-
-  return regex.test(phone);
-
+  return /^\+7\d{10}$/.test(normalized);
 }
 
-// =================================
-// СИНХРОНИЗАЦИЯ ТОВАРОВ С FIREBASE
-// =================================
+function normalizePhone(phone) {
+  let normalized = String(phone || "").trim();
+
+  if (!normalized) {
+    return "";
+  }
+
+  if (!normalized.startsWith("+")) {
+    normalized = "+" + normalized;
+  }
+
+  return normalized;
+}
+
+function check1CAccess(req, res) {
+  const apiKey = req.headers["x-api-key"];
+
+  if (apiKey !== ONE_C_API_KEY) {
+    res.status(403).json({
+      success: false,
+      message: "Нет доступа",
+    });
+
+    return false;
+  }
+
+  return true;
+}
+
+function serializeFirestoreValue(value) {
+  if (!value) {
+    return value;
+  }
+
+  if (
+    typeof value.toDate === "function"
+  ) {
+    return value.toDate().toISOString();
+  }
+
+  return value;
+}
+
+/*
+|--------------------------------------------------------------------------
+| НОРМАЛИЗАЦИЯ ТОВАРА МойСклад → Firebase
+|--------------------------------------------------------------------------
+|
+| Здесь формируется единая структура товара для сайта.
+|--------------------------------------------------------------------------
+*/
+
+function buildFirebaseProduct(
+  product,
+  existingProduct = null
+) {
+  const price = Number(
+    product.price || 0
+  );
+
+  const stock = Number(
+    product.stock || 0
+  );
+
+  const quantity = Number(
+    product.quantity || 0
+  );
+
+  const reserve = Number(
+    product.reserve || 0
+  );
+
+  const inTransit = Number(
+    product.inTransit || 0
+  );
+
+  const characteristics =
+    Array.isArray(product.characteristics)
+      ? product.characteristics
+      : [];
+
+  /*
+   * Автоматически вытаскиваем характеристики
+   * МойСклад в отдельные поля.
+   */
+  const characteristicMap = {};
+
+  for (const characteristic of characteristics) {
+    if (!characteristic) {
+      continue;
+    }
+
+    const name =
+      characteristic.name ||
+      characteristic.type ||
+      characteristic.title;
+
+    const value =
+      characteristic.value ??
+      characteristic.valueName ??
+      characteristic.text;
+
+    if (name && value !== undefined) {
+      characteristicMap[
+        String(name).trim()
+      ] = value;
+    }
+  }
+
+  /*
+   * Сохраняем поля сайта, которые не приходят
+   * из МойСклад.
+   */
+  const images =
+    Array.isArray(existingProduct?.images)
+      ? existingProduct.images
+      : [];
+
+  const rating = Number(
+    existingProduct?.rating || 0
+  );
+
+  const reviews = Number(
+    existingProduct?.reviews || 0
+  );
+
+  const delivery =
+    existingProduct?.delivery ||
+    "Уточняется";
+
+  const hidden =
+    existingProduct?.hidden !== undefined
+      ? Boolean(existingProduct.hidden)
+      : false;
+
+  /*
+   * Полная структура товара.
+   */
+  return {
+    /*
+    |--------------------------------------------------------------------------
+    | ID
+    |--------------------------------------------------------------------------
+    */
+
+    id: String(product.id),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Основная информация
+    |--------------------------------------------------------------------------
+    */
+
+    title: String(
+      product.name || ""
+    ),
+
+    name: String(
+      product.name || ""
+    ),
+
+    description: String(
+      product.description || ""
+    ),
+
+    category:
+      product.category || null,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Цена
+    |--------------------------------------------------------------------------
+    */
+
+    price,
+
+    minPrice:
+      Number(product.minPrice || 0),
+
+    buyPrice:
+      Number(product.buyPrice || 0),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Артикулы / коды
+    |--------------------------------------------------------------------------
+    */
+
+    article:
+      product.article || null,
+
+    code:
+      product.code || null,
+
+    externalCode:
+      product.externalCode || null,
+
+    barcode:
+      product.barcode || null,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Остатки
+    |--------------------------------------------------------------------------
+    */
+
+    stock,
+
+    reserve,
+
+    inTransit,
+
+    quantity,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Наличие
+    |--------------------------------------------------------------------------
+    */
+
+    inStock:
+      stock > 0 ||
+      quantity > 0,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Состояние товара
+    |--------------------------------------------------------------------------
+    */
+
+    archived:
+      Boolean(product.archived),
+
+    hidden,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Характеристики
+    |--------------------------------------------------------------------------
+    */
+
+    characteristics,
+
+    characteristicMap,
+
+    variantsCount:
+      Number(product.variantsCount || 0),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Физические параметры
+    |--------------------------------------------------------------------------
+    */
+
+    weight:
+      product.weight ?? null,
+
+    volume:
+      product.volume ?? null,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Служебная информация МойСклад
+    |--------------------------------------------------------------------------
+    */
+
+    updated:
+      product.updated || null,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Поля сайта
+    |--------------------------------------------------------------------------
+    */
+
+    images,
+
+    rating,
+
+    reviews,
+
+    delivery,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Дополнительные поля сайта
+    |--------------------------------------------------------------------------
+    |
+    | Эти поля можно использовать ProductCard/ProductPage.
+    */
+
+    memory:
+      existingProduct?.memory ||
+      characteristicMap["Память"] ||
+      characteristicMap["Объем памяти"] ||
+      "",
+
+    color:
+      existingProduct?.color ||
+      characteristicMap["Цвет"] ||
+      "",
+
+    warranty:
+      existingProduct?.warranty ||
+      characteristicMap["Гарантия"] ||
+      "",
+
+    brand:
+      existingProduct?.brand ||
+      null,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Дата синхронизации
+    |--------------------------------------------------------------------------
+    */
+
+    syncedAt:
+      new Date(),
+  };
+}
+
+/*
+|--------------------------------------------------------------------------
+| СИНХРОНИЗАЦИЯ МойСклад → Firebase
+|--------------------------------------------------------------------------
+*/
 
 async function syncMoySkladProductsToFirebase() {
-  console.log("======================================");
-  console.log("FIREBASE: НАЧАЛО СИНХРОНИЗАЦИИ ТОВАРОВ");
-  console.log("======================================");
+  console.log(
+    "======================================"
+  );
+
+  console.log(
+    "FIREBASE: НАЧАЛО СИНХРОНИЗАЦИИ ТОВАРОВ"
+  );
+
+  console.log(
+    "======================================"
+  );
 
   try {
-    // ---------------------------------
-    // 1. Получаем товары из МойСклад
-    // ---------------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | 1. Получаем товары из МойСклад
+    |--------------------------------------------------------------------------
+    */
 
-    console.log("1. Получаем товары из МойСклад...");
+    console.log(
+      "1. Получаем товары из МойСклад..."
+    );
 
-    const products = await getProducts();
+    const products =
+      await getProducts();
 
     console.log(
       `2. Получено товаров из МойСклад: ${products.length}`
@@ -47,53 +405,71 @@ async function syncMoySkladProductsToFirebase() {
         count: 0,
         created: 0,
         updated: 0,
-        message: "МойСклад не вернул товары",
+        message:
+          "МойСклад не вернул товары",
       };
     }
 
-    // ---------------------------------
-    // 2. Собираем ID товаров
-    // ---------------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | 2. ID товаров
+    |--------------------------------------------------------------------------
+    */
 
-    const productIds = products
-      .map((product) => product?.id)
-      .filter(Boolean);
+    const productIds =
+      products
+        .map(
+          (product) =>
+            product?.id
+        )
+        .filter(Boolean);
 
     console.log(
       `3. ID товаров собрано: ${productIds.length}`
     );
 
-    // ---------------------------------
-    // 3. Получаем существующие товары
-    //    из Firebase пачками
-    // ---------------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | 3. Читаем существующие товары Firebase
+    |--------------------------------------------------------------------------
+    */
 
     console.log(
       "4. Получаем существующие товары из Firebase..."
     );
 
-    const existingProducts = new Map();
+    const existingProducts =
+      new Map();
 
-    const firestoreReadBatchSize = 300;
+    const firestoreReadBatchSize =
+      300;
 
     for (
       let i = 0;
       i < productIds.length;
       i += firestoreReadBatchSize
     ) {
-      const idsChunk = productIds.slice(
-        i,
-        i + firestoreReadBatchSize
-      );
+      const idsChunk =
+        productIds.slice(
+          i,
+          i + firestoreReadBatchSize
+        );
 
-      const refs = idsChunk.map((id) =>
-        db.collection("products").doc(id)
-      );
+      const refs =
+        idsChunk.map((id) =>
+          db
+            .collection(
+              PRODUCTS_COLLECTION
+            )
+            .doc(id)
+        );
 
       const snapshots =
         await db.getAll(...refs);
 
-      for (const snapshot of snapshots) {
+      for (
+        const snapshot of snapshots
+      ) {
         if (snapshot.exists) {
           existingProducts.set(
             snapshot.id,
@@ -111,162 +487,77 @@ async function syncMoySkladProductsToFirebase() {
     }
 
     console.log(
-      `5. Существующих товаров в Firebase: ${existingProducts.size}`
+      `5. Существующих товаров: ${existingProducts.size}`
     );
 
-    // ---------------------------------
-    // 4. Записываем товары
-    // ---------------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | 4. Запись товаров
+    |--------------------------------------------------------------------------
+    */
 
     let created = 0;
     let updated = 0;
 
-    const firestoreWriteBatchSize = 400;
+    const firestoreWriteBatchSize =
+      400;
 
     for (
       let i = 0;
       i < products.length;
       i += firestoreWriteBatchSize
     ) {
-      const chunk = products.slice(
-        i,
-        i + firestoreWriteBatchSize
-      );
+      const chunk =
+        products.slice(
+          i,
+          i + firestoreWriteBatchSize
+        );
 
-      const batch = db.batch();
+      const batch =
+        db.batch();
 
-      for (const product of chunk) {
+      for (
+        const product of chunk
+      ) {
         if (!product?.id) {
           continue;
         }
 
-        const productRef = db
-          .collection("products")
-          .doc(product.id);
+        const productRef =
+          db
+            .collection(
+              PRODUCTS_COLLECTION
+            )
+            .doc(
+              String(product.id)
+            );
 
         const existingProduct =
-          existingProducts.get(product.id);
+          existingProducts.get(
+            String(product.id)
+          ) || null;
 
-        // ---------------------------------
-        // Сохраняем данные сайта
-        // ---------------------------------
+        /*
+        |--------------------------------------------------------------------------
+        | Формируем правильную структуру
+        |--------------------------------------------------------------------------
+        */
 
-        const firebaseProduct = {
-          // Постоянный ID МойСклад
-          id: product.id,
-
-          // Основная информация
-          title: product.name || "",
-          name: product.name || "",
-
-          description:
-            product.description || "",
-
-          category:
-            product.category || null,
-
-          // Цена
-          price:
-            Number(product.price || 0),
-
-          // Идентификаторы
-          article:
-            product.article || null,
-
-          code:
-            product.code || null,
-
-          externalCode:
-            product.externalCode || null,
-
-          barcode:
-            product.barcode || null,
-
-          // Остатки
-          stock:
-            Number(product.stock || 0),
-
-          reserve:
-            Number(product.reserve || 0),
-
-          inTransit:
-            Number(product.inTransit || 0),
-
-          quantity:
-            Number(product.quantity || 0),
-
-          // Наличие
-          inStock:
-            Number(product.stock || 0) > 0 ||
-            Number(product.quantity || 0) > 0,
-
-          // Архив
-          archived:
-            Boolean(product.archived),
-
-          // Характеристики
-          characteristics:
-            Array.isArray(product.characteristics)
-              ? product.characteristics
-              : [],
-
-          // Варианты
-          variantsCount:
-            Number(product.variantsCount || 0),
-
-          // Вес
-          weight:
-            product.weight ?? null,
-
-          // Объём
-          volume:
-            product.volume ?? null,
-
-          // Дата обновления МойСклад
-          updated:
-            product.updated || null,
-
-          // ---------------------------------
-          // Поля сайта
-          // ---------------------------------
-
-          // Сохраняем существующий hidden.
-          // Для нового товара false.
-          hidden:
+        const firebaseProduct =
+          buildFirebaseProduct(
+            product,
             existingProduct
-              ? Boolean(
-                  existingProduct.hidden ?? false
-                )
-              : false,
+          );
 
-          // Картинки пока не загружаем.
-          // Если они уже были добавлены вручную —
-          // сохраняем их.
-          images:
-            existingProduct?.images || [],
-
-          // Рейтинг сохраняем.
-          rating:
-            existingProduct
-              ? Number(
-                  existingProduct.rating || 0
-                )
-              : 0,
-
-          // Отзывы сохраняем.
-          reviews:
-            existingProduct
-              ? Number(
-                  existingProduct.reviews || 0
-                )
-              : 0,
-
-          // Доставка сохраняется,
-          // если она уже была в Firebase.
-          delivery:
-            existingProduct?.delivery ||
-            "Уточняется",
-        };
+        /*
+        |--------------------------------------------------------------------------
+        | Сохраняем
+        |--------------------------------------------------------------------------
+        |
+        | merge: true позволяет сохранить поля,
+        | которые были добавлены вручную в Firebase.
+        |--------------------------------------------------------------------------
+        */
 
         batch.set(
           productRef,
@@ -293,24 +584,35 @@ async function syncMoySkladProductsToFirebase() {
       );
     }
 
-    // ---------------------------------
-    // 5. Результат
-    // ---------------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | 5. Результат
+    |--------------------------------------------------------------------------
+    */
 
-    console.log("======================================");
+    console.log(
+      "======================================"
+    );
+
     console.log(
       "FIREBASE: СИНХРОНИЗАЦИЯ ЗАВЕРШЕНА"
     );
+
     console.log(
       `Всего товаров: ${products.length}`
     );
+
     console.log(
       `Создано: ${created}`
     );
+
     console.log(
       `Обновлено: ${updated}`
     );
-    console.log("======================================");
+
+    console.log(
+      "======================================"
+    );
 
     return {
       success: true,
@@ -318,1472 +620,1426 @@ async function syncMoySkladProductsToFirebase() {
       created,
       updated,
     };
-
   } catch (error) {
     console.error(
       "FIREBASE: ОШИБКА СИНХРОНИЗАЦИИ:"
     );
 
     console.error(
-      error.response?.data ||
-      error.message ||
-      error
+      error?.response?.data ||
+        error?.message ||
+        error
     );
 
     throw error;
   }
 }
 
-const app = express();
-
-const PORT = process.env.PORT || 3001;
-const ONE_C_API_KEY =
-  process.env.ONE_C_API_KEY ||
-  "KUSAI-MAX-1C-KEY-2026";
-
-app.use(cors());
-app.use(express.json());
-
-function check1CAccess(req, res) {
-
-  const apiKey = req.headers["x-api-key"];
-
-
-  if (apiKey !== ONE_C_API_KEY) {
-
-    res.status(403).json({
-      success: false,
-      message: "Нет доступа"
-    });
-
-    return false;
-  }
-
-
-  return true;
-}
-
-// --------------------------------
-// Проверка соединения для 1С
-// --------------------------------
-
-app.get("/api/1c/test", (req, res) => {
-
-  const apiKey = req.headers["x-api-key"];
-
-
-  if (apiKey !== ONE_C_API_KEY) {
-
-    return res.status(403).json({
-      success: false,
-      message: "Нет доступа"
-    });
-
-  }
-
-
-  res.json({
-    success: true,
-    message: "KUSAI MAX API подключен",
-    serverTime: new Date().toISOString()
-  });
-
-});
-
-app.get("/api/1c/client", async (req, res) => {
-
-  try {
-
-    let phone = String(req.query.phone || "").trim();
-
-    if (!phone.startsWith("+")) {
-      phone = "+" + phone;
-    }
-
-
-    if (!phone) {
-      return res.status(400).json({
-        success: false,
-        message: "Не указан телефон"
-      });
-    }
-
-
-    const snapshot = await db
-      .collection("clients")
-      .where("phone", "==", phone)
-      .limit(1)
-      .get();
-
-
-    if (snapshot.empty) {
-
-      return res.json({
-        success: false,
-        message: "Клиент не найден"
-      });
-
-    }
-
-
-    const doc = snapshot.docs[0];
-    const data = doc.data();
-
-
-    res.json({
-
-      success: true,
-
-      client: {
-
-        id: doc.id,
-
-        name: data.name,
-
-        phone: data.phone,
-
-        points: data.points || 0,
-
-        status: data.status || "MAX GOLD"
-
-      }
-
-    });
-
-
-  } catch (error) {
-
-    console.error(
-      "Ошибка поиска клиента:",
-      error
-    );
-
-
-    res.status(500).json({
-      success: false,
-      message: "Ошибка сервера"
-    });
-
-  }
-
-});
-
-/*
---------------------------------
-API ДЛЯ 1С
-Получение клиентов KUSAI MAX
---------------------------------
-*/
-
-app.get("/api/1c/clients", async (req, res) => {
-
-   if (!check1CAccess(req, res)) {
-    return;
-  }
-
-  try {
-
-    const snapshot = await db
-      .collection("clients")
-      .get();
-
-
-    const clients = [];
-
-
-    snapshot.forEach((doc) => {
-
-      const data = doc.data();
-
-
-      clients.push({
-        id: doc.id,
-        name: data.name,
-        phone: data.phone,
-        points: data.points || 0,
-        createdAt: data.createdAt
-          ? data.createdAt.toDate()
-          : null
-      });
-
-
-    });
-
-
-    res.json({
-      success: true,
-      count: clients.length,
-      clients
-    });
-
-
-  } catch (error) {
-
-    console.error(
-      "Ошибка выгрузки клиентов для 1С:",
-      error
-    );
-
-
-    res.status(500).json({
-      success: false,
-      message: "Ошибка получения клиентов"
-    });
-
-  }
-});
-
-
 /*
 |--------------------------------------------------------------------------
-| Проверка API
+| БАЗОВЫЕ API
 |--------------------------------------------------------------------------
 */
 
 app.get("/", (req, res) => {
   res.json({
     success: true,
-    message: "KUSAI MAX REST API работает",
+    message:
+      "KUSAI MAX REST API работает",
   });
 });
 
 app.get("/api", (req, res) => {
   res.json({
     success: true,
-    message: "KUSAI MAX API работает",
+    message:
+      "KUSAI MAX API работает",
   });
 });
 
 /*
 |--------------------------------------------------------------------------
-| GET /api/clients
-| Получить всех клиентов из Firebase
+| 1С
 |--------------------------------------------------------------------------
 */
 
-app.get("/api/client", async (req,res)=>{
-
-try {
-
-const { phone } = req.query;
-
-
-if (!phone){
-return res.status(400).json({
-success:false,
-message:"Не указан телефон"
-});
-}
-
-
-// GET /api/clients/phone/:phone
-// Найти клиента по номеру телефона
-
-app.get("/api/clients/phone/:phone", async (req, res) => {
-  try {
-    const { phone } = req.params;
-
-    const snapshot = await db
-      .collection("clients")
-      .where("phone", "==", phone)
-      .limit(1)
-      .get();
-
-    if (snapshot.empty) {
-      return res.status(404).json({
-        success: false,
-        message: "Клиент не найден",
-      });
+app.get(
+  "/api/1c/test",
+  (req, res) => {
+    if (!check1CAccess(req, res)) {
+      return;
     }
-
-    const clientDoc = snapshot.docs[0];
 
     res.json({
       success: true,
-      client: {
-        id: clientDoc.id,
-        ...clientDoc.data(),
-      },
-    });
-
-  } catch (error) {
-    console.error("Ошибка поиска клиента:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Ошибка поиска клиента",
+      message:
+        "KUSAI MAX API подключен",
+      serverTime:
+        new Date().toISOString(),
     });
   }
-});
+);
 
+/*
+|--------------------------------------------------------------------------
+| Клиент для 1С
+|--------------------------------------------------------------------------
+*/
 
-const snapshot = await db
-.collection("clients")
-.where("phone","==",phone)
-.limit(1)
-.get();
+app.get(
+  "/api/1c/client",
+  async (req, res) => {
+    try {
+      if (!check1CAccess(req, res)) {
+        return;
+      }
 
+      const phone =
+        normalizePhone(
+          req.query.phone
+        );
 
-if(snapshot.empty){
+      if (!phone) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Не указан телефон",
+        });
+      }
 
-return res.status(404).json({
-success:false,
-message:"Клиент не найден"
-});
+      const snapshot =
+        await db
+          .collection(
+            CLIENTS_COLLECTION
+          )
+          .where(
+            "phone",
+            "==",
+            phone
+          )
+          .limit(1)
+          .get();
 
-}
+      if (snapshot.empty) {
+        return res.json({
+          success: false,
+          message:
+            "Клиент не найден",
+        });
+      }
 
+      const clientDoc =
+        snapshot.docs[0];
 
-const doc = snapshot.docs[0];
+      const data =
+        clientDoc.data();
 
+      res.json({
+        success: true,
 
-res.json({
-success:true,
-client:{
-id:doc.id,
-...doc.data()
-}
-});
+        client: {
+          id: clientDoc.id,
+          name: data.name || "",
+          phone:
+            data.phone || phone,
+          points:
+            Number(
+              data.points || 0
+            ),
+          status:
+            data.status ||
+            "MAX GOLD",
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка поиска клиента:",
+        error
+      );
 
+      res.status(500).json({
+        success: false,
+        message:
+          "Ошибка сервера",
+      });
+    }
+  }
+);
 
-}catch(error){
+/*
+|--------------------------------------------------------------------------
+| Все клиенты для 1С
+|--------------------------------------------------------------------------
+*/
 
-console.error(error);
+app.get(
+  "/api/1c/clients",
+  async (req, res) => {
+    if (!check1CAccess(req, res)) {
+      return;
+    }
 
-res.status(500).json({
-success:false,
-message:"Ошибка поиска клиента"
-});
+    try {
+      const snapshot =
+        await db
+          .collection(
+            CLIENTS_COLLECTION
+          )
+          .get();
 
-}
+      const clients =
+        snapshot.docs.map(
+          (clientDoc) => {
+            const data =
+              clientDoc.data();
 
-});
+            return {
+              id: clientDoc.id,
+              name:
+                data.name || "",
+              phone:
+                data.phone || "",
+              points:
+                Number(
+                  data.points || 0
+                ),
+              createdAt:
+                serializeFirestoreValue(
+                  data.createdAt
+                ),
+            };
+          }
+        );
+
+      res.json({
+        success: true,
+        count: clients.length,
+        clients,
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка выгрузки клиентов для 1С:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Ошибка получения клиентов",
+      });
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| CLIENTS
+|--------------------------------------------------------------------------
+*/
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/client?phone=
+|--------------------------------------------------------------------------
+*/
+
+app.get(
+  "/api/client",
+  async (req, res) => {
+    try {
+      const phone =
+        normalizePhone(
+          req.query.phone
+        );
+
+      if (!phone) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Не указан телефон",
+        });
+      }
+
+      const snapshot =
+        await db
+          .collection(
+            CLIENTS_COLLECTION
+          )
+          .where(
+            "phone",
+            "==",
+            phone
+          )
+          .limit(1)
+          .get();
+
+      if (snapshot.empty) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Клиент не найден",
+        });
+      }
+
+      const clientDoc =
+        snapshot.docs[0];
+
+      res.json({
+        success: true,
+
+        client: {
+          id: clientDoc.id,
+          ...clientDoc.data(),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка поиска клиента:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Ошибка поиска клиента",
+      });
+    }
+  }
+);
+
 /*
 |--------------------------------------------------------------------------
 | GET /api/clients/:id
-| Получить одного клиента
 |--------------------------------------------------------------------------
 */
 
-app.get("/api/clients/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
+app.get(
+  "/api/clients/:id",
+  async (req, res) => {
+    try {
+      const { id } =
+        req.params;
 
-    const clientRef = db.collection("clients").doc(id);
-    const clientDoc = await clientRef.get();
+      const clientRef =
+        db
+          .collection(
+            CLIENTS_COLLECTION
+          )
+          .doc(id);
 
-    if (!clientDoc.exists) {
-      return res.status(404).json({
-        success: false,
-        message: "Клиент не найден",
-      });
-    }
+      const clientDoc =
+        await clientRef.get();
 
-    res.json({
-      success: true,
-      client: {
-        id: clientDoc.id,
-        ...clientDoc.data(),
-      },
-    });
-  } catch (error) {
-    console.error("Ошибка получения клиента:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Ошибка получения клиента",
-    });
-  }
-});
-
-app.get("/api/clients/:id/profile", async (req, res) => {
-
-  try {
-
-    const { id } = req.params;
-
-
-    const clientRef = db
-      .collection("clients")
-      .doc(id);
-
-
-    const clientDoc = await clientRef.get();
-
-
-    if (!clientDoc.exists) {
-
-      return res.status(404).json({
-
-        success:false,
-
-        message:"Клиент не найден"
-
-      });
-
-    }
-
-
-    const operationsSnapshot = await clientRef
-      .collection("operations")
-      .orderBy("date", "desc")
-      .get();
-
-
-
-    const operations = operationsSnapshot.docs.map(doc => {
-
-      const data = doc.data();
-
-
-      return {
-
-        id: doc.id,
-
-        ...data,
-
-        date:
-          data.date?.toDate
-          ? data.date.toDate().toISOString()
-          : data.date
-
-      };
-
-    });
-
-
-
-    const client = clientDoc.data();
-
-
-
-    res.json({
-
-      success:true,
-
-      client:{
-
-        id: clientDoc.id,
-
-        ...client,
-
-        createdAt:
-          client.createdAt?.toDate
-          ? client.createdAt.toDate().toISOString()
-          : client.createdAt,
-
-        operations
-
+      if (!clientDoc.exists) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Клиент не найден",
+        });
       }
 
-    });
+      res.json({
+        success: true,
 
+        client: {
+          id: clientDoc.id,
+          ...clientDoc.data(),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка получения клиента:",
+        error
+      );
 
-
-  } catch(error) {
-
-    console.error(
-      "Ошибка профиля:",
-      error
-    );
-
-
-    res.status(500).json({
-
-      success:false,
-
-      message:"Ошибка получения профиля"
-
-    });
-
+      res.status(500).json({
+        success: false,
+        message:
+          "Ошибка получения клиента",
+      });
+    }
   }
+);
 
-});
+/*
+|--------------------------------------------------------------------------
+| GET /api/clients/phone/:phone
+|--------------------------------------------------------------------------
+*/
 
+app.get(
+  "/api/clients/phone/:phone",
+  async (req, res) => {
+    try {
+      const phone =
+        normalizePhone(
+          req.params.phone
+        );
+
+      const snapshot =
+        await db
+          .collection(
+            CLIENTS_COLLECTION
+          )
+          .where(
+            "phone",
+            "==",
+            phone
+          )
+          .limit(1)
+          .get();
+
+      if (snapshot.empty) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Клиент не найден",
+        });
+      }
+
+      const clientDoc =
+        snapshot.docs[0];
+
+      res.json({
+        success: true,
+
+        client: {
+          id: clientDoc.id,
+          ...clientDoc.data(),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка поиска клиента:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Ошибка поиска клиента",
+      });
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/clients/:id/profile
+|--------------------------------------------------------------------------
+*/
+
+app.get(
+  "/api/clients/:id/profile",
+  async (req, res) => {
+    try {
+      const { id } =
+        req.params;
+
+      const clientRef =
+        db
+          .collection(
+            CLIENTS_COLLECTION
+          )
+          .doc(id);
+
+      const clientDoc =
+        await clientRef.get();
+
+      if (!clientDoc.exists) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Клиент не найден",
+        });
+      }
+
+      const operationsSnapshot =
+        await clientRef
+          .collection("operations")
+          .orderBy(
+            "date",
+            "desc"
+          )
+          .get();
+
+      const operations =
+        operationsSnapshot.docs.map(
+          (operationDoc) => {
+            const data =
+              operationDoc.data();
+
+            return {
+              id: operationDoc.id,
+              ...data,
+              date:
+                serializeFirestoreValue(
+                  data.date
+                ),
+            };
+          }
+        );
+
+      const client =
+        clientDoc.data();
+
+      res.json({
+        success: true,
+
+        client: {
+          id: clientDoc.id,
+          ...client,
+
+          createdAt:
+            serializeFirestoreValue(
+              client.createdAt
+            ),
+
+          operations,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка профиля:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Ошибка получения профиля",
+      });
+    }
+  }
+);
 
 /*
 |--------------------------------------------------------------------------
 | POST /api/clients
-| Создать клиента в Firebase
 |--------------------------------------------------------------------------
 */
 
-app.post("/api/clients", async (req, res) => {
-  try {
-    const { name, phone } = req.body;
+app.post(
+  "/api/clients",
+  async (req, res) => {
+    try {
+      const name =
+        String(
+          req.body.name || ""
+        ).trim();
 
-    if (!name || !phone) {
+      const phone =
+        normalizePhone(
+          req.body.phone
+        );
 
-      return res.status(400).json({
-        success:false,
-        message:"Введите имя и телефон"
+      if (!name || !phone) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Введите имя и телефон",
+        });
+      }
+
+      if (!validatePhone(phone)) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Телефон должен начинаться с +7 и содержать 11 цифр",
+        });
+      }
+
+      const existingSnapshot =
+        await db
+          .collection(
+            CLIENTS_COLLECTION
+          )
+          .where(
+            "phone",
+            "==",
+            phone
+          )
+          .limit(1)
+          .get();
+
+      if (!existingSnapshot.empty) {
+        return res.status(409).json({
+          success: false,
+          message:
+            "Клиент с таким номером телефона уже существует",
+        });
+      }
+
+      const clientRef =
+        db
+          .collection(
+            CLIENTS_COLLECTION
+          )
+          .doc();
+
+      const welcomeBonus =
+        100000;
+
+      const client = {
+        name,
+        phone,
+        points: welcomeBonus,
+        createdAt: new Date(),
+      };
+
+      await clientRef.set(
+        client
+      );
+
+      await clientRef
+        .collection("operations")
+        .doc()
+        .set({
+          type: "add",
+          points: welcomeBonus,
+          reason:
+            "Приветственные бонусы",
+          date: new Date(),
+        });
+
+      res.status(201).json({
+        success: true,
+
+        client: {
+          id: clientRef.id,
+          ...client,
+        },
       });
+    } catch (error) {
+      console.error(
+        "Ошибка создания клиента:",
+        error
+      );
 
-    }
-
-
-    if (!validatePhone(phone)) {
-
-      return res.status(400).json({
-
-        success:false,
-
-        message:"Телефон должен начинаться с +7 и содержать 11 цифр"
-
-      });
-
-    }
-
-    /*
-     * Проверяем, существует ли клиент
-     * с таким номером телефона.
-     */
-
-    const existingSnapshot = await db
-      .collection("clients")
-      .where("phone", "==", phone)
-      .limit(1)
-      .get();
-
-    if (!existingSnapshot.empty) {
-      return res.status(409).json({
+      res.status(500).json({
         success: false,
-        message: "Клиент с таким номером телефона уже существует",
+        message:
+          "Ошибка создания клиента",
       });
     }
-
-    /*
-     * Создаём новый документ.
-     */
-
-    const clientRef = db.collection("clients").doc();
-
-    const welcomeBonus = 100000;
-
-
-    const client = {
-      name,
-      phone,
-      points: welcomeBonus,
-      createdAt: new Date(),
-    };
-
-    await clientRef.set(client);
-
-
-    // Создаем приветственную операцию
-
-    const operationRef =
-      clientRef.collection("operations").doc();
-
-
-    await operationRef.set({
-
-      type: "add",
-
-      points: welcomeBonus,
-
-      reason: "Приветственные бонусы",
-
-      date: new Date(),
-
-    });
-
-    res.status(201).json({
-      success: true,
-      client: {
-        id: clientRef.id,
-        ...client,
-      },
-    });
-  } catch (error) {
-    console.error("Ошибка создания клиента:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Ошибка создания клиента",
-    });
   }
-});
+);
 
 /*
 |--------------------------------------------------------------------------
 | PATCH /api/clients/:id
-| Обновить данные клиента
 |--------------------------------------------------------------------------
 */
 
-app.patch("/api/clients/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, phone, points } = req.body;
+app.patch(
+  "/api/clients/:id",
+  async (req, res) => {
+    try {
+      const { id } =
+        req.params;
 
-    const clientRef = db.collection("clients").doc(id);
+      const {
+        name,
+        phone,
+        points,
+      } = req.body;
 
-    const clientDoc = await clientRef.get();
+      const clientRef =
+        db
+          .collection(
+            CLIENTS_COLLECTION
+          )
+          .doc(id);
 
-    if (!clientDoc.exists) {
-      return res.status(404).json({
+      const clientDoc =
+        await clientRef.get();
+
+      if (!clientDoc.exists) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Клиент не найден",
+        });
+      }
+
+      const updates = {};
+
+      if (name !== undefined) {
+        updates.name = String(
+          name
+        ).trim();
+      }
+
+      if (phone !== undefined) {
+        const normalizedPhone =
+          normalizePhone(
+            phone
+          );
+
+        if (
+          !validatePhone(
+            normalizedPhone
+          )
+        ) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Некорректный телефон",
+          });
+        }
+
+        updates.phone =
+          normalizedPhone;
+      }
+
+      if (points !== undefined) {
+        updates.points =
+          Number(points);
+      }
+
+      await clientRef.update(
+        updates
+      );
+
+      const updatedDoc =
+        await clientRef.get();
+
+      res.json({
+        success: true,
+
+        client: {
+          id: updatedDoc.id,
+          ...updatedDoc.data(),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка обновления клиента:",
+        error
+      );
+
+      res.status(500).json({
         success: false,
-        message: "Клиент не найден",
+        message:
+          "Ошибка обновления клиента",
       });
     }
-
-    const updates = {};
-
-    if (name !== undefined) {
-      updates.name = name;
-    }
-
-    if (phone !== undefined) {
-      updates.phone = phone;
-    }
-
-    if (points !== undefined) {
-      updates.points = Number(points);
-    }
-
-    await clientRef.update(updates);
-
-    const updatedDoc = await clientRef.get();
-
-    res.json({
-      success: true,
-      client: {
-        id: updatedDoc.id,
-        ...updatedDoc.data(),
-      },
-    });
-  } catch (error) {
-    console.error("Ошибка обновления клиента:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Ошибка обновления клиента",
-    });
   }
-});
-
-// GET /api/clients/phone/:phone
-// Поиск клиента по номеру телефона
-
-app.get("/api/clients/phone/:phone", async (req, res) => {
-  try {
-    const { phone } = req.params;
-
-    const snapshot = await db
-      .collection("clients")
-      .where("phone", "==", phone)
-      .limit(1)
-      .get();
-
-    if (snapshot.empty) {
-      return res.status(404).json({
-        success: false,
-        message: "Клиент не найден",
-      });
-    }
-
-    const clientDoc = snapshot.docs[0];
-
-    res.json({
-      success: true,
-      client: {
-        id: clientDoc.id,
-        ...clientDoc.data(),
-      },
-    });
-
-  } catch (error) {
-    console.error("Ошибка поиска клиента:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Ошибка поиска клиента",
-    });
-  }
-});
-
-// POST /api/clients/:id/bonus/add
-// Начисление бонусов клиенту
-
-app.post("/api/clients/:id/bonus/add", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { points, reason } = req.body;
-
-    const clientRef = db.collection("clients").doc(id);
-
-    const clientDoc = await clientRef.get();
-
-    if (!clientDoc.exists) {
-      return res.status(404).json({
-        success: false,
-        message: "Клиент не найден",
-      });
-    }
-
-
-    const client = clientDoc.data();
-
-    const newPoints =
-      Number(client.points || 0) + Number(points);
-
-
-    await clientRef.update({
-      points: newPoints,
-    });
-
-
-    await clientRef
-      .collection("operations")
-      .add({
-        type: "add",
-        points: Number(points),
-        reason: reason || "Начисление бонусов",
-        date: new Date(),
-      });
-
-
-    res.json({
-      success: true,
-      message: "Бонусы начислены",
-      points: newPoints,
-    });
-
-
-  } catch (error) {
-
-    console.error(
-      "Ошибка начисления бонусов:",
-      error
-    );
-
-    res.status(500).json({
-      success:false,
-      message:"Ошибка начисления бонусов",
-    });
-  }
-});
-
-// POST /api/clients/:id/bonus/remove
-// Списание бонусов клиента
-
-app.post("/api/clients/:id/bonus/remove", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { points, reason } = req.body;
-
-
-    const clientRef = db.collection("clients").doc(id);
-
-    const clientDoc = await clientRef.get();
-
-
-    if (!clientDoc.exists) {
-      return res.status(404).json({
-        success: false,
-        message: "Клиент не найден",
-      });
-    }
-
-
-    const client = clientDoc.data();
-
-
-    const currentPoints = Number(client.points || 0);
-    const removePoints = Number(points);
-
-
-    if (removePoints > currentPoints) {
-      return res.status(400).json({
-        success: false,
-        message: "Недостаточно бонусов",
-      });
-    }
-
-
-    const newPoints = currentPoints - removePoints;
-
-
-    await clientRef.update({
-      points: newPoints,
-    });
-
-
-    await clientRef
-      .collection("operations")
-      .add({
-        type: "remove",
-        points: removePoints,
-        reason: reason || "Списание бонусов",
-        date: new Date(),
-      });
-
-
-    res.json({
-      success: true,
-      message: "Бонусы списаны",
-      points: newPoints,
-    });
-
-
-  } catch (error) {
-
-    console.error(
-      "Ошибка списания бонусов:",
-      error
-    );
-
-
-    res.status(500).json({
-      success:false,
-      message:"Ошибка списания бонусов",
-    });
-
-  }
-});
+);
 
 /*
 |--------------------------------------------------------------------------
-| Запуск сервера
+| BONUS
 |--------------------------------------------------------------------------
 */
 
-// GET /api/clients/:id/operations
-// История бонусных операций клиента
+/*
+|--------------------------------------------------------------------------
+| Начисление бонусов
+|--------------------------------------------------------------------------
+*/
 
-app.get("/api/clients/:id/operations", async (req, res) => {
-  try {
-    const { id } = req.params;
+app.post(
+  "/api/clients/:id/bonus/add",
+  async (req, res) => {
+    try {
+      const { id } =
+        req.params;
 
-    const clientRef = db
-      .collection("clients")
-      .doc(id);
+      const {
+        points,
+        reason,
+      } = req.body;
 
+      const amount =
+        Number(points);
 
-    const clientDoc = await clientRef.get();
-
-
-    if (!clientDoc.exists) {
-      return res.status(404).json({
-        success: false,
-        message: "Клиент не найден",
-      });
-    }
-
-
-    const snapshot = await clientRef
-      .collection("operations")
-      .orderBy("date", "desc")
-      .get();
-
-
-    const operations = snapshot.docs.map(doc => {
-
-      const data = doc.data();
-
-      return {
-        id: doc.id,
-        type: data.type,
-        points: data.points,
-        reason: data.reason,
-        date: data.date?.toDate()
-          ? data.date.toDate().toISOString()
-          : null,
-      };
-
-    });
-
-
-    res.json({
-      success: true,
-      operations,
-    });
-
-
-  } catch (error) {
-
-    console.error(
-      "Ошибка получения истории:",
-      error
-    );
-
-
-    res.status(500).json({
-      success:false,
-      message:"Ошибка получения истории",
-    });
-
-  }
-});
-
-// GET /api/clients/:id/profile
-// Полный профиль клиента
-
-app.get("/api/clients/:id/profile", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-
-    const clientRef = db
-      .collection("clients")
-      .doc(id);
-
-
-    const clientDoc = await clientRef.get();
-
-
-    if (!clientDoc.exists) {
-      return res.status(404).json({
-        success: false,
-        message: "Клиент не найден",
-      });
-    }
-
-
-    const clientData = clientDoc.data();
-
-
-    const operationsSnapshot = await clientRef
-      .collection("operations")
-      .orderBy("date", "desc")
-      .get();
-
-
-    const operations = operationsSnapshot.docs.map(doc => {
-
-      const data = doc.data();
-
-
-      return {
-        id: doc.id,
-        type: data.type,
-        points: data.points,
-        reason: data.reason,
-        date: data.date?.toDate()
-          ? data.date.toDate().toISOString()
-          : null,
-      };
-
-    });
-
-
-    res.json({
-
-      success: true,
-
-      client: {
-        id: clientDoc.id,
-        name: clientData.name,
-        phone: clientData.phone,
-        points: clientData.points || 0,
-        createdAt: clientData.createdAt?.toDate
-          ? clientData.createdAt.toDate().toISOString()
-          : null,
-
-        operations,
-
+      if (
+        !Number.isFinite(amount) ||
+        amount <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Некорректное количество бонусов",
+        });
       }
 
-    });
-
-
-  } catch (error) {
-
-    console.error(
-      "Ошибка получения профиля клиента:",
-      error
-    );
-
-
-    res.status(500).json({
-      success:false,
-      message:"Ошибка получения профиля клиента",
-    });
-
-  }
-});
-
-// Расчёт бонусной скидки
-
-app.post("/api/bonus/calculate", async (req,res)=>{
-
-try {
-
-
-const {
-price,
-category,
-clientPoints
-}=req.body;
-
-
-
-const result =
-calculateBonusDiscount({
-
-price,
-category,
-clientPoints
-
-});
-
-
-
-res.json({
-
-success:true,
-
-result
-
-});
-
-
-
-}
-catch(error){
-
-console.error(
-"Ошибка расчёта бонусов:",
-error
-);
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Ошибка расчёта бонусов"
-
-});
-
-}
-
-
-});
-
-
-
-
-app.post("/api/auth/login", async (req, res) => {
-
-  try {
-
-    const { name, phone } = req.body;
-
-
-    if (!name || !phone) {
-
-      return res.status(400).json({
-        success:false,
-        message:"Введите имя и телефон"
-      });
-
-    }
-
-
-    const snapshot = await db
-      .collection("clients")
-      .where("phone", "==", phone)
-      .where("name", "==", name)
-      .limit(1)
-      .get();
-
-
-
-    if (snapshot.empty) {
-
-      return res.status(404).json({
-
-        success:false,
-
-        message:"Клиент не найден"
-
-      });
-
-    }
-
-
-
-    const clientDoc = snapshot.docs[0];
-
-
-    const clientData = clientDoc.data();
-
-
-    res.json({
-
-      success:true,
-
-      client:{
-
-        id: clientDoc.id,
-
-        name: clientData.name,
-
-        phone: clientData.phone,
-
-        points: clientData.points,
-
-        createdAt:
-          clientData.createdAt?.toDate
-          ? clientData.createdAt.toDate().toISOString()
-          : clientData.createdAt
-
+      const clientRef =
+        db
+          .collection(
+            CLIENTS_COLLECTION
+          )
+          .doc(id);
+
+      const clientDoc =
+        await clientRef.get();
+
+      if (!clientDoc.exists) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Клиент не найден",
+        });
       }
 
-    });
+      const client =
+        clientDoc.data();
 
+      const currentPoints =
+        Number(
+          client.points || 0
+        );
 
+      const newPoints =
+        currentPoints + amount;
 
-  } catch(error) {
-
-
-    console.error(
-      "Ошибка входа:",
-      error
-    );
-
-
-    res.status(500).json({
-
-      success:false,
-
-      message:"Ошибка входа"
-
-    });
-
-
-  }
-
-});
-
-
-app.post("/api/auth", async (req, res) => {
-
-  try {
-
-    const { name, phone } = req.body;
-
-
-    if (!name || !phone) {
-
-      return res.status(400).json({
-        success:false,
-        message:"Введите имя и телефон"
+      await clientRef.update({
+        points: newPoints,
       });
 
-    }
+      await clientRef
+        .collection("operations")
+        .add({
+          type: "add",
+          points: amount,
+          reason:
+            reason ||
+            "Начисление бонусов",
+          date: new Date(),
+        });
 
-
-    // ищем клиента
-
-    const snapshot = await db
-      .collection("clients")
-      .where("phone", "==", phone)
-      .limit(1)
-      .get();
-
-
-
-    // ==========================
-    // Клиент уже существует
-    // ==========================
-
-    if (!snapshot.empty) {
-
-
-      const clientDoc = snapshot.docs[0];
-
-      const clientData = clientDoc.data();
-
-
-      return res.json({
-
-        success:true,
-
-        isNew:false,
-
-        client:{
-
-          id:clientDoc.id,
-
-          ...clientData,
-
-          createdAt:
-          clientData.createdAt?.toDate
-          ? clientData.createdAt.toDate().toISOString()
-          : clientData.createdAt
-
-        }
-
+      res.json({
+        success: true,
+        message:
+          "Бонусы начислены",
+        points: newPoints,
       });
-
-    }
-
-
-
-    // ==========================
-    // Новый клиент
-    // ==========================
-
-
-    const welcomeBonus = 100000;
-
-
-    const clientRef =
-      db.collection("clients").doc();
-
-
-
-    const client = {
-
-      name,
-
-      phone,
-
-      points:welcomeBonus,
-
-      createdAt:new Date()
-
-    };
-
-
-    await clientRef.set(client);
-
-
-
-    // история бонусов
-
-    const operationRef =
-      clientRef.collection("operations").doc();
-
-
-
-    await operationRef.set({
-
-      type:"add",
-
-      points:welcomeBonus,
-
-      reason:"Приветственные бонусы",
-
-      date:new Date()
-
-    });
-
-
-
-    res.json({
-
-      success:true,
-
-      isNew:true,
-
-      client:{
-
-        id:clientRef.id,
-
-        ...client,
-
-        createdAt:
-        client.createdAt.toISOString()
-
-      }
-
-    });
-
-
-
-  } catch(error) {
-
-
-    console.error(
-      "Ошибка авторизации:",
-      error
-    );
-
-
-    res.status(500).json({
-
-      success:false,
-
-      message:"Ошибка авторизации"
-
-    });
-
-  }
-
-});
-
-// =================================
-// Вход администратора через Firebase
-// =================================
-
-app.post("/api/admin/login", async (req, res) => {
-
-  try {
-
-    const {
-      login,
-      password
-    } = req.body;
-
-
-    if (!login || !password) {
-
-      return res.status(400).json({
-
-        success:false,
-
-        message:"Введите логин и пароль"
-
-      });
-
-    }
-
-
-
-    const snapshot =
-      await db
-        .collection("admins")
-        .where(
-          "login",
-          "==",
-          login
-        )
-        .limit(1)
-        .get();
-
-
-
-    if(snapshot.empty){
-
-      return res.status(401).json({
-
-        success:false,
-
-        message:"Администратор не найден"
-
-      });
-
-    }
-
-
-
-    const adminDoc =
-      snapshot.docs[0];
-
-
-    const admin =
-      adminDoc.data();
-
-
-
-    const passwordCorrect =
-      await bcrypt.compare(
-        password,
-        admin.passwordHash
+    } catch (error) {
+      console.error(
+        "Ошибка начисления бонусов:",
+        error
       );
 
-
-
-    if(!passwordCorrect){
-
-      return res.status(401).json({
-
-        success:false,
-
-        message:"Неверный пароль"
-
+      res.status(500).json({
+        success: false,
+        message:
+          "Ошибка начисления бонусов",
       });
-
     }
+  }
+);
 
+/*
+|--------------------------------------------------------------------------
+| Списание бонусов
+|--------------------------------------------------------------------------
+*/
 
+app.post(
+  "/api/clients/:id/bonus/remove",
+  async (req, res) => {
+    try {
+      const { id } =
+        req.params;
 
-    res.json({
+      const {
+        points,
+        reason,
+      } = req.body;
 
-      success:true,
+      const amount =
+        Number(points);
 
-      admin:{
-
-        id:adminDoc.id,
-
-        name:admin.name,
-
-        login:admin.login,
-
-        role:"admin"
-
+      if (
+        !Number.isFinite(amount) ||
+        amount <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Некорректное количество бонусов",
+        });
       }
 
-    });
+      const clientRef =
+        db
+          .collection(
+            CLIENTS_COLLECTION
+          )
+          .doc(id);
 
+      const clientDoc =
+        await clientRef.get();
 
+      if (!clientDoc.exists) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Клиент не найден",
+        });
+      }
 
-  } catch(error){
+      const client =
+        clientDoc.data();
 
+      const currentPoints =
+        Number(
+          client.points || 0
+        );
 
-    console.error(
-      "Ошибка входа администратора:",
-      error
-    );
+      if (
+        amount >
+        currentPoints
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Недостаточно бонусов",
+        });
+      }
 
+      const newPoints =
+        currentPoints - amount;
 
-    res.status(500).json({
+      await clientRef.update({
+        points: newPoints,
+      });
 
-      success:false,
+      await clientRef
+        .collection("operations")
+        .add({
+          type: "remove",
+          points: amount,
+          reason:
+            reason ||
+            "Списание бонусов",
+          date: new Date(),
+        });
 
-      message:"Ошибка сервера"
+      res.json({
+        success: true,
+        message:
+          "Бонусы списаны",
+        points: newPoints,
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка списания бонусов:",
+        error
+      );
 
-    });
-
-
+      res.status(500).json({
+        success: false,
+        message:
+          "Ошибка списания бонусов",
+      });
+    }
   }
+);
 
-});
+/*
+|--------------------------------------------------------------------------
+| История бонусных операций
+|--------------------------------------------------------------------------
+*/
 
-// =================================
-// MOYSKLAD
-// =================================
+app.get(
+  "/api/clients/:id/operations",
+  async (req, res) => {
+    try {
+      const { id } =
+        req.params;
 
-// Проверка соединения с МойСклад
-app.get("/api/moysklad/test", async (req, res) => {
-  try {
-    const result = await testMoySklad();
+      const clientRef =
+        db
+          .collection(
+            CLIENTS_COLLECTION
+          )
+          .doc(id);
 
-    res.json({
-      success: true,
-      message: "МойСклад подключен",
-      ...result,
-    });
+      const clientDoc =
+        await clientRef.get();
 
-  } catch (error) {
-    console.error(
-      "Ошибка подключения к МойСклад:",
-      error.response?.data || error.message
-    );
+      if (!clientDoc.exists) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Клиент не найден",
+        });
+      }
 
-    res.status(500).json({
-      success: false,
-      message: "Ошибка подключения к МойСклад",
-      error:
-        error.response?.data ||
-        error.message,
-    });
+      const snapshot =
+        await clientRef
+          .collection("operations")
+          .orderBy(
+            "date",
+            "desc"
+          )
+          .get();
+
+      const operations =
+        snapshot.docs.map(
+          (operationDoc) => {
+            const data =
+              operationDoc.data();
+
+            return {
+              id: operationDoc.id,
+              type: data.type,
+              points: data.points,
+              reason: data.reason,
+              date:
+                serializeFirestoreValue(
+                  data.date
+                ),
+            };
+          }
+        );
+
+      res.json({
+        success: true,
+        operations,
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка получения истории:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Ошибка получения истории",
+      });
+    }
   }
-});
+);
 
+/*
+|--------------------------------------------------------------------------
+| BONUS CALCULATE
+|--------------------------------------------------------------------------
+*/
 
-// Получить весь ассортимент
+app.post(
+  "/api/bonus/calculate",
+  async (req, res) => {
+    try {
+      const {
+        price,
+        category,
+        clientPoints,
+      } = req.body;
+
+      const result =
+        calculateBonusDiscount({
+          price,
+          category,
+          clientPoints,
+        });
+
+      res.json({
+        success: true,
+        result,
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка расчёта бонусов:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Ошибка расчёта бонусов",
+      });
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| AUTH
+|--------------------------------------------------------------------------
+*/
+
+app.post(
+  "/api/auth/login",
+  async (req, res) => {
+    try {
+      const name =
+        String(
+          req.body.name || ""
+        ).trim();
+
+      const phone =
+        normalizePhone(
+          req.body.phone
+        );
+
+      if (!name || !phone) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Введите имя и телефон",
+        });
+      }
+
+      const snapshot =
+        await db
+          .collection(
+            CLIENTS_COLLECTION
+          )
+          .where(
+            "phone",
+            "==",
+            phone
+          )
+          .where(
+            "name",
+            "==",
+            name
+          )
+          .limit(1)
+          .get();
+
+      if (snapshot.empty) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Клиент не найден",
+        });
+      }
+
+      const clientDoc =
+        snapshot.docs[0];
+
+      const clientData =
+        clientDoc.data();
+
+      res.json({
+        success: true,
+
+        client: {
+          id: clientDoc.id,
+          name:
+            clientData.name,
+          phone:
+            clientData.phone,
+          points:
+            Number(
+              clientData.points || 0
+            ),
+          createdAt:
+            serializeFirestoreValue(
+              clientData.createdAt
+            ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка входа:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Ошибка входа",
+      });
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| AUTH / регистрация или вход
+|--------------------------------------------------------------------------
+*/
+
+app.post(
+  "/api/auth",
+  async (req, res) => {
+    try {
+      const name =
+        String(
+          req.body.name || ""
+        ).trim();
+
+      const phone =
+        normalizePhone(
+          req.body.phone
+        );
+
+      if (!name || !phone) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Введите имя и телефон",
+        });
+      }
+
+      if (!validatePhone(phone)) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Некорректный телефон",
+        });
+      }
+
+      const snapshot =
+        await db
+          .collection(
+            CLIENTS_COLLECTION
+          )
+          .where(
+            "phone",
+            "==",
+            phone
+          )
+          .limit(1)
+          .get();
+
+      /*
+      |--------------------------------------------------------------------------
+      | Клиент существует
+      |--------------------------------------------------------------------------
+      */
+
+      if (!snapshot.empty) {
+        const clientDoc =
+          snapshot.docs[0];
+
+        const clientData =
+          clientDoc.data();
+
+        return res.json({
+          success: true,
+          isNew: false,
+
+          client: {
+            id: clientDoc.id,
+            ...clientData,
+
+            createdAt:
+              serializeFirestoreValue(
+                clientData.createdAt
+              ),
+          },
+        });
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Новый клиент
+      |--------------------------------------------------------------------------
+      */
+
+      const welcomeBonus =
+        100000;
+
+      const clientRef =
+        db
+          .collection(
+            CLIENTS_COLLECTION
+          )
+          .doc();
+
+      const client = {
+        name,
+        phone,
+        points: welcomeBonus,
+        createdAt: new Date(),
+      };
+
+      await clientRef.set(
+        client
+      );
+
+      await clientRef
+        .collection("operations")
+        .doc()
+        .set({
+          type: "add",
+          points: welcomeBonus,
+          reason:
+            "Приветственные бонусы",
+          date: new Date(),
+        });
+
+      res.json({
+        success: true,
+        isNew: true,
+
+        client: {
+          id: clientRef.id,
+          ...client,
+          createdAt:
+            client.createdAt.toISOString(),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка авторизации:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Ошибка авторизации",
+      });
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| ADMIN LOGIN
+|--------------------------------------------------------------------------
+*/
+
+app.post(
+  "/api/admin/login",
+  async (req, res) => {
+    try {
+      const {
+        login,
+        password,
+      } = req.body;
+
+      if (!login || !password) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Введите логин и пароль",
+        });
+      }
+
+      const snapshot =
+        await db
+          .collection(
+            ADMINS_COLLECTION
+          )
+          .where(
+            "login",
+            "==",
+            login
+          )
+          .limit(1)
+          .get();
+
+      if (snapshot.empty) {
+        return res.status(401).json({
+          success: false,
+          message:
+            "Администратор не найден",
+        });
+      }
+
+      const adminDoc =
+        snapshot.docs[0];
+
+      const admin =
+        adminDoc.data();
+
+      const passwordCorrect =
+        await bcrypt.compare(
+          password,
+          admin.passwordHash
+        );
+
+      if (!passwordCorrect) {
+        return res.status(401).json({
+          success: false,
+          message:
+            "Неверный пароль",
+        });
+      }
+
+      res.json({
+        success: true,
+
+        admin: {
+          id: adminDoc.id,
+          name:
+            admin.name || "",
+          login:
+            admin.login || login,
+          role: "admin",
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка входа администратора:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Ошибка сервера",
+      });
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| MOYSKLAD TEST
+|--------------------------------------------------------------------------
+*/
+
+app.get(
+  "/api/moysklad/test",
+  async (req, res) => {
+    try {
+      const result =
+        await testMoySklad();
+
+      res.json({
+        success: true,
+        message:
+          "МойСклад подключен",
+        ...result,
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка подключения к МойСклад:",
+        error?.response?.data ||
+          error?.message ||
+          error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Ошибка подключения к МойСклад",
+        error:
+          error?.response?.data ||
+          error?.message,
+      });
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| MOYSKLAD PRODUCTS
+|--------------------------------------------------------------------------
+*/
+
+/*
+|--------------------------------------------------------------------------
+| Получить весь ассортимент
+|--------------------------------------------------------------------------
+*/
+
 app.get(
   "/api/moysklad/products",
   async (req, res) => {
-
     try {
-
       const products =
         await getProducts();
 
@@ -1792,98 +2048,90 @@ app.get(
         count: products.length,
         products,
       });
-
     } catch (error) {
-
       console.error(
         "Ошибка получения товаров из МойСклад:",
-        error.response?.data ||
-        error.message
+        error?.response?.data ||
+          error?.message ||
+          error
       );
 
       res.status(500).json({
-
         success: false,
-
         message:
           "Ошибка получения товаров из МойСклад",
-
         error:
-          error.response?.data ||
-          error.message,
-
+          error?.response?.data ||
+          error?.message,
       });
-
     }
   }
 );
 
+/*
+|--------------------------------------------------------------------------
+| Получить один товар
+|--------------------------------------------------------------------------
+*/
 
-// Получить один товар
 app.get(
   "/api/moysklad/products/:id",
   async (req, res) => {
-
     try {
-
       const { id } =
         req.params;
 
       const product =
         await getProductById(id);
 
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Товар не найден в МойСклад",
+        });
+      }
+
       res.json({
-
         success: true,
-
         product,
-
       });
-
     } catch (error) {
-
       console.error(
         "Ошибка получения товара из МойСклад:",
-        error.response?.data ||
-        error.message
+        error?.response?.data ||
+          error?.message ||
+          error
       );
 
       if (
-        error.response?.status === 404
+        error?.response?.status ===
+        404
       ) {
-
         return res.status(404).json({
-
           success: false,
-
           message:
             "Товар не найден в МойСклад",
-
         });
-
       }
 
       res.status(500).json({
-
         success: false,
-
         message:
           "Ошибка получения товара",
-
         error:
-          error.response?.data ||
-          error.message,
-
+          error?.response?.data ||
+          error?.message,
       });
-
     }
   }
 );
 
-// =================================
-// POST /api/moysklad/sync
-// Синхронизация МойСклад -> Firebase
-// =================================
+/*
+|--------------------------------------------------------------------------
+| СИНХРОНИЗАЦИЯ МойСклад → Firebase
+|--------------------------------------------------------------------------
+*/
 
 app.post(
   "/api/moysklad/sync",
@@ -1893,10 +2141,9 @@ app.post(
         await syncMoySkladProductsToFirebase();
 
       res.json(result);
-
     } catch (error) {
       console.error(
-        "Ошибка синхронизации МойСклад -> Firebase:",
+        "Ошибка синхронизации МойСклад → Firebase:",
         error
       );
 
@@ -1905,15 +2152,66 @@ app.post(
         message:
           "Ошибка синхронизации товаров",
         error:
-          error.response?.data ||
-          error.message,
+          error?.response?.data ||
+          error?.message,
       });
     }
   }
 );
 
-app.listen(PORT, () => {
+/*
+|--------------------------------------------------------------------------
+| АВТОМАТИЧЕСКАЯ СИНХРОНИЗАЦИЯ
+|--------------------------------------------------------------------------
+*/
+
+const SYNC_INTERVAL = 30 * 60 * 1000; // 30 минут
+
+async function runAutomaticSync() {
   console.log(
-    `KUSAI MAX API запущен: http://localhost:${PORT}`
+    "⏰ Автоматическая синхронизация МойСклад → Firebase"
   );
-});
+
+  try {
+    const result =
+      await syncMoySkladProductsToFirebase();
+
+    console.log(
+      "✅ Автоматическая синхронизация завершена:",
+      result
+    );
+  } catch (error) {
+    console.error(
+      "❌ Ошибка автоматической синхронизации:",
+      error
+    );
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| ЗАПУСК
+|--------------------------------------------------------------------------
+*/
+
+app.listen(
+  PORT,
+  async () => {
+    console.log(
+      `KUSAI MAX API запущен: http://localhost:${PORT}`
+    );
+
+    /*
+     * Синхронизируем товары сразу после запуска сервера.
+     */
+    await runAutomaticSync();
+
+    /*
+     * Затем повторяем синхронизацию каждые 30 минут.
+     */
+    setInterval(
+      runAutomaticSync,
+      SYNC_INTERVAL
+    );
+  }
+);

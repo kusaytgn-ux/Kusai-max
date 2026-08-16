@@ -459,37 +459,50 @@ app.post(
 |--------------------------------------------------------------------------
 | MOYSKLAD → FIREBASE
 |
-| Получение товаров из МойСклад
-| и сохранение в коллекцию products
+| Синхронизация товаров
 |--------------------------------------------------------------------------
 */
 
-app.get("/api/moysklad/products", async (req, res) => {
+let syncInProgress = false;
+
+async function syncMoySkladToFirebase() {
+  if (syncInProgress) {
+    console.log(
+      "Синхронизация уже выполняется. Пропускаем новый запуск."
+    );
+
+    return {
+      success: false,
+      skipped: true,
+      message: "Синхронизация уже выполняется",
+    };
+  }
+
+  syncInProgress = true;
+
   console.log("");
   console.log("======================================");
   console.log("MOYSKLAD → FIREBASE: СИНХРОНИЗАЦИЯ");
   console.log("======================================");
 
   try {
-    console.log("1. Получаем товары из МойСклад...");
+    console.log(
+      "1. Получаем товары из МойСклад..."
+    );
 
-    const moySkladProducts = await getProducts();
+    const moySkladProducts =
+      await getProducts();
 
     console.log(
       `2. Получено товаров из МойСклад: ${moySkladProducts.length}`
     );
 
-    const productsCollection = db.collection("products");
+    const productsCollection =
+      db.collection("products");
 
     let created = 0;
     let updated = 0;
     let skipped = 0;
-
-    /*
-    |--------------------------------------------------------------------------
-    | Сохраняем товары
-    |--------------------------------------------------------------------------
-    */
 
     for (const product of moySkladProducts) {
       try {
@@ -504,24 +517,18 @@ app.get("/api/moysklad/products", async (req, res) => {
         }
 
         const productRef =
-          productsCollection.doc(String(product.id));
+          productsCollection.doc(
+            String(product.id)
+          );
 
         const productDoc =
           await productRef.get();
 
-        /*
-        |--------------------------------------------------------------------------
-        | Формируем товар Firebase
-        |--------------------------------------------------------------------------
-        |
-        | Картинки пока НЕ добавляем.
-        |
-        */
-
         const firebaseProduct = {
           id: String(product.id),
 
-          title: product.name || "",
+          title:
+            product.name || "",
 
           description:
             product.description || "",
@@ -559,43 +566,35 @@ app.get("/api/moysklad/products", async (req, res) => {
           inStock:
             Number(product.quantity || 0) > 0,
 
-          /*
-          |--------------------------------------------------------------------------
-          | Пока картинок нет
-          |--------------------------------------------------------------------------
-          */
-
-          images: [],
+          images:
+            product.images || [],
 
           /*
-          |--------------------------------------------------------------------------
-          | Скрытие товара
-          |--------------------------------------------------------------------------
-          |
-          | Главное:
-          | новый товар автоматически hidden: false
-          |
-          */
+           * ВАЖНО:
+           * hidden НЕ перезаписываем,
+           * если товар уже существует.
+           */
 
-          hidden: false,
-
-          /*
-          |--------------------------------------------------------------------------
-          | Дополнительные поля для сайта
-          |--------------------------------------------------------------------------
-          */
+          hidden:
+            productDoc.exists
+              ? Boolean(
+                  productDoc.data().hidden ??
+                  false
+                )
+              : false,
 
           rating:
-            product.rating || 0,
+            Number(product.rating || 0),
 
           reviews:
-            product.reviews || 0,
+            Number(product.reviews || 0),
 
           badge:
             product.badge || null,
 
           delivery:
-            product.delivery || "Уточняется",
+            product.delivery ||
+            "Уточняется",
 
           updated:
             product.updated || null,
@@ -604,14 +603,7 @@ app.get("/api/moysklad/products", async (req, res) => {
             new Date(),
         };
 
-        /*
-        |--------------------------------------------------------------------------
-        | Создание / обновление
-        |--------------------------------------------------------------------------
-        */
-
         if (!productDoc.exists) {
-
           await productRef.set(
             firebaseProduct
           );
@@ -621,9 +613,7 @@ app.get("/api/moysklad/products", async (req, res) => {
           console.log(
             `Создан: ${product.name}`
           );
-
         } else {
-
           await productRef.update(
             firebaseProduct
           );
@@ -634,79 +624,135 @@ app.get("/api/moysklad/products", async (req, res) => {
             `Обновлён: ${product.name}`
           );
         }
-
       } catch (productError) {
-
         skipped++;
 
         console.error(
           `Ошибка сохранения товара ${product.name}:`,
-          productError.message
+          productError?.message ||
+            productError
         );
       }
     }
 
     console.log("");
-    console.log("======================================");
-    console.log("СИНХРОНИЗАЦИЯ ЗАВЕРШЕНА");
-    console.log("======================================");
-
+    console.log(
+      "СИНХРОНИЗАЦИЯ ЗАВЕРШЕНА"
+    );
     console.log(
       `Создано: ${created}`
     );
-
     console.log(
       `Обновлено: ${updated}`
     );
-
     console.log(
       `Пропущено: ${skipped}`
     );
-
     console.log(
       `Всего из МойСклад: ${moySkladProducts.length}`
     );
-
-    console.log("======================================");
+    console.log(
+      "======================================"
+    );
     console.log("");
 
-    res.json({
+    return {
       success: true,
-
-      message:
-        "Товары успешно синхронизированы с Firebase",
-
       moySkladCount:
         moySkladProducts.length,
-
       created,
-
       updated,
-
       skipped,
-    });
-
+    };
   } catch (error) {
-
     console.error(
       "Ошибка синхронизации МойСклад → Firebase:",
-      error
+      error?.response?.data ||
+        error?.message ||
+        error
     );
 
-    res.status(500).json({
-
-      success: false,
-
-      message:
-        "Ошибка синхронизации товаров",
-
-      error:
-        error?.message || String(error),
-
-    });
+    throw error;
+  } finally {
+    syncInProgress = false;
   }
-});
+}
 
+/*
+|--------------------------------------------------------------------------
+| GET /api/moysklad/products
+|
+| Ручной запуск синхронизации
+|--------------------------------------------------------------------------
+*/
+
+app.get(
+  "/api/moysklad/products",
+  async (req, res) => {
+    try {
+      const result =
+        await syncMoySkladToFirebase();
+
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message:
+          "Ошибка синхронизации товаров",
+        error:
+          error?.message ||
+          String(error),
+      });
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| АВТОМАТИЧЕСКАЯ СИНХРОНИЗАЦИЯ
+|
+| Каждые 30 минут
+|--------------------------------------------------------------------------
+*/
+
+const SYNC_INTERVAL =
+  30 * 60 * 1000;
+
+async function startAutoSync() {
+  console.log(
+    "Запускаем первоначальную синхронизацию..."
+  );
+
+  try {
+    await syncMoySkladToFirebase();
+  } catch (error) {
+    console.error(
+      "Первоначальная синхронизация не удалась:",
+      error?.message ||
+        error
+    );
+  }
+
+  setInterval(
+    async () => {
+      console.log("");
+      console.log(
+        "⏰ Прошло 30 минут. Запускаем автоматическую синхронизацию..."
+      );
+
+      try {
+        await syncMoySkladToFirebase();
+      } catch (error) {
+        console.error(
+          "Автоматическая синхронизация завершилась ошибкой:",
+          error?.message ||
+            error
+        );
+      }
+    },
+    SYNC_INTERVAL
+  );
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -717,9 +763,11 @@ app.get("/api/moysklad/products", async (req, res) => {
 app.listen(
   PORT,
   "0.0.0.0",
-  () => {
+  async () => {
     console.log(
       `Production API запущен на порту ${PORT}`
     );
+
+    await startAutoSync();
   }
 );

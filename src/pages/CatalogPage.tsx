@@ -4,17 +4,347 @@ import BottomNavigation from "../components/navigation/BottomNavigation";
 import ProductCard from "../components/cards/ProductCard";
 import SearchInput from "../components/ui/SearchInput";
 import { useProducts } from "../store/ProductContext";
+import type { Product } from "../types/Product";
 
-type CategoryGroup = {
+type CatalogSection = {
   name: string;
-  children: string[];
+  brands: string[];
 };
 
+type ParsedProduct = Product & {
+  brand: string;
+  subcategory: string;
+  section: string;
+};
+
+/*
+|--------------------------------------------------------------------------
+| Категории, которые считаем техникой
+|--------------------------------------------------------------------------
+|
+| Если в МойСклад категория выглядит:
+|
+| Apple/iPhone
+| Apple/iPad
+| Apple/Mac
+| Apple/AirPods
+|
+| то автоматически получаем:
+|
+| Техника → Apple → iPhone
+|
+*/
+
+const TECH_CATEGORIES = [
+  "iphone",
+  "ipad",
+  "mac",
+  "macbook",
+  "imac",
+  "mac mini",
+  "mac studio",
+  "mac pro",
+  "apple watch",
+  "airpods",
+  "airpods max",
+  "airpods pro",
+  "galaxy s",
+  "galaxy a",
+  "galaxy z",
+  "galaxy note",
+  "galaxy watch",
+  "galaxy buds",
+  "smartphone",
+  "смартфон",
+  "планшет",
+  "ноутбук",
+  "компьютер",
+  "телевизор",
+  "tv",
+  "watch",
+];
+
+/*
+|--------------------------------------------------------------------------
+| Бренды
+|--------------------------------------------------------------------------
+*/
+
+const KNOWN_BRANDS = [
+  "Apple",
+  "Samsung",
+  "Xiaomi",
+  "Huawei",
+  "Honor",
+  "Sony",
+  "JBL",
+  "Anker",
+  "Baseus",
+  "Belkin",
+  "Marshall",
+  "Google",
+  "Nothing",
+  "Dyson",
+];
+
+/*
+|--------------------------------------------------------------------------
+| Определяем бренд
+|--------------------------------------------------------------------------
+*/
+
+function detectBrand(
+  rawCategory: string,
+  title: string
+): string {
+  const categoryFirstPart =
+    rawCategory
+      .split("/")
+      .map((part) => part.trim())
+      .filter(Boolean)[0] || "";
+
+  const titleLower =
+    title.toLowerCase();
+
+  const categoryLower =
+    categoryFirstPart.toLowerCase();
+
+  const knownBrand =
+    KNOWN_BRANDS.find(
+      (brand) =>
+        categoryLower ===
+          brand.toLowerCase() ||
+        titleLower.startsWith(
+          brand.toLowerCase()
+        )
+    );
+
+  if (knownBrand) {
+    return knownBrand;
+  }
+
+  if (categoryFirstPart) {
+    return categoryFirstPart;
+  }
+
+  return "Другие";
+}
+
+/*
+|--------------------------------------------------------------------------
+| Определяем подкатегорию
+|--------------------------------------------------------------------------
+*/
+
+function detectSubcategory(
+  rawCategory: string,
+  title: string
+): string {
+  const parts =
+    rawCategory
+      .split("/")
+      .map((part) => part.trim())
+      .filter(Boolean);
+
+  if (parts.length > 1) {
+    return parts
+      .slice(1)
+      .join(" / ");
+  }
+
+  const titleLower =
+    title.toLowerCase();
+
+  const knownSubcategories = [
+    "iPhone",
+    "iPad",
+    "MacBook",
+    "Mac",
+    "iMac",
+    "Mac mini",
+    "Mac Studio",
+    "Apple Watch",
+    "AirPods",
+    "AirPods Pro",
+    "AirPods Max",
+    "Galaxy S",
+    "Galaxy A",
+    "Galaxy Z",
+    "Galaxy Watch",
+    "Galaxy Buds",
+    "Наушники",
+    "Чехлы",
+    "Зарядные устройства",
+    "Кабели",
+    "Повербанки",
+    "Адаптеры",
+    "Стекла",
+    "Защитные пленки",
+  ];
+
+  const found =
+    knownSubcategories.find(
+      (subcategory) =>
+        titleLower.includes(
+          subcategory.toLowerCase()
+        )
+    );
+
+  return found || "Другое";
+}
+
+/*
+|--------------------------------------------------------------------------
+| Определяем раздел:
+|
+| Техника / Аксессуары
+|--------------------------------------------------------------------------
+*/
+
+function detectSection(
+  rawCategory: string,
+  title: string,
+  subcategory: string
+): string {
+  const value =
+    `${rawCategory} ${title} ${subcategory}`
+      .toLowerCase();
+
+  const isAccessory =
+    [
+      "чехол",
+      "case",
+      "кабель",
+      "cable",
+      "зарядк",
+      "charger",
+      "адаптер",
+      "adapter",
+      "стекло",
+      "пленк",
+      "защит",
+      "powerbank",
+      "power bank",
+      "повербанк",
+      "ремешок",
+      "strap",
+      "клавиатур",
+      "keyboard",
+      "мышь",
+      "mouse",
+      "держатель",
+      "holder",
+      "аксессуар",
+      "accessor",
+    ].some((word) =>
+      value.includes(word)
+    );
+
+  if (isAccessory) {
+    return "Аксессуары";
+  }
+
+  const isTechnology =
+    TECH_CATEGORIES.some(
+      (category) =>
+        value.includes(category)
+    );
+
+  if (isTechnology) {
+    return "Техника";
+  }
+
+  /*
+   * Если МойСклад явно содержит категорию
+   * аксессуаров — отправляем туда.
+   */
+
+  if (
+    value.includes("аксессуар") ||
+    value.includes("accessories")
+  ) {
+    return "Аксессуары";
+  }
+
+  /*
+   * Для известных устройств считаем техникой.
+   */
+
+  if (
+    KNOWN_BRANDS.some(
+      (brand) =>
+        value.includes(
+          brand.toLowerCase()
+        )
+    )
+  ) {
+    return "Техника";
+  }
+
+  return "Аксессуары";
+}
+
+/*
+|--------------------------------------------------------------------------
+| Нормализация товара для каталога
+|--------------------------------------------------------------------------
+*/
+
+function parseProduct(
+  product: Product
+): ParsedProduct {
+  const rawCategory =
+    String(
+      product.category || ""
+    ).trim();
+
+  const title =
+    String(
+      product.title || ""
+    ).trim();
+
+  const brand =
+    detectBrand(
+      rawCategory,
+      title
+    );
+
+  const subcategory =
+    detectSubcategory(
+      rawCategory,
+      title
+    );
+
+  const section =
+    detectSection(
+      rawCategory,
+      title,
+      subcategory
+    );
+
+  return {
+    ...product,
+    brand,
+    subcategory,
+    section,
+  };
+}
+
 function CatalogPage() {
-  const [search, setSearch] = useState("");
-  const [selectedGroup, setSelectedGroup] = useState("Все");
-  const [selectedCategory, setSelectedCategory] = useState("Все");
-  const [sort, setSort] = useState("Популярные");
+  const [search, setSearch] =
+    useState("");
+
+  const [selectedSection, setSelectedSection] =
+    useState("Все");
+
+  const [selectedBrand, setSelectedBrand] =
+    useState("Все");
+
+  const [selectedCategory, setSelectedCategory] =
+    useState("Все");
+
+  const [sort, setSort] =
+    useState("Популярные");
 
   const {
     products,
@@ -25,257 +355,386 @@ function CatalogPage() {
 
   /*
   |--------------------------------------------------------------------------
-  | Разбираем категории вида:
-  |
-  | Apple/AirPods
-  | Apple/iPhone
-  | Samsung/Galaxy S
-  |
-  | в:
-  |
-  | Apple
-  | ├── AirPods
-  | └── iPhone
-  |
-  | Samsung
-  | └── Galaxy S
+  | Разобранные товары
   |--------------------------------------------------------------------------
   */
 
-  const categoryGroups = useMemo<CategoryGroup[]>(() => {
-    const groups = new Map<string, Set<string>>();
+  const parsedProducts =
+    useMemo(
+      () =>
+        products.map(
+          parseProduct
+        ),
+      [products]
+    );
 
-    products.forEach((product) => {
-      const rawCategory = String(
-        product.category || ""
-      ).trim();
+  /*
+  |--------------------------------------------------------------------------
+  | Разделы
+  |--------------------------------------------------------------------------
+  */
 
-      if (!rawCategory) {
-        return;
+  const sections =
+    useMemo<CatalogSection[]>(() => {
+      const sectionMap =
+        new Map<
+          string,
+          Set<string>
+        >();
+
+      parsedProducts.forEach(
+        (product) => {
+          if (
+            !sectionMap.has(
+              product.section
+            )
+          ) {
+            sectionMap.set(
+              product.section,
+              new Set<string>()
+            );
+          }
+
+          sectionMap
+            .get(product.section)!
+            .add(product.brand);
+        }
+      );
+
+      return Array.from(
+        sectionMap.entries()
+      )
+        .map(
+          ([
+            name,
+            brands,
+          ]) => ({
+            name,
+            brands:
+              Array.from(
+                brands
+              ).sort(
+                (a, b) =>
+                  a.localeCompare(
+                    b,
+                    "ru"
+                  )
+              ),
+          })
+        )
+        .sort(
+          (a, b) =>
+            a.name.localeCompare(
+              b.name,
+              "ru"
+            )
+        );
+    }, [parsedProducts]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Текущий раздел
+  |--------------------------------------------------------------------------
+  */
+
+  const currentSection =
+    useMemo(() => {
+      if (
+        selectedSection ===
+        "Все"
+      ) {
+        return null;
       }
 
-      const parts = rawCategory
-        .split("/")
-        .map((part) => part.trim())
-        .filter(Boolean);
+      return (
+        sections.find(
+          (section) =>
+            section.name ===
+            selectedSection
+        ) || null
+      );
+    }, [
+      sections,
+      selectedSection,
+    ]);
 
-      if (parts.length === 0) {
-        return;
-      }
+  /*
+  |--------------------------------------------------------------------------
+  | Бренды текущего раздела
+  |--------------------------------------------------------------------------
+  */
 
-      const groupName = parts[0];
-
-      if (!groups.has(groupName)) {
-        groups.set(
-          groupName,
-          new Set<string>()
+  const visibleBrands =
+    useMemo(() => {
+      if (
+        selectedSection ===
+        "Все"
+      ) {
+        return Array.from(
+          new Set(
+            parsedProducts.map(
+              (product) =>
+                product.brand
+            )
+          )
+        ).sort((a, b) =>
+          a.localeCompare(
+            b,
+            "ru"
+          )
         );
       }
 
-      const group = groups.get(groupName)!;
+      return (
+        currentSection
+          ?.brands || []
+      );
+    }, [
+      parsedProducts,
+      selectedSection,
+      currentSection,
+    ]);
 
-      /*
-       * Если категория:
-       *
-       * Apple/AirPods
-       *
-       * добавляем AirPods.
-       *
-       * Если просто:
-       *
-       * Apple
-       *
-       * оставляем группу без дочерней категории.
-       */
-
-      if (parts.length > 1) {
-        group.add(parts.slice(1).join(" / "));
+  /*
+  |--------------------------------------------------------------------------
+  | Текущий бренд
+  |--------------------------------------------------------------------------
+  const currentBrand =
+    useMemo(() => {
+      if (
+        selectedBrand ===
+        "Все"
+      ) {
+        return null;
       }
-    });
 
-    return Array.from(groups.entries())
-      .map(([name, children]) => ({
-        name,
-        children: Array.from(children).sort(
-          (a, b) =>
-            a.localeCompare(b, "ru")
-        ),
-      }))
-      .sort((a, b) =>
-        a.name.localeCompare(
-          b.name,
+      return selectedBrand;
+    }, [
+      selectedBrand,
+    ]);
+  */
+
+  
+
+  /*
+  |--------------------------------------------------------------------------
+  | Подкатегории текущего бренда
+  |--------------------------------------------------------------------------
+  */
+
+  const visibleSubcategories =
+    useMemo(() => {
+      let source =
+        parsedProducts;
+
+      if (
+        selectedSection !==
+        "Все"
+      ) {
+        source =
+          source.filter(
+            (product) =>
+              product.section ===
+              selectedSection
+          );
+      }
+
+      if (
+        selectedBrand !==
+        "Все"
+      ) {
+        source =
+          source.filter(
+            (product) =>
+              product.brand ===
+              selectedBrand
+          );
+      }
+
+      return Array.from(
+        new Set(
+          source
+            .map(
+              (product) =>
+                product.subcategory
+            )
+            .filter(Boolean)
+        )
+      ).sort((a, b) =>
+        a.localeCompare(
+          b,
           "ru"
         )
       );
-  }, [products]);
+    }, [
+      parsedProducts,
+      selectedSection,
+      selectedBrand,
+    ]);
 
   /*
   |--------------------------------------------------------------------------
-  | Категории текущей группы
+  | Фильтрация товаров
   |--------------------------------------------------------------------------
   */
 
-  const currentGroup = useMemo(() => {
-    if (selectedGroup === "Все") {
-      return null;
-    }
+  const filteredProducts =
+    useMemo(() => {
+      const searchValue =
+        search
+          .trim()
+          .toLowerCase();
 
-    return categoryGroups.find(
-      (group) =>
-        group.name === selectedGroup
-    ) || null;
-  }, [
-    categoryGroups,
-    selectedGroup,
-  ]);
+      let result =
+        parsedProducts.filter(
+          (product) => {
+            const matchSection =
+              selectedSection ===
+                "Все" ||
+              product.section ===
+                selectedSection;
 
-  /*
-  |--------------------------------------------------------------------------
-  | Поиск + группа + категория
-  |--------------------------------------------------------------------------
-  */
+            const matchBrand =
+              selectedBrand ===
+                "Все" ||
+              product.brand ===
+                selectedBrand;
 
-  const filteredProducts = useMemo(() => {
-    const searchValue =
-      search
-        .trim()
-        .toLowerCase();
+            const matchCategory =
+              selectedCategory ===
+                "Все" ||
+              product.subcategory ===
+                selectedCategory;
 
-    let result = products.filter(
-      (product) => {
-        const title =
-          String(
-            product.title || ""
-          ).toLowerCase();
+            const searchableText =
+              [
+                product.title,
+                product.description,
+                product.category,
+                product.brand,
+                product.subcategory,
+                product.memory,
+                product.color,
+              ]
+                .join(" ")
+                .toLowerCase();
 
-        const description =
-          String(
-            product.description || ""
-          ).toLowerCase();
+            const matchSearch =
+              !searchValue ||
+              searchableText.includes(
+                searchValue
+              );
 
-        const category =
-          String(
-            product.category || ""
-          ).trim();
-
-        const categoryParts =
-          category
-            .split("/")
-            .map((part) =>
-              part.trim()
-            )
-            .filter(Boolean);
-
-        const productGroup =
-          categoryParts[0] || "";
-
-        const productSubcategory =
-          categoryParts
-            .slice(1)
-            .join(" / ");
-
-        /*
-         * Группа.
-         */
-
-        const matchGroup =
-          selectedGroup === "Все" ||
-          productGroup ===
-            selectedGroup;
-
-        /*
-         * Подкатегория.
-         */
-
-        const matchCategory =
-          selectedCategory === "Все" ||
-          productSubcategory ===
-            selectedCategory;
-
-        /*
-         * Поиск.
-         *
-         * Ищем не только по названию,
-         * но и по категории.
-         */
-
-        const searchableText =
-          `${title} ${description} ${category}`
-            .toLowerCase();
-
-        const matchSearch =
-          !searchValue ||
-          searchableText.includes(
-            searchValue
-          );
-
-        return (
-          matchGroup &&
-          matchCategory &&
-          matchSearch
+            return (
+              matchSection &&
+              matchBrand &&
+              matchCategory &&
+              matchSearch
+            );
+          }
         );
+
+      /*
+      |----------------------------------------------------------------------
+      | Сортировка
+      |----------------------------------------------------------------------
+      */
+
+      switch (sort) {
+        case "Цена ↑":
+          result =
+            [...result].sort(
+              (a, b) =>
+                Number(a.price || 0) -
+                Number(b.price || 0)
+            );
+          break;
+
+        case "Цена ↓":
+          result =
+            [...result].sort(
+              (a, b) =>
+                Number(b.price || 0) -
+                Number(a.price || 0)
+            );
+          break;
+
+        case "Рейтинг":
+          result =
+            [...result].sort(
+              (a, b) =>
+                Number(
+                  b.rating || 0
+                ) -
+                Number(
+                  a.rating || 0
+                )
+            );
+          break;
+
+        case "Популярные":
+        default:
+          result =
+            [...result].sort(
+              (a, b) =>
+                Number(
+                  b.rating || 0
+                ) -
+                Number(
+                  a.rating || 0
+                )
+            );
+          break;
       }
+
+      return result;
+    }, [
+      parsedProducts,
+      search,
+      selectedSection,
+      selectedBrand,
+      selectedCategory,
+      sort,
+    ]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Выбор раздела
+  |--------------------------------------------------------------------------
+  */
+
+  const handleSectionChange = (
+    section: string
+  ) => {
+    setSelectedSection(
+      section
     );
 
-    /*
-     * Сортировка.
-     */
+    setSelectedBrand(
+      "Все"
+    );
 
-    switch (sort) {
-      case "Цена ↑":
-        result = [...result].sort(
-          (a, b) =>
-            Number(a.price || 0) -
-            Number(b.price || 0)
-        );
-        break;
-
-      case "Цена ↓":
-        result = [...result].sort(
-          (a, b) =>
-            Number(b.price || 0) -
-            Number(a.price || 0)
-        );
-        break;
-
-      case "Рейтинг":
-        result = [...result].sort(
-          (a, b) =>
-            Number(b.rating || 0) -
-            Number(a.rating || 0)
-        );
-        break;
-
-      case "Популярные":
-      default:
-        result = [...result].sort(
-          (a, b) =>
-            Number(b.rating || 0) -
-            Number(a.rating || 0)
-        );
-        break;
-    }
-
-    return result;
-  }, [
-    products,
-    search,
-    selectedGroup,
-    selectedCategory,
-    sort,
-  ]);
+    setSelectedCategory(
+      "Все"
+    );
+  };
 
   /*
   |--------------------------------------------------------------------------
-  | Выбор группы
+  | Выбор бренда
   |--------------------------------------------------------------------------
   */
 
-  const handleGroupChange = (
-    group: string
+  const handleBrandChange = (
+    brand: string
   ) => {
-    setSelectedGroup(group);
-    setSelectedCategory("Все");
+    setSelectedBrand(
+      brand
+    );
+
+    setSelectedCategory(
+      "Все"
+    );
   };
 
   /*
@@ -287,7 +746,28 @@ function CatalogPage() {
   const handleCategoryChange = (
     category: string
   ) => {
-    setSelectedCategory(category);
+    setSelectedCategory(
+      category
+    );
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Сброс
+  |--------------------------------------------------------------------------
+  */
+
+  const resetFilters = () => {
+    setSearch("");
+    setSelectedSection(
+      "Все"
+    );
+    setSelectedBrand(
+      "Все"
+    );
+    setSelectedCategory(
+      "Все"
+    );
   };
 
   /*
@@ -334,7 +814,7 @@ function CatalogPage() {
           </h1>
 
           <p className="mt-1 text-sm text-zinc-500">
-            Найдите нужную технику и аксессуары
+            Выберите раздел и найдите нужный товар
           </p>
         </div>
 
@@ -343,7 +823,7 @@ function CatalogPage() {
         ========================================================= */}
 
         <SearchInput
-          placeholder="Поиск техники..."
+          placeholder="Поиск по товарам..."
           value={search}
           onChange={(event) =>
             setSearch(
@@ -353,17 +833,17 @@ function CatalogPage() {
         />
 
         {/* =========================================================
-            Основные группы
+            Уровень 1 — раздел
         ========================================================= */}
 
         <section className="mt-6">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-bold uppercase tracking-wide text-zinc-500">
-              Категории
+              Раздел
             </h2>
 
             <span className="text-xs text-zinc-600">
-              {categoryGroups.length} групп
+              {sections.length}
             </span>
           </div>
 
@@ -371,10 +851,13 @@ function CatalogPage() {
             <button
               type="button"
               onClick={() =>
-                handleGroupChange("Все")
+                handleSectionChange(
+                  "Все"
+                )
               }
               className={`whitespace-nowrap rounded-2xl px-4 py-3 text-sm font-bold transition ${
-                selectedGroup === "Все"
+                selectedSection ===
+                "Все"
                   ? "bg-yellow-400 text-black"
                   : "bg-zinc-900 text-white hover:bg-zinc-800"
               }`}
@@ -382,24 +865,26 @@ function CatalogPage() {
               Все товары
             </button>
 
-            {categoryGroups.map(
-              (group) => (
+            {sections.map(
+              (section) => (
                 <button
-                  key={group.name}
+                  key={
+                    section.name
+                  }
                   type="button"
                   onClick={() =>
-                    handleGroupChange(
-                      group.name
+                    handleSectionChange(
+                      section.name
                     )
                   }
                   className={`whitespace-nowrap rounded-2xl px-4 py-3 text-sm font-bold transition ${
-                    selectedGroup ===
-                    group.name
+                    selectedSection ===
+                    section.name
                       ? "bg-yellow-400 text-black"
                       : "bg-zinc-900 text-white hover:bg-zinc-800"
                   }`}
                 >
-                  {group.name}
+                  {section.name}
                 </button>
               )
             )}
@@ -407,20 +892,80 @@ function CatalogPage() {
         </section>
 
         {/* =========================================================
-            Подкатегории
+            Уровень 2 — бренд
         ========================================================= */}
 
-        {currentGroup &&
-          currentGroup.children.length >
+        {visibleBrands.length >
+          0 && (
+          <section className="mt-5">
+            <div className="mb-3">
+              <h2 className="text-sm font-bold uppercase tracking-wide text-zinc-500">
+                {selectedSection ===
+                "Все"
+                  ? "Бренд"
+                  : `Бренды · ${selectedSection}`}
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  handleBrandChange(
+                    "Все"
+                  )
+                }
+                className={`rounded-2xl px-4 py-3 text-left text-sm font-bold transition ${
+                  selectedBrand ===
+                  "Все"
+                    ? "bg-yellow-400 text-black"
+                    : "bg-zinc-900 text-white hover:bg-zinc-800"
+                }`}
+              >
+                Все бренды
+              </button>
+
+              {visibleBrands.map(
+                (brand) => (
+                  <button
+                    key={brand}
+                    type="button"
+                    onClick={() =>
+                      handleBrandChange(
+                        brand
+                      )
+                    }
+                    className={`rounded-2xl px-4 py-3 text-left text-sm font-bold transition ${
+                      selectedBrand ===
+                      brand
+                        ? "bg-yellow-400 text-black"
+                        : "bg-zinc-900 text-white hover:bg-zinc-800"
+                    }`}
+                  >
+                    {brand}
+                  </button>
+                )
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* =========================================================
+            Уровень 3 — подкатегория
+        ========================================================= */}
+
+        {selectedBrand !==
+          "Все" &&
+          visibleSubcategories.length >
             0 && (
-            <section className="mt-4">
+            <section className="mt-5">
               <div className="mb-3">
-                <h2 className="text-sm font-bold text-white">
-                  {currentGroup.name}
+                <h2 className="text-sm font-bold uppercase tracking-wide text-zinc-500">
+                  Категория
                 </h2>
 
-                <p className="mt-1 text-xs text-zinc-500">
-                  Выберите нужную категорию
+                <p className="mt-1 text-xs text-zinc-600">
+                  {selectedBrand}
                 </p>
               </div>
 
@@ -432,20 +977,22 @@ function CatalogPage() {
                       "Все"
                     )
                   }
-                  className={`rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${
+                  className={`rounded-2xl px-4 py-3 text-left text-sm font-bold transition ${
                     selectedCategory ===
                     "Все"
                       ? "bg-yellow-400 text-black"
                       : "bg-zinc-900 text-white hover:bg-zinc-800"
                   }`}
                 >
-                  Все {currentGroup.name}
+                  Всё
                 </button>
 
-                {currentGroup.children.map(
+                {visibleSubcategories.map(
                   (subcategory) => (
                     <button
-                      key={subcategory}
+                      key={
+                        subcategory
+                      }
                       type="button"
                       onClick={() =>
                         handleCategoryChange(
@@ -471,22 +1018,42 @@ function CatalogPage() {
             Активные фильтры
         ========================================================= */}
 
-        {(selectedGroup !== "Все" ||
-          selectedCategory !== "Все" ||
+        {(selectedSection !==
+          "Все" ||
+          selectedBrand !==
+            "Все" ||
+          selectedCategory !==
+            "Все" ||
           search.trim()) && (
           <div className="mt-5 flex flex-wrap gap-2">
-            {selectedGroup !==
+
+            {selectedSection !==
               "Все" && (
               <button
                 type="button"
                 onClick={() =>
-                  handleGroupChange(
+                  handleSectionChange(
                     "Все"
                   )
                 }
                 className="rounded-full bg-yellow-400/10 px-3 py-1.5 text-xs font-semibold text-yellow-400"
               >
-                {selectedGroup} ×
+                {selectedSection} ×
+              </button>
+            )}
+
+            {selectedBrand !==
+              "Все" && (
+              <button
+                type="button"
+                onClick={() =>
+                  handleBrandChange(
+                    "Все"
+                  )
+                }
+                className="rounded-full bg-yellow-400/10 px-3 py-1.5 text-xs font-semibold text-yellow-400"
+              >
+                {selectedBrand} ×
               </button>
             )}
 
@@ -590,15 +1157,9 @@ function CatalogPage() {
 
               <button
                 type="button"
-                onClick={() => {
-                  setSearch("");
-                  setSelectedGroup(
-                    "Все"
-                  );
-                  setSelectedCategory(
-                    "Все"
-                  );
-                }}
+                onClick={
+                  resetFilters
+                }
                 className="mt-5 rounded-2xl bg-yellow-400 px-5 py-3 text-sm font-bold text-black transition hover:bg-yellow-300"
               >
                 Сбросить фильтры
@@ -608,7 +1169,7 @@ function CatalogPage() {
         </div>
 
         {/* =========================================================
-            Автоматическая загрузка
+            Автоматическая пагинация
         ========================================================= */}
 
         {loadingMore && (

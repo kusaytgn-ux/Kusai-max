@@ -16,7 +16,6 @@ import type {
 import {
   getProducts,
   getNextProducts,
-  subscribeProducts,
 } from "../services/productService";
 
 import type { Product } from "../types/Product";
@@ -63,10 +62,10 @@ export function ProductProvider({
   const [error, setError] =
     useState<string | null>(null);
 
-  const [lastDoc, setLastDoc] =
-    useState<QueryDocumentSnapshot<DocumentData> | null>(
-      null
-    );
+const [, setLastDoc] =
+  useState<QueryDocumentSnapshot<DocumentData> | null>(
+    null
+  );
 
   /*
   |--------------------------------------------------------------------------
@@ -81,9 +80,9 @@ export function ProductProvider({
     useRef(true);
 
   const lastDocRef =
-    useRef<QueryDocumentSnapshot<DocumentData> | null>(
-      null
-    );
+    useRef<
+      QueryDocumentSnapshot<DocumentData> | null
+    >(null);
 
   /*
   |--------------------------------------------------------------------------
@@ -168,13 +167,14 @@ export function ProductProvider({
           const existingIds =
             new Set(
               current.map(
-                (product) => product.id
+                (product: Product) =>
+                  product.id
               )
             );
 
           const newProducts =
             page.products.filter(
-              (product) =>
+              (product: Product) =>
                 !existingIds.has(
                   product.id
                 )
@@ -187,8 +187,8 @@ export function ProductProvider({
         });
 
         /*
-         * Если пришли товары —
-         * запоминаем новый последний документ.
+         * Если пришла новая страница,
+         * сохраняем последний документ.
          */
 
         if (page.products.length > 0) {
@@ -258,7 +258,7 @@ export function ProductProvider({
   */
 
   useEffect(() => {
-    loadInitialProducts();
+    void loadInitialProducts();
   }, [
     loadInitialProducts,
   ]);
@@ -268,8 +268,8 @@ export function ProductProvider({
   | Автоматическая пагинация
   |--------------------------------------------------------------------------
   |
-  | Пользователь просто листает каталог.
-  | Кнопка "Загрузить ещё" больше не нужна.
+  | Когда пользователь приближается к низу страницы,
+  | автоматически загружаем следующую страницу.
   |
   */
 
@@ -299,8 +299,8 @@ export function ProductProvider({
           viewportHeight);
 
       /*
-       * Подгружаем товары заранее,
-       * когда осталось 1000px до конца.
+       * Начинаем загрузку заранее,
+       * когда до конца осталось менее 1000px.
        */
 
       if (
@@ -319,10 +319,10 @@ export function ProductProvider({
     );
 
     /*
-     * Проверяем сразу после загрузки.
+     * Проверяем сразу.
      *
-     * Если 20 товаров физически не заполнили
-     * экран, следующая страница загрузится сама.
+     * Если 20 товаров не заполнили экран,
+     * автоматически загрузится следующая страница.
      */
 
     handleScroll();
@@ -339,20 +339,6 @@ export function ProductProvider({
     loadMore,
     products.length,
   ]);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Realtime обновления
-  |--------------------------------------------------------------------------
-  |
-  | ВАЖНО:
-  | Не заменяем здесь весь каталог результатом
-  | subscribeProducts(), иначе realtime-подписка
-  | сломает пагинацию.
-  |
-  | Поэтому realtime подписку сейчас НЕ используем.
-  |
-  */
 
   /*
   |--------------------------------------------------------------------------

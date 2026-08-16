@@ -29,11 +29,11 @@ function ProductForm({ product, onSave }: Props) {
   setTitle(product.title);
   setPrice(product.price.toString());
   setImage(product.images?.[0] ?? "");
-  setCategory(product.category);
+  setCategory(product.category ?? "");
   setBadge(product.badge ?? "");
   setDescription(product.description);
-  setMemory(product.memory);
-  setColor(product.color);
+  setMemory(product.memory ?? "");
+  setColor(product.color ?? "");
   setDelivery(product.delivery);
 }, [product]);
 

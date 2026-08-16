@@ -1,33 +1,26 @@
 import {
-  collection,
   addDoc,
-  getDocs,
+  collection,
   deleteDoc,
-  updateDoc,
   doc,
+  getDocs,
   getDoc,
-  onSnapshot,
-  query,
-  orderBy,
   limit,
+  onSnapshot,
+  orderBy,
+  query,
   startAfter,
-  type QueryDocumentSnapshot,
+  updateDoc,
   type DocumentData,
+  type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
 import { db } from "../firebase/firebase";
 import type { Product } from "../types/Product";
 
 const COLLECTION = "products";
-const PAGE_SIZE = 20;
 
 const productsRef = collection(db, COLLECTION);
-
-/*
-|--------------------------------------------------------------------------
-| Тип страницы товаров
-|--------------------------------------------------------------------------
-*/
 
 export interface ProductsPage {
   products: Product[];
@@ -35,91 +28,132 @@ export interface ProductsPage {
   hasMore: boolean;
 }
 
+export type CreateProductData = {
+  title: string;
+  price: number;
+  images: string[];
+  category: string;
+  badge?: "Хит" | "Новинка" | "Акция";
+  rating: number;
+  reviews: number;
+  delivery: string;
+  inStock: boolean;
+  description: string;
+  memory: string;
+  color: string;
+  warranty: string;
+  hidden: boolean;
+};
+
 /*
 |--------------------------------------------------------------------------
 | Нормализация товара
+|--------------------------------------------------------------------------
 |
-| Firebase может содержать дополнительные поля.
-| Здесь оставляем только то, что ожидает Product.
+| Firebase может содержать старые документы с name вместо title
+| или наоборот. На выходе всегда отдаём Product с title.
 |--------------------------------------------------------------------------
 */
 
 function normalizeProduct(
-  id: string,
-  data: DocumentData
+  snapshot: QueryDocumentSnapshot<DocumentData>
 ): Product {
+  const data = snapshot.data();
+
   return {
-    id,
+    id: snapshot.id,
 
-    title: String(
+    ...data,
+
+    title:
       data.title ??
-        data.name ??
-        ""
-    ),
+      data.name ??
+      "",
 
-    price: Number(
-      data.price ?? 0
-    ),
+    name:
+      data.name ??
+      data.title ??
+      "",
 
-    images: Array.isArray(data.images)
-      ? data.images.filter(
-          (image: unknown): image is string =>
-            typeof image === "string"
-        )
-      : [],
+    description:
+      data.description ??
+      "",
 
-    category: String(
-      data.category ?? ""
-    ),
+    price:
+      Number(data.price ?? 0),
 
-    badge:
-      data.badge === "Хит" ||
-      data.badge === "Новинка" ||
-      data.badge === "Акция"
-        ? data.badge
-        : undefined,
+    category:
+      data.category ??
+      "",
 
-    rating: Number(
-      data.rating ?? 0
-    ),
+    categoryGroup:
+      data.categoryGroup ??
+      null,
 
-    reviews: Number(
-      data.reviews ?? 0
-    ),
+    categoryPath:
+      Array.isArray(data.categoryPath)
+        ? data.categoryPath
+        : [],
 
-    delivery: String(
-      data.delivery ??
-        "Уточняется"
-    ),
+    categoryLeaf:
+      data.categoryLeaf ??
+      null,
+
+    stock:
+      Number(data.stock ?? 0),
+
+    reserve:
+      Number(data.reserve ?? 0),
+
+    inTransit:
+      Number(data.inTransit ?? 0),
+
+    quantity:
+      Number(data.quantity ?? 0),
 
     inStock:
-      typeof data.inStock === "boolean"
-        ? data.inStock
-        : Number(
-            data.stock ??
-              data.quantity ??
-              0
-          ) > 0,
+      data.inStock !== undefined
+        ? Boolean(data.inStock)
+        : Number(data.stock ?? 0) > 0 ||
+          Number(data.quantity ?? 0) > 0,
 
-    description: String(
-      data.description ?? ""
-    ),
+    hidden:
+      Boolean(data.hidden ?? false),
 
-    memory: String(
-      data.memory ?? ""
-    ),
+    images:
+      Array.isArray(data.images)
+        ? data.images
+        : [],
 
-    color: String(
-      data.color ?? ""
-    ),
+    characteristics:
+      Array.isArray(data.characteristics)
+        ? data.characteristics
+        : [],
 
-    warranty: String(
-      data.warranty ?? ""
-    ),
+    rating:
+      Number(data.rating ?? 0),
 
-    hidden: Boolean(
-      data.hidden ?? false
-    ),
+    reviews:
+      Number(data.reviews ?? 0),
+
+    delivery:
+      data.delivery ??
+      "Уточняется",
+
+    warranty:
+      data.warranty ??
+      "",  
+
+    archived:
+      Boolean(data.archived ?? false),
+
+   memory:
+    data.memory ??
+    "",
+
+  color:
+    data.color ??
+    "",
   };
 }
 
@@ -130,26 +164,25 @@ function normalizeProduct(
 */
 
 export async function getProducts(
-  pageSize: number = PAGE_SIZE
+  pageSize = 20
 ): Promise<ProductsPage> {
-  const q = query(
-    productsRef,
-
-    orderBy("title", "asc"),
-
-    limit(pageSize)
+  const safePageSize = Math.max(
+    1,
+    Math.min(pageSize, 100)
   );
 
-  const snapshot =
-    await getDocs(q);
+  const q = query(
+    productsRef,
+    orderBy("title"),
+    limit(safePageSize)
+  );
 
-  const products =
-    snapshot.docs.map((item) =>
-      normalizeProduct(
-        item.id,
-        item.data()
-      )
-    );
+  const snapshot = await getDocs(q);
+
+  const products = snapshot.docs.map(
+    (item) =>
+      normalizeProduct(item)
+  );
 
   const lastDoc =
     snapshot.docs.length > 0
@@ -161,42 +194,40 @@ export async function getProducts(
   return {
     products,
     lastDoc,
-
     hasMore:
-      snapshot.docs.length === pageSize,
+      snapshot.docs.length ===
+      safePageSize,
   };
 }
 
 /*
 |--------------------------------------------------------------------------
-| Получить следующую страницу товаров
+| Получить следующую страницу
 |--------------------------------------------------------------------------
 */
 
 export async function getNextProducts(
   lastDoc: QueryDocumentSnapshot<DocumentData>,
-  pageSize: number = PAGE_SIZE
+  pageSize = 20
 ): Promise<ProductsPage> {
-  const q = query(
-    productsRef,
-
-    orderBy("title", "asc"),
-
-    startAfter(lastDoc),
-
-    limit(pageSize)
+  const safePageSize = Math.max(
+    1,
+    Math.min(pageSize, 100)
   );
 
-  const snapshot =
-    await getDocs(q);
+  const q = query(
+    productsRef,
+    orderBy("title"),
+    startAfter(lastDoc),
+    limit(safePageSize)
+  );
 
-  const products =
-    snapshot.docs.map((item) =>
-      normalizeProduct(
-        item.id,
-        item.data()
-      )
-    );
+  const snapshot = await getDocs(q);
+
+  const products = snapshot.docs.map(
+    (item) =>
+      normalizeProduct(item)
+  );
 
   const newLastDoc =
     snapshot.docs.length > 0
@@ -208,62 +239,87 @@ export async function getNextProducts(
   return {
     products,
     lastDoc: newLastDoc,
-
     hasMore:
-      snapshot.docs.length === pageSize,
+      snapshot.docs.length ===
+      safePageSize,
   };
 }
 
 /*
 |--------------------------------------------------------------------------
-| Получить ВСЕ категории
+| Получить все категории
+|--------------------------------------------------------------------------
 |
-| ВАЖНО:
-| Категории загружаются отдельным запросом.
-| Поэтому они доступны сразу, независимо от пагинации товаров.
+| Строим структуру автоматически из categoryPath/category.
+|
+| Например:
+|
+| Apple/AirPods
+| Apple/iPhone
+| Samsung/Galaxy
+|
+| =>
+|
+| ["Apple", "Samsung"]
 |--------------------------------------------------------------------------
 */
 
-export async function getAllCategories(): Promise<string[]> {
-  const q = query(
-    productsRef
-  );
-
+export async function getAllCategories(): Promise<
+  string[]
+> {
   const snapshot =
-    await getDocs(q);
+    await getDocs(productsRef);
 
   const categories =
     new Set<string>();
 
-  snapshot.docs.forEach((item) => {
-    const data =
-      item.data();
+  snapshot.forEach((item) => {
+    const data = item.data();
 
-    // Скрытые товары не должны
-    // добавлять категории в каталог.
-    if (
-      Boolean(
-        data.hidden ?? false
-      )
-    ) {
+    /*
+     * Если backend уже сохранил categoryGroup,
+     * используем его.
+     */
+
+    if (data.categoryGroup) {
+      categories.add(
+        String(
+          data.categoryGroup
+        ).trim()
+      );
+
       return;
     }
 
-    const category =
+    /*
+     * Fallback для старых документов.
+     */
+
+    const rawCategory =
       String(
-        data.category ?? ""
+        data.category ??
+        ""
       ).trim();
 
-    if (category) {
-      categories.add(
-        category
-      );
+    if (!rawCategory) {
+      return;
+    }
+
+    const group =
+      rawCategory
+        .split("/")
+        .map(
+          (part: string) =>
+            part.trim()
+        )
+        .filter(Boolean)[0];
+
+    if (group) {
+      categories.add(group);
     }
   });
 
-  return Array.from(
-    categories
-  ).sort(
+  return Array.from(categories).sort(
     (a, b) =>
       a.localeCompare(
         b,
@@ -274,7 +330,7 @@ export async function getAllCategories(): Promise<string[]> {
 
 /*
 |--------------------------------------------------------------------------
-| Realtime подписка на товары
+| Realtime подписка
 |--------------------------------------------------------------------------
 */
 
@@ -285,63 +341,26 @@ export function subscribeProducts(
 ) {
   const q = query(
     productsRef,
-
-    orderBy(
-      "title",
-      "asc"
-    )
+    orderBy("title")
   );
 
   return onSnapshot(
     q,
     (snapshot) => {
       const products =
-        snapshot.docs
-          .map((item) =>
-            normalizeProduct(
-              item.id,
-              item.data()
-            )
-          )
-          .filter(
-            (product) =>
-              !product.hidden
-          );
+        snapshot.docs.map(
+          (item) =>
+            normalizeProduct(item)
+        );
 
-      callback(
-        products
+      callback(products);
+    },
+    (error) => {
+      console.error(
+        "Ошибка realtime-подписки товаров:",
+        error
       );
     }
-  );
-}
-
-/*
-|--------------------------------------------------------------------------
-| Получить один товар
-|--------------------------------------------------------------------------
-*/
-
-export async function getProduct(
-  id: string
-): Promise<Product | null> {
-  const snapshot =
-    await getDoc(
-      doc(
-        db,
-        COLLECTION,
-        id
-      )
-    );
-
-  if (
-    !snapshot.exists()
-  ) {
-    return null;
-  }
-
-  return normalizeProduct(
-    snapshot.id,
-    snapshot.data()
   );
 }
 
@@ -353,17 +372,125 @@ export async function getProduct(
 
 export async function addProduct(
   product: Omit<Product, "id">
-): Promise<void> {
-  await addDoc(
-    productsRef,
-    {
-      ...product,
+): Promise<string> {
+  const data = {
+    ...product,
 
-      hidden:
-        product.hidden ??
-        false,
-    }
-  );
+    title:
+      product.title ??
+      product.name ??
+      "",
+
+    name:
+      product.name ??
+      product.title ??
+      "",
+
+    description:
+      product.description ??
+      "",
+
+    price:
+      Number(product.price ?? 0),
+
+    category:
+      product.category ??
+      "",
+
+    categoryGroup:
+      product.categoryGroup ??
+      null,
+
+    categoryPath:
+      Array.isArray(
+        product.categoryPath
+      )
+        ? product.categoryPath
+        : [],
+
+    categoryLeaf:
+      product.categoryLeaf ??
+      null,
+
+    stock:
+      Number(product.stock ?? 0),
+
+    reserve:
+      Number(product.reserve ?? 0),
+
+    inTransit:
+      Number(product.inTransit ?? 0),
+
+    quantity:
+      Number(product.quantity ?? 0),
+
+    inStock:
+      product.inStock ??
+      (
+        Number(product.stock ?? 0) > 0 ||
+        Number(product.quantity ?? 0) > 0
+      ),
+
+    hidden:
+      product.hidden ??
+      false,
+
+    images:
+      Array.isArray(product.images)
+        ? product.images
+        : [],
+
+    characteristics:
+      Array.isArray(
+        product.characteristics
+      )
+        ? product.characteristics
+        : [],
+
+    rating:
+      Number(product.rating ?? 0),
+
+    reviews:
+      Number(product.reviews ?? 0),
+
+    delivery:
+      product.delivery ??
+      "Уточняется",
+
+    memory:
+      product.memory ??
+      "",
+
+    color:
+      product.color ??
+      "",
+
+    warranty:
+      product.warranty ??
+      "",
+
+    variantsCount:
+      Number(
+        product.variantsCount ?? 0
+      ),
+
+    archived:
+      Boolean(
+        product.archived ?? false
+      ),
+
+    updated:
+      product.updated ??
+      null,
+  };
+
+  const docRef =
+    await addDoc(
+      productsRef,
+      data
+    );
+
+  return docRef.id;
 }
 
 /*
@@ -376,13 +503,101 @@ export async function updateProduct(
   id: string,
   product: Partial<Product>
 ): Promise<void> {
-  await updateDoc(
+  if (!id) {
+    throw new Error(
+      "Не указан ID товара"
+    );
+  }
+
+  const productRef =
     doc(
       db,
       COLLECTION,
       id
-    ),
-    product
+    );
+
+  const updates: Record<
+    string,
+    unknown
+  > = {
+    ...product,
+  };
+
+  /*
+   * Не отправляем id как поле,
+   * потому что ID документа уже является ID товара.
+   */
+
+  delete updates.id;
+
+  /*
+   * Если изменяется title,
+   * синхронно обновляем name.
+   */
+
+  if (
+    product.title !==
+    undefined
+  ) {
+    updates.title =
+      product.title;
+
+    updates.name =
+      product.title;
+  }
+
+  /*
+   * Если изменяется name,
+   * а title не передан — обновляем оба.
+   */
+
+  if (
+    product.name !==
+      undefined &&
+    product.title ===
+      undefined
+  ) {
+    updates.name =
+      product.name;
+
+    updates.title =
+      product.name;
+  }
+
+  if (
+    product.price !==
+    undefined
+  ) {
+    updates.price =
+      Number(
+        product.price
+      );
+  }
+
+  if (
+    product.stock !==
+    undefined ||
+    product.quantity !==
+      undefined
+  ) {
+    const stock =
+      Number(
+        product.stock ?? 0
+      );
+
+    const quantity =
+      Number(
+        product.quantity ?? 0
+      );
+
+    updates.inStock =
+      stock > 0 ||
+      quantity > 0;
+  }
+
+  await updateDoc(
+    productRef,
+    updates
   );
 }
 
@@ -395,6 +610,12 @@ export async function updateProduct(
 export async function deleteProduct(
   id: string
 ): Promise<void> {
+  if (!id) {
+    throw new Error(
+      "Не указан ID товара"
+    );
+  }
+
   await deleteDoc(
     doc(
       db,
@@ -414,6 +635,12 @@ export async function toggleProductHidden(
   id: string,
   hidden: boolean
 ): Promise<void> {
+  if (!id) {
+    throw new Error(
+      "Не указан ID товара"
+    );
+  }
+
   await updateDoc(
     doc(
       db,
@@ -421,7 +648,42 @@ export async function toggleProductHidden(
       id
     ),
     {
-      hidden,
+      hidden:
+        Boolean(hidden),
     }
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Получить один товар
+|--------------------------------------------------------------------------
+|
+| Оставляем отдельную функцию на случай,
+| если она понадобится ProductPage.
+|--------------------------------------------------------------------------
+*/
+
+export async function getProduct(
+  id: string
+): Promise<Product | null> {
+  if (!id) {
+    return null;
+  }
+
+  const snapshot = await getDoc(
+    doc(
+      db,
+      COLLECTION,
+      id
+    )
+  );
+
+  if (!snapshot.exists()) {
+    return null;
+  }
+
+  return normalizeProduct(
+    snapshot as QueryDocumentSnapshot<DocumentData>
   );
 }
