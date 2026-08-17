@@ -645,4 +645,3 @@ function CatalogPage() {
 }
 
 export default CatalogPage;
-// бэк
