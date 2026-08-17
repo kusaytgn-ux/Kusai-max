@@ -37,7 +37,8 @@ interface ProductProviderProps {
   children: ReactNode;
 }
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 50; // по 25 товаров
+
 
 export function ProductProvider({ children }: ProductProviderProps) {
   const [products, setProducts] = useState<Product[]>([]);
@@ -46,14 +47,14 @@ export function ProductProvider({ children }: ProductProviderProps) {
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [, setLastDoc] =
-    useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
 
   const loadingMoreRef = useRef(false);
   const hasMoreRef = useRef(true);
-  const lastDocRef =
-    useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const lastDocRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // ---------- Первая загрузка ----------
   const loadInitialProducts = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -80,6 +81,7 @@ export function ProductProvider({ children }: ProductProviderProps) {
     }
   }, []);
 
+  // ---------- Загрузить следующую страницу ----------
   const loadMore = useCallback(async (): Promise<void> => {
     if (
       loadingMoreRef.current ||
@@ -126,7 +128,14 @@ export function ProductProvider({ children }: ProductProviderProps) {
     }
   }, []);
 
+  // ---------- Полное обновление ----------
   const refreshProducts = useCallback(async () => {
+    // Останавливаем автозагрузку
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
     setProducts([]);
     setLastDoc(null);
     setHasMore(true);
@@ -139,36 +148,39 @@ export function ProductProvider({ children }: ProductProviderProps) {
     await loadInitialProducts();
   }, [loadInitialProducts]);
 
+  // ---------- Первая загрузка ----------
   useEffect(() => {
     void loadInitialProducts();
   }, [loadInitialProducts]);
 
-  // Быстрая автозагрузка
-  useEffect(() => {
-    if (loading) return;
-    if (!hasMore) return;
+  // ---------- Быстрая автоматическая подгрузка ----------
+useEffect(() => {
+  if (loading) return;
+  if (!hasMore) return;
 
-    let stopped = false;
+  let stopped = false;
 
-    const loadNext = async () => {
-      if (stopped || !hasMoreRef.current || loadingMoreRef.current) {
-        return;
-      }
+  const loadNext = async () => {
+    if (stopped || !hasMoreRef.current || loadingMoreRef.current) {
+      return;
+    }
 
-      await loadMore();
+    await loadMore();
 
-      if (!stopped && hasMoreRef.current) {
-        setTimeout(loadNext, 400);
-      }
-    };
+    // Небольшая пауза, чтобы не долбить Firestore слишком часто
+    if (!stopped && hasMoreRef.current) {
+      setTimeout(loadNext, 400); // 400 мс пауза между пачками
+    }
+  };
 
-    const timer = setTimeout(loadNext, 300);
+  // Запускаем цепочку
+  const timer = setTimeout(loadNext, 300);
 
-    return () => {
-      stopped = true;
-      clearTimeout(timer);
-    };
-  }, [loading, hasMore, loadMore]);
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+  };
+}, [loading, hasMore, loadMore]);
 
   return (
     <ProductContext.Provider
@@ -198,3 +210,4 @@ export function useProducts() {
 
   return context;
 }
+//бэкап
