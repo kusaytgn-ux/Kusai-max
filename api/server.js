@@ -69,6 +69,64 @@ function check1CAccess(req, res) {
   return true;
 }
 
+function normalizePhone(phone) {
+  let value = String(phone || "")
+    .replace(/\D/g, "");
+
+  if (!value) {
+    return "";
+  }
+
+  if (value.startsWith("8") && value.length === 11) {
+    value = "7" + value.slice(1);
+  }
+
+  if (value.startsWith("9") && value.length === 10) {
+    value = "7" + value;
+  }
+
+  if (
+    !value.startsWith("7") ||
+    value.length !== 11
+  ) {
+    return "";
+  }
+
+  return value;
+}
+
+async function findClientByPhone(phone) {
+  const normalized =
+    normalizePhone(phone);
+
+  if (!normalized) {
+    return null;
+  }
+
+  const phoneVariants = [
+    normalized,
+    "+" + normalized,
+    "8" + normalized.slice(1),
+    normalized.slice(1),
+  ];
+
+  const snapshot = await db
+    .collection("clients")
+    .where(
+      "phone",
+      "in",
+      phoneVariants
+    )
+    .limit(1)
+    .get();
+
+  if (snapshot.empty) {
+    return null;
+  }
+
+  return snapshot.docs[0];
+}
+
 function serializeFirestoreValue(value) {
   if (!value) {
     return value;

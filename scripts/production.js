@@ -2,11 +2,18 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { db } from "../api/firebaseAdmin.js";
+import { Timestamp } from "firebase-admin/firestore";
 import {
   getProducts,
   getProductById,
   testMoySklad,
 } from "../api/moysklad.js";
+
+import {
+  checkOneCHealth,
+  getOneCCustomer,
+  normalizePhone,
+} from "../api/oneC.js";
 
 const app = express();
 
@@ -32,6 +39,8 @@ app.get("/", (req, res) => {
   });
 });
 
+
+
 /*
 |--------------------------------------------------------------------------
 | Авторизация 1С
@@ -53,6 +62,36 @@ function check1CAccess(req, res) {
   return true;
 }
 
+async function findClientByPhone(phone) {
+  const normalizedPhone = normalizePhone(phone);
+
+  // Ищем в Firebase сначала по нормализованному номеру
+  const snapshot = await db
+    .collection("clients")
+    .where("phone", "==", normalizedPhone)
+    .limit(1)
+    .get();
+
+  if (!snapshot.empty) {
+    return snapshot.docs[0];
+  }
+
+  // Дополнительно пробуем вариант с +7
+  const plusPhone =  normalizedPhone;
+
+  const plusSnapshot = await db
+    .collection("clients")
+    .where("phone", "==", plusPhone)
+    .limit(1)
+    .get();
+
+  if (!plusSnapshot.empty) {
+    return plusSnapshot.docs[0];
+  }
+
+  return null;
+}
+
 /*
 |--------------------------------------------------------------------------
 | GET /api/1c/test
@@ -72,6 +111,658 @@ app.get("/api/1c/test", (req, res) => {
     serverTime: new Date().toISOString(),
   });
 });
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/1c/health
+|
+| Проверка связи Production API → 1С
+|--------------------------------------------------------------------------
+*/
+
+app.get(
+  "/api/1c/health",
+  async (req, res) => {
+    try {
+      const result =
+        await checkOneCHealth();
+
+      res.json({
+        success: true,
+
+        oneC: result,
+
+        serverTime:
+          new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка проверки 1С:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+
+        message:
+          "Не удалось подключиться к 1С",
+
+        error:
+          error?.message ||
+          String(error),
+      });
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/1c/customer?phone=
+|
+| Получение клиента из 1С
+| + синхронизация с Firebase
+|--------------------------------------------------------------------------
+*/
+
+app.get(
+  "/api/1c/customer",
+  async (req, res) => {
+    try {
+      const phone =
+        String(
+          req.query.phone || ""
+        ).trim();
+
+      if (!phone) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Не указан телефон",
+        });
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | 1. Получаем клиента из 1С
+      |--------------------------------------------------------------------------
+      */
+
+      const customer =
+        await getOneCCustomer(phone);
+
+      if (!customer) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Клиент не найден в 1С",
+        });
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | 2. Нормализуем данные
+      |--------------------------------------------------------------------------
+      */
+
+      const normalizedPhone =
+        normalizePhone(
+          customer.phone || phone
+        );
+
+      const points =
+        Number(
+          customer.bonusBalance || 0
+        );
+
+      const address =
+        String(
+          customer.address || ""
+        ).trim();
+
+      const passportDetails =
+        String(
+          customer.passportDetails || ""
+        ).trim();
+
+      /*
+      |--------------------------------------------------------------------------
+      | Дата рождения
+      |
+      | 1С может отдавать:
+      | 0001-01-01T00:00:00
+      |
+      | Такое значение считаем отсутствующим.
+      |--------------------------------------------------------------------------
+      */
+
+      let birthDay = null;
+
+      if (
+        customer.birthDay &&
+        !String(
+          customer.birthDay
+        ).startsWith("0001-01-01")
+      ) {
+        birthDay =
+          customer.birthDay;
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | 3. Ищем существующего клиента Firebase
+      |--------------------------------------------------------------------------
+      */
+
+      const clientDoc =
+        await findClientByPhone(
+          normalizedPhone
+        );
+
+      /*
+      |--------------------------------------------------------------------------
+      | 4. Если клиент уже существует
+      |--------------------------------------------------------------------------
+      */
+
+      if (clientDoc) {
+        const clientData =
+          clientDoc.data();
+
+        const updateData = {
+          /*
+          |--------------------------------------------------------------------------
+          | Актуальный баланс из 1С
+          |--------------------------------------------------------------------------
+          */
+
+          points,
+
+          bonuses: points,
+
+          /*
+          |--------------------------------------------------------------------------
+          | Данные из 1С
+          |--------------------------------------------------------------------------
+          */
+
+          address,
+
+          birthDay,
+
+          passportDetails,
+
+          /*
+          |--------------------------------------------------------------------------
+          | Технические поля
+          |--------------------------------------------------------------------------
+          */
+
+          oneCSyncedAt:
+            Timestamp.now(),
+
+          updatedFrom1C:
+            Timestamp.now(),
+        };
+
+        /*
+        |--------------------------------------------------------------------------
+        | Если телефон в Firebase записан в другом формате,
+        | приводим его к нормальному виду.
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+          normalizedPhone &&
+          clientData.phone !==
+            normalizedPhone
+        ) {
+          updateData.phone =
+             normalizedPhone;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Обновляем ТОЛЬКО нужные поля.
+        |
+        | login
+        | orders
+        | role
+        | source
+        | status
+        | welcomeBonus
+        | createdAt
+        |
+        | остаются нетронутыми.
+        |--------------------------------------------------------------------------
+        */
+
+        await clientDoc.ref.update(
+          updateData
+        );
+
+        console.log(
+          `1С → Firebase: клиент обновлён ${clientDoc.id}`
+        );
+
+        return res.json({
+          success: true,
+
+          action: "updated",
+
+          clientId:
+            clientDoc.id,
+
+          customer: {
+            id:
+              clientDoc.id,
+
+            name:
+              customer.name ||
+              clientData.name ||
+              "",
+
+            phone:
+              
+              normalizedPhone,
+
+            bonusBalance:
+              points,
+
+            birthDay,
+
+            address,
+
+            passportDetails,
+          },
+        });
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | 5. Если клиента нет — создаём нового
+      |--------------------------------------------------------------------------
+      */
+
+      const clientRef =
+        db.collection("clients").doc();
+
+      const now =
+        Timestamp.now();
+
+      const newClient = {
+        /*
+        |--------------------------------------------------------------------------
+        | Основные данные
+        |--------------------------------------------------------------------------
+        */
+
+        name:
+          customer.name || "",
+
+        phone:
+          
+          normalizedPhone,
+
+        login:
+          "",
+
+        points,
+
+        bonuses: points,
+
+        orders: 0,
+
+        /*
+        |--------------------------------------------------------------------------
+        | Данные из 1С
+        |--------------------------------------------------------------------------
+        */
+
+        address,
+
+        birthDay,
+
+        passportDetails,
+
+        /*
+        |--------------------------------------------------------------------------
+        | Данные приложения
+        |--------------------------------------------------------------------------
+        */
+
+        role:
+          "user",
+
+        source:
+          "1C",
+
+        status:
+          "ACTIVE",
+
+        welcomeBonus:
+          false,
+
+        /*
+        |--------------------------------------------------------------------------
+        | Даты
+        |--------------------------------------------------------------------------
+        */
+
+        createdAt:
+          now,
+
+        oneCSyncedAt:
+          now,
+
+        updatedFrom1C:
+          now,
+      };
+
+      await clientRef.set(
+        newClient
+      );
+
+      console.log(
+        `1С → Firebase: создан новый клиент ${clientRef.id}`
+      );
+
+      return res.json({
+        success: true,
+
+        action: "created",
+
+        clientId:
+          clientRef.id,
+
+        customer: {
+          id:
+            clientRef.id,
+
+          name:
+            customer.name || "",
+
+          phone:
+            
+            normalizedPhone,
+
+          bonusBalance:
+            points,
+
+          birthDay,
+
+          address,
+
+          passportDetails,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка синхронизации клиента 1С → Firebase:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+
+        message:
+          "Ошибка получения клиента из 1С",
+
+        error:
+          error?.message ||
+          String(error),
+      });
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/clients/1c?phone=
+|
+| Получение клиента из 1С + синхронизация с Firebase
+|--------------------------------------------------------------------------
+*/
+
+app.get(
+  "/api/clients/1c",
+  async (req, res) => {
+    try {
+      const phone =
+        String(
+          req.query.phone || ""
+        ).trim();
+
+      if (!phone) {
+        return res.status(400).json({
+          success: false,
+          message: "Не указан телефон",
+        });
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Получаем клиента из 1С
+      |--------------------------------------------------------------------------
+      */
+
+      const customer =
+        await getOneCCustomer(phone);
+
+      if (!customer) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Клиент не найден в 1С",
+        });
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Нормализуем данные
+      |--------------------------------------------------------------------------
+      */
+
+      const customerPhone =
+        customer.phone || phone;
+
+      const points =
+        Number(
+          customer.bonusBalance || 0
+        );
+
+      /*
+      |--------------------------------------------------------------------------
+      | Ищем клиента в Firebase
+      |--------------------------------------------------------------------------
+      */
+
+      const clientsRef =
+        db.collection("clients");
+
+      let snapshot =
+        await clientsRef
+          .where(
+            "phone",
+            "==",
+            customerPhone
+          )
+          .limit(1)
+          .get();
+
+      /*
+      |--------------------------------------------------------------------------
+      | Если по номеру с + не нашли —
+      | пробуем вариант без +
+      |--------------------------------------------------------------------------
+      */
+
+      if (snapshot.empty) {
+        const phoneWithoutPlus =
+          customerPhone.replace(
+            /^\+/,
+            ""
+          );
+
+        snapshot =
+          await clientsRef
+            .where(
+              "phone",
+              "==",
+              phoneWithoutPlus
+            )
+            .limit(1)
+            .get();
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Клиент существует → обновляем
+      |--------------------------------------------------------------------------
+      */
+
+      let clientId;
+      let clientData;
+
+      if (!snapshot.empty) {
+        const clientDoc =
+          snapshot.docs[0];
+
+        clientId =
+          clientDoc.id;
+
+        clientData =
+          clientDoc.data();
+
+        await clientDoc.ref.update({
+          name:
+            customer.name ||
+            clientData.name ||
+            "",
+
+          phone:
+            customer.phone ||
+            clientData.phone ||
+            customerPhone,
+
+          points,
+
+          birthDay:
+            customer.birthDay ||
+            null,
+
+          address:
+            customer.address ||
+            "",
+
+          updatedFrom1C:
+            new Date(),
+
+          oneCSyncedAt:
+            new Date(),
+        });
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Клиента ещё нет → создаём
+      |--------------------------------------------------------------------------
+      */
+
+      else {
+        const newClientRef =
+          clientsRef.doc();
+
+        clientId =
+          newClientRef.id;
+
+        clientData = {
+          name:
+            customer.name || "",
+
+          phone:
+            customer.phone ||
+            customerPhone,
+
+          points,
+
+          status:
+            "ACTIVE",
+
+          birthDay:
+            customer.birthDay ||
+            null,
+
+          address:
+            customer.address ||
+            "",
+
+          createdAt:
+            new Date(),
+
+          updatedFrom1C:
+            new Date(),
+
+          oneCSyncedAt:
+            new Date(),
+        };
+
+        await newClientRef.set(
+          clientData
+        );
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Возвращаем клиенту сайта
+      |--------------------------------------------------------------------------
+      */
+
+      return res.json({
+        success: true,
+
+        client: {
+          id: clientId,
+
+          name:
+            customer.name || "",
+
+          phone:
+            customer.phone ||
+            customerPhone,
+
+          points,
+
+          birthDay:
+            customer.birthDay ||
+            null,
+
+          address:
+            customer.address ||
+            "",
+        },
+
+        source: "1C",
+      });
+
+    } catch (error) {
+      console.error(
+        "Ошибка синхронизации клиента 1С → Firebase:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+
+        message:
+          "Ошибка получения клиента из 1С",
+
+        error:
+          error?.message ||
+          String(error),
+      });
+    }
+  }
+);
 
 /*
 |--------------------------------------------------------------------------
