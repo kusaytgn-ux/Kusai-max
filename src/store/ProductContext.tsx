@@ -38,7 +38,7 @@ interface ProductProviderProps {
 }
 
 const PAGE_SIZE = 50; // по 25 товаров
-const AUTO_LOAD_INTERVAL = 1000; // каждые 2 секунды
+
 
 export function ProductProvider({ children }: ProductProviderProps) {
   const [products, setProducts] = useState<Product[]>([]);
@@ -153,36 +153,34 @@ export function ProductProvider({ children }: ProductProviderProps) {
     void loadInitialProducts();
   }, [loadInitialProducts]);
 
-  // ---------- Автоматическая подгрузка каждые 2 секунды ----------
-  useEffect(() => {
-    // Пока идёт первая загрузка — ничего не делаем
-    if (loading) return;
+  // ---------- Быстрая автоматическая подгрузка ----------
+useEffect(() => {
+  if (loading) return;
+  if (!hasMore) return;
 
-    // Если больше нечего грузить — останавливаем
-    if (!hasMore) {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+  let stopped = false;
+
+  const loadNext = async () => {
+    if (stopped || !hasMoreRef.current || loadingMoreRef.current) {
       return;
     }
 
-    // Уже есть интервал — не создаём второй
-    if (intervalRef.current) return;
+    await loadMore();
 
-    intervalRef.current = setInterval(() => {
-      if (hasMoreRef.current && !loadingMoreRef.current) {
-        void loadMore();
-      }
-    }, AUTO_LOAD_INTERVAL);
+    // Небольшая пауза, чтобы не долбить Firestore слишком часто
+    if (!stopped && hasMoreRef.current) {
+      setTimeout(loadNext, 400); // 400 мс пауза между пачками
+    }
+  };
 
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    };
-  }, [loading, hasMore, loadMore]);
+  // Запускаем цепочку
+  const timer = setTimeout(loadNext, 300);
+
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+  };
+}, [loading, hasMore, loadMore]);
 
   return (
     <ProductContext.Provider
