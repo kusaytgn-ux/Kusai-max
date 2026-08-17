@@ -22,341 +22,176 @@ import type { Product } from "../types/Product";
 
 interface ProductContextType {
   products: Product[];
-
   loading: boolean;
   loadingMore: boolean;
   hasMore: boolean;
-
   error: string | null;
-
   loadMore: () => Promise<void>;
   refreshProducts: () => Promise<void>;
 }
 
 const ProductContext =
-  createContext<ProductContextType | undefined>(
-    undefined
-  );
+  createContext<ProductContextType | undefined>(undefined);
 
 interface ProductProviderProps {
   children: ReactNode;
 }
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 50; // по 25 товаров
+const AUTO_LOAD_INTERVAL = 1000; // каждые 2 секунды
 
-export function ProductProvider({
-  children,
-}: ProductProviderProps) {
-  const [products, setProducts] =
-    useState<Product[]>([]);
+export function ProductProvider({ children }: ProductProviderProps) {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
 
-  const [loadingMore, setLoadingMore] =
-    useState(false);
+  const loadingMoreRef = useRef(false);
+  const hasMoreRef = useRef(true);
+  const lastDocRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [hasMore, setHasMore] =
-    useState(true);
+  // ---------- Первая загрузка ----------
+  const loadInitialProducts = useCallback(async () => {
+    setLoading(true);
+    setError(null);
 
-  const [error, setError] =
-    useState<string | null>(null);
+    try {
+      const page = await getProducts(PAGE_SIZE);
 
-const [, setLastDoc] =
-  useState<QueryDocumentSnapshot<DocumentData> | null>(
-    null
-  );
+      setProducts(page.products);
+      setLastDoc(page.lastDoc);
+      setHasMore(page.hasMore);
 
-  /*
-  |--------------------------------------------------------------------------
-  | Защита от параллельных запросов
-  |--------------------------------------------------------------------------
-  */
-
-  const loadingMoreRef =
-    useRef(false);
-
-  const hasMoreRef =
-    useRef(true);
-
-  const lastDocRef =
-    useRef<
-      QueryDocumentSnapshot<DocumentData> | null
-    >(null);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Первая загрузка
-  |--------------------------------------------------------------------------
-  */
-
-  const loadInitialProducts =
-    useCallback(async () => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const page =
-          await getProducts(PAGE_SIZE);
-
-        setProducts(page.products);
-
-        setLastDoc(page.lastDoc);
-
-        setHasMore(page.hasMore);
-
-        lastDocRef.current =
-          page.lastDoc;
-
-        hasMoreRef.current =
-          page.hasMore;
-
-      } catch (err) {
-        console.error(
-          "Ошибка первой загрузки товаров:",
-          err
-        );
-
-        setError(
-          "Не удалось загрузить товары"
-        );
-
-        setProducts([]);
-
-        setLastDoc(null);
-
-        setHasMore(false);
-
-        lastDocRef.current = null;
-
-        hasMoreRef.current = false;
-
-      } finally {
-        setLoading(false);
-      }
-    }, []);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Загрузить следующую страницу
-  |--------------------------------------------------------------------------
-  */
-
-  const loadMore =
-    useCallback(async (): Promise<void> => {
-      if (
-        loadingMoreRef.current ||
-        !hasMoreRef.current ||
-        !lastDocRef.current
-      ) {
-        return;
-      }
-
-      loadingMoreRef.current = true;
-
-      setLoadingMore(true);
-
-      try {
-        const page =
-          await getNextProducts(
-            lastDocRef.current,
-            PAGE_SIZE
-          );
-
-        setProducts((current) => {
-          const existingIds =
-            new Set(
-              current.map(
-                (product: Product) =>
-                  product.id
-              )
-            );
-
-          const newProducts =
-            page.products.filter(
-              (product: Product) =>
-                !existingIds.has(
-                  product.id
-                )
-            );
-
-          return [
-            ...current,
-            ...newProducts,
-          ];
-        });
-
-        /*
-         * Если пришла новая страница,
-         * сохраняем последний документ.
-         */
-
-        if (page.products.length > 0) {
-          lastDocRef.current =
-            page.lastDoc;
-
-          setLastDoc(
-            page.lastDoc
-          );
-        }
-
-        hasMoreRef.current =
-          page.hasMore;
-
-        setHasMore(
-          page.hasMore
-        );
-
-      } catch (err) {
-        console.error(
-          "Ошибка загрузки следующей страницы:",
-          err
-        );
-
-        setError(
-          "Не удалось загрузить следующие товары"
-        );
-
-      } finally {
-        loadingMoreRef.current = false;
-
-        setLoadingMore(false);
-      }
-    }, []);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Полное обновление каталога
-  |--------------------------------------------------------------------------
-  */
-
-  const refreshProducts =
-    useCallback(async () => {
+      lastDocRef.current = page.lastDoc;
+      hasMoreRef.current = page.hasMore;
+    } catch (err) {
+      console.error("Ошибка первой загрузки товаров:", err);
+      setError("Не удалось загрузить товары");
       setProducts([]);
-
       setLastDoc(null);
-
-      setHasMore(true);
-
-      setError(null);
-
+      setHasMore(false);
       lastDocRef.current = null;
+      hasMoreRef.current = false;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-      hasMoreRef.current = true;
+  // ---------- Загрузить следующую страницу ----------
+  const loadMore = useCallback(async (): Promise<void> => {
+    if (
+      loadingMoreRef.current ||
+      !hasMoreRef.current ||
+      !lastDocRef.current
+    ) {
+      return;
+    }
 
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+
+    try {
+      const page = await getNextProducts(
+        lastDocRef.current,
+        PAGE_SIZE
+      );
+
+      setProducts((current) => {
+        const existingIds = new Set(
+          current.map((product: Product) => product.id)
+        );
+
+        const newProducts = page.products.filter(
+          (product: Product) => !existingIds.has(product.id)
+        );
+
+        return [...current, ...newProducts];
+      });
+
+      if (page.products.length > 0) {
+        lastDocRef.current = page.lastDoc;
+        setLastDoc(page.lastDoc);
+      }
+
+      hasMoreRef.current = page.hasMore;
+      setHasMore(page.hasMore);
+    } catch (err) {
+      console.error("Ошибка загрузки следующей страницы:", err);
+      setError("Не удалось загрузить следующие товары");
+    } finally {
       loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, []);
 
-      await loadInitialProducts();
-    }, [
-      loadInitialProducts,
-    ]);
+  // ---------- Полное обновление ----------
+  const refreshProducts = useCallback(async () => {
+    // Останавливаем автозагрузку
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Первая загрузка
-  |--------------------------------------------------------------------------
-  */
+    setProducts([]);
+    setLastDoc(null);
+    setHasMore(true);
+    setError(null);
 
+    lastDocRef.current = null;
+    hasMoreRef.current = true;
+    loadingMoreRef.current = false;
+
+    await loadInitialProducts();
+  }, [loadInitialProducts]);
+
+  // ---------- Первая загрузка ----------
   useEffect(() => {
     void loadInitialProducts();
-  }, [
-    loadInitialProducts,
-  ]);
+  }, [loadInitialProducts]);
 
-  /*
-  |--------------------------------------------------------------------------
-  | Автоматическая пагинация
-  |--------------------------------------------------------------------------
-  |
-  | Когда пользователь приближается к низу страницы,
-  | автоматически загружаем следующую страницу.
-  |
-  */
-
+  // ---------- Автоматическая подгрузка каждые 2 секунды ----------
   useEffect(() => {
-    if (loading) {
-      return;
-    }
+    // Пока идёт первая загрузка — ничего не делаем
+    if (loading) return;
 
+    // Если больше нечего грузить — останавливаем
     if (!hasMore) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
       return;
     }
 
-    const handleScroll = () => {
-      const scrollTop =
-        window.scrollY;
+    // Уже есть интервал — не создаём второй
+    if (intervalRef.current) return;
 
-      const viewportHeight =
-        window.innerHeight;
-
-      const documentHeight =
-        document.documentElement
-          .scrollHeight;
-
-      const distanceToBottom =
-        documentHeight -
-        (scrollTop +
-          viewportHeight);
-
-      /*
-       * Начинаем загрузку заранее,
-       * когда до конца осталось менее 1000px.
-       */
-
-      if (
-        distanceToBottom < 1000
-      ) {
+    intervalRef.current = setInterval(() => {
+      if (hasMoreRef.current && !loadingMoreRef.current) {
         void loadMore();
       }
-    };
-
-    window.addEventListener(
-      "scroll",
-      handleScroll,
-      {
-        passive: true,
-      }
-    );
-
-    /*
-     * Проверяем сразу.
-     *
-     * Если 20 товаров не заполнили экран,
-     * автоматически загрузится следующая страница.
-     */
-
-    handleScroll();
+    }, AUTO_LOAD_INTERVAL);
 
     return () => {
-      window.removeEventListener(
-        "scroll",
-        handleScroll
-      );
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     };
-  }, [
-    loading,
-    hasMore,
-    loadMore,
-    products.length,
-  ]);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Context
-  |--------------------------------------------------------------------------
-  */
+  }, [loading, hasMore, loadMore]);
 
   return (
     <ProductContext.Provider
       value={{
         products,
-
         loading,
         loadingMore,
         hasMore,
-
         error,
-
         loadMore,
         refreshProducts,
       }}
@@ -366,17 +201,8 @@ const [, setLastDoc] =
   );
 }
 
-/*
-|--------------------------------------------------------------------------
-| Hook
-|--------------------------------------------------------------------------
-*/
-
 export function useProducts() {
-  const context =
-    useContext(
-      ProductContext
-    );
+  const context = useContext(ProductContext);
 
   if (!context) {
     throw new Error(
