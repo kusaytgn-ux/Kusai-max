@@ -1,0 +1,29 @@
+// Prisma schema for Postgres
+// Run:
+// 1) set DATABASE_URL in api/.env
+// 2) npx prisma generate
+// 3) npx prisma migrate dev --name init
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Client {
+  id           String   @id @default(uuid())
+  name         String
+  login        String?  
+  phone        String   @unique
+  points       Int      @default(0)
+  bonuses      Int      @default(0)
+  orders       Int      @default(0)
+  status       String?
+  role         String   @default("user")
+  createdAt    DateTime @default(now())
+  welcomeBonus Boolean? @default(false)
+  source       String?
+}

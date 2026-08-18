@@ -7,23 +7,7 @@ import {
   type ReactNode,
 } from "react";
 
-import {
-  collection,
-  addDoc,
-  getDocs,
-  query,
-  where,
-  serverTimestamp,
-  doc,
-  updateDoc,
-} from "firebase/firestore";
-
-import {
-  signInWithEmailAndPassword,
-  signOut,
-} from "firebase/auth";
-
-import { db, auth } from "../firebase/firebase";
+// NOTE: Replaced Firebase logic with calls to a REST API.
 
 type User = {
   id: string;
@@ -72,31 +56,13 @@ type AuthContextType = {
 const AuthContext =
   createContext<AuthContextType | null>(null);
 
-// =====================================================
-// EMAIL АДМИНИСТРАТОРА В FIREBASE AUTHENTICATION
-// =====================================================
+const API = (import.meta.env.VITE_API_URL as string) || "";
 
-const ADMIN_EMAIL = "kusay.tgn@gmail.com";
-
-// =====================================================
-// PROVIDER
-// =====================================================
-
-export function AuthProvider({
-  children,
-}: {
-  children: ReactNode;
-}) {
-  const [user, setUser] =
-    useState<User | null>(null);
-
-  // ===================================================
-  // ВОССТАНОВЛЕНИЕ СЕССИИ
-  // ===================================================
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    const saved =
-      localStorage.getItem("currentUser");
+    const saved = localStorage.getItem("currentUser");
 
     if (!saved) {
       return;
@@ -107,474 +73,139 @@ export function AuthProvider({
 
       setUser(parsed);
     } catch {
-      localStorage.removeItem(
-        "currentUser"
-      );
+      localStorage.removeItem("currentUser");
     }
   }, []);
 
-  // ===================================================
-  // ВХОД КЛИЕНТА
-  // ===================================================
-
-  async function login(
-    name: string,
-    phone: string
-  ): Promise<Result> {
+  async function login(name: string, phone: string): Promise<Result> {
     try {
-      const q = query(
-        collection(db, "clients"),
-        where("phone", "==", phone)
-      );
+      const res = await fetch(`${API}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, phone }),
+      });
 
-      const snapshot =
-        await getDocs(q);
+      const data = await res.json();
 
-      let client: any;
-
-      // Клиент существует
-      if (!snapshot.empty) {
-        const clientDoc =
-          snapshot.docs[0];
-
-        client = {
-          id: clientDoc.id,
-          ...clientDoc.data(),
-        };
+      if (!data.success) {
+        return { success: false, message: data.message || "Ошибка входа" };
       }
 
-      // Новый клиент
-      else {
-        const newClient = {
-          name,
-          phone,
-          login: name,
+      const currentUser: User = data.user;
 
-          points: 100000,
-          bonuses: 100000,
-
-          orders: 0,
-
-          status: "NEW CLIENT",
-
-          role: "user",
-
-          createdAt:
-            serverTimestamp(),
-
-          source: "telegram",
-
-          welcomeBonus: true,
-        };
-
-        const docRef =
-          await addDoc(
-            collection(db, "clients"),
-            newClient
-          );
-
-        client = {
-          id: docRef.id,
-          ...newClient,
-        };
+      localStorage.setItem("currentUser", JSON.stringify(currentUser));
+      if (data.token) {
+        localStorage.setItem("token", data.token);
       }
-
-      const currentUser: User = {
-        id: client.id,
-
-        name:
-          client.name ?? name,
-
-        login:
-          client.login ??
-          client.name ??
-          name,
-
-        phone:
-          client.phone ?? phone,
-
-        points:
-          Number(
-            client.points ?? 0
-          ),
-
-        bonuses:
-          Number(
-            client.bonuses ??
-              client.points ??
-              0
-          ),
-
-        status:
-          client.status ??
-          "MAX START",
-
-        orders:
-          Number(
-            client.orders ?? 0
-          ),
-
-        role: "user",
-      };
-
-      localStorage.setItem(
-        "currentUser",
-        JSON.stringify(currentUser)
-      );
 
       setUser(currentUser);
 
-      return {
-        success: true,
-        message: "Успешный вход",
-      };
+      return { success: true, message: data.message || "Успешный вход" };
     } catch (error) {
-      console.error(
-        "Firebase client login error:",
-        error
-      );
-
-      return {
-        success: false,
-        message: "Ошибка Firebase",
-      };
+      console.error("Client login error:", error);
+      return { success: false, message: "Ошибка соединения с сервером" };
     }
   }
 
-  // ===================================================
-  // ВХОД АДМИНИСТРАТОРА
-  // ===================================================
-
-  async function adminLogin(
-    login: string,
-    password: string
-  ): Promise<Result> {
+  async function adminLogin(login: string, password: string): Promise<Result> {
     try {
-      const enteredLogin =
-        login.trim().toLowerCase();
+      const res = await fetch(`${API}/api/auth/admin-login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ login, password }),
+      });
 
-      const email =
-        ADMIN_EMAIL.toLowerCase();
+      const data = await res.json();
 
-      // Разрешаем:
-      // admin
-      // kusay.tgn@gmail.com
-
-      if (
-        enteredLogin !== "admin" &&
-        enteredLogin !== email
-      ) {
-        return {
-          success: false,
-          message:
-            "Неверный логин или пароль",
-        };
+      if (!data.success) {
+        return { success: false, message: data.message || "Неверный логин или пароль" };
       }
 
-      if (!password.trim()) {
-        return {
-          success: false,
-          message:
-            "Введите пароль",
-        };
-      }
+      const adminUser: User = data.user;
 
-      console.log(
-        "Попытка входа администратора:",
-        email
-      );
-
-      // ===============================================
-      // FIREBASE AUTHENTICATION
-      // ===============================================
-
-      const credential =
-        await signInWithEmailAndPassword(
-          auth,
-          ADMIN_EMAIL,
-          password
-        );
-
-      const firebaseUser =
-        credential.user;
-
-      console.log(
-        "Firebase admin login success:",
-        firebaseUser.uid
-      );
-
-      // ===============================================
-      // СОЗДАЁМ ЛОКАЛЬНОГО АДМИНА
-      // ===============================================
-
-      const adminUser: User = {
-        id: firebaseUser.uid,
-
-        name: "Administrator",
-
-        login: "admin",
-
-        phone: "",
-
-        points: 0,
-
-        bonuses: 0,
-
-        status: "ADMIN",
-
-        orders: 0,
-
-        role: "admin",
-      };
-
-      localStorage.setItem(
-        "currentUser",
-        JSON.stringify(adminUser)
-      );
+      localStorage.setItem("currentUser", JSON.stringify(adminUser));
+      if (data.token) localStorage.setItem("token", data.token);
 
       setUser(adminUser);
 
-      return {
-        success: true,
-        message: "Вход выполнен",
-      };
-    } catch (error: any) {
-      console.error(
-        "Firebase admin login error:",
-        error
-      );
-
-      console.error(
-        "Firebase error code:",
-        error?.code
-      );
-
-      console.error(
-        "Firebase error message:",
-        error?.message
-      );
-
-      const code =
-        error?.code ?? "";
-
-      // Неверный email/пароль
-      if (
-        code ===
-          "auth/invalid-credential" ||
-        code ===
-          "auth/wrong-password" ||
-        code ===
-          "auth/user-not-found" ||
-        code ===
-          "auth/invalid-email"
-      ) {
-        return {
-          success: false,
-          message:
-            "Неверный логин или пароль",
-        };
-      }
-
-      // Слишком много попыток
-      if (
-        code ===
-        "auth/too-many-requests"
-      ) {
-        return {
-          success: false,
-          message:
-            "Слишком много попыток. Попробуйте позже.",
-        };
-      }
-
-      // Firebase не доступен
-      if (
-        code ===
-        "auth/network-request-failed"
-      ) {
-        return {
-          success: false,
-          message:
-            "Ошибка соединения с Firebase",
-        };
-      }
-
-      // Email/Password выключен
-      if (
-        code ===
-        "auth/operation-not-allowed"
-      ) {
-        return {
-          success: false,
-          message:
-            "В Firebase не включён вход по Email/Password",
-        };
-      }
-
-      return {
-        success: false,
-        message:
-          `Ошибка Firebase: ${
-            code || "unknown"
-          }`,
-      };
+      return { success: true, message: data.message || "Вход выполнен" };
+    } catch (error) {
+      console.error("Admin login error:", error);
+      return { success: false, message: "Ошибка сервера" };
     }
   }
 
-  // ===================================================
-  // РЕГИСТРАЦИЯ
-  // ===================================================
-
-  async function register(
-    name: string,
-    phone: string,
-    password: string
-  ): Promise<Result> {
-    console.log(
-      "Старая регистрация отключена:",
-      name,
-      phone,
-      password
-    );
+  async function register(name: string, phone: string, password: string): Promise<Result> {
+    console.log("Регистрация через пароль отключена (frontend)", name, phone);
 
     return {
       success: false,
-      message:
-        "Регистрация по логину и паролю отключена. Используйте вход по имени и телефону.",
+      message: "Регистрация по логину и паролю отключена. Используйте вход по имени и телефону.",
     };
   }
 
-  // ===================================================
-  // ОБНОВЛЕНИЕ ПРОФИЛЯ
-  // ===================================================
-
-  async function updateProfile(
-    data: Partial<User>
-  ): Promise<Result> {
+  async function updateProfile(data: Partial<User>): Promise<Result> {
     if (!user) {
-      return {
-        success: false,
-        message:
-          "Пользователь не найден",
-      };
+      return { success: false, message: "Пользователь не найден" };
     }
 
     try {
-      const updatedUser: User = {
-        ...user,
-        ...data,
-      };
+      const token = localStorage.getItem("token");
 
-      localStorage.setItem(
-        "currentUser",
-        JSON.stringify(updatedUser)
-      );
+      const res = await fetch(`${API}/api/clients/${user.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify(data),
+      });
 
-      setUser(updatedUser);
+      const result = await res.json();
 
-      // Администратора в clients
-      // не обновляем
-      if (
-        user.role !== "admin"
-      ) {
-        await updateDoc(
-          doc(
-            db,
-            "clients",
-            user.id
-          ),
-          data
-        );
+      if (!result.success) {
+        return { success: false, message: result.message || "Ошибка обновления профиля" };
       }
 
-      return {
-        success: true,
-        message:
-          "Профиль обновлен",
-      };
-    } catch (error) {
-      console.error(
-        "Profile update error:",
-        error
-      );
+      const updatedUser: User = result.user;
 
-      return {
-        success: false,
-        message:
-          "Ошибка обновления профиля",
-      };
+      localStorage.setItem("currentUser", JSON.stringify(updatedUser));
+      setUser(updatedUser);
+
+      return { success: true, message: result.message || "Профиль обновлен" };
+    } catch (error) {
+      console.error("Profile update error:", error);
+      return { success: false, message: "Ошибка соединения с сервером" };
     }
   }
 
-  // ===================================================
-  // ВЫХОД
-  // ===================================================
-
   function logout() {
-    if (user?.role === "admin") {
-      signOut(auth).catch(
-        (error) => {
-          console.error(
-            "Firebase logout error:",
-            error
-          );
-        }
-      );
-    }
-
-    localStorage.removeItem(
-      "currentUser"
-    );
-
+    localStorage.removeItem("currentUser");
+    localStorage.removeItem("token");
     setUser(null);
   }
 
-  // ===================================================
-  // CONTEXT
-  // ===================================================
-
-  const value =
-    useMemo(
-      () => ({
-        user,
-
-        isAuthenticated:
-          !!user,
-
-        login,
-
-        adminLogin,
-
-        logout,
-
-        register,
-
-        updateProfile,
-      }),
-      [user]
-    );
-
-  return (
-    <AuthContext.Provider
-      value={value}
-    >
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({
+      user,
+      isAuthenticated: !!user,
+      login,
+      adminLogin,
+      logout,
+      register,
+      updateProfile,
+    }),
+    [user]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-// =====================================================
-// HOOK
-// =====================================================
-
 export function useAuth() {
-  const context =
-    useContext(AuthContext);
+  const context = useContext(AuthContext);
 
   if (!context) {
-    throw new Error(
-      "useAuth должен использоваться внутри AuthProvider"
-    );
+    throw new Error("useAuth должен использоваться внутри AuthProvider");
   }
 
   return context;
