@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import { db } from "../api/firebaseAdmin.js";
 import { Timestamp } from "firebase-admin/firestore";
+import { query as pgQuery, checkPostgres } from "../api/postgres.js";
 import {
   getProducts,
   getProductById,
@@ -1156,6 +1157,134 @@ app.post(
 
 let syncInProgress = false;
 
+async function upsertProductToPostgres(product) {
+  const normalized = {
+    id: String(product.id),
+    title: product.title || product.name || "",
+    name: product.name || product.title || "",
+    price: Number(product.price || 0),
+    images: Array.isArray(product.images) ? product.images : [],
+    category: product.category || "",
+    badge: product.badge == null ? null : String(product.badge),
+    rating: Number(product.rating || 0),
+    reviews: Number(product.reviews || 0),
+    delivery: product.delivery || "Уточняется",
+    inStock: Boolean(product.inStock),
+    stock: Number(product.stock || 0),
+    reserve: Number(product.reserve || 0),
+    inTransit: Number(product.inTransit || 0),
+    quantity: Number(product.quantity || 0),
+    description: product.description || "",
+    memory: product.memory || "",
+    color: product.color || "",
+    warranty: product.warranty || "",
+    type: product.type || null,
+    product: product.product == null ? null : String(product.product),
+    characteristics: Array.isArray(product.characteristics)
+      ? product.characteristics
+      : [],
+    variantsCount: Number(product.variantsCount || 0),
+    weight: product.weight == null ? null : Number(product.weight),
+    volume: product.volume == null ? null : Number(product.volume),
+    article: product.article || null,
+    code: product.code || null,
+    externalCode: product.externalCode || null,
+    barcode: product.barcode || null,
+    archived: Boolean(product.archived),
+    hidden: Boolean(product.hidden),
+    buyPrice: product.buyPrice == null ? null : Number(product.buyPrice),
+    syncedAt: new Date(),
+  };
+
+  await pgQuery(
+    `
+    INSERT INTO products (
+      id, title, name, price, images, category, badge, rating, reviews,
+      delivery, in_stock, stock, reserve, in_transit, quantity, description,
+      memory, color, warranty, type, product, characteristics, variants_count,
+      weight, volume, article, code, external_code, barcode, archived,
+      hidden, buy_price, synced_at, raw
+    )
+    VALUES (
+      $1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,
+      $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22::jsonb,$23,
+      $24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34::jsonb
+    )
+    ON CONFLICT (id) DO UPDATE SET
+      title = EXCLUDED.title,
+      name = EXCLUDED.name,
+      price = EXCLUDED.price,
+      images = EXCLUDED.images,
+      category = EXCLUDED.category,
+      badge = EXCLUDED.badge,
+      rating = EXCLUDED.rating,
+      reviews = EXCLUDED.reviews,
+      delivery = EXCLUDED.delivery,
+      in_stock = EXCLUDED.in_stock,
+      stock = EXCLUDED.stock,
+      reserve = EXCLUDED.reserve,
+      in_transit = EXCLUDED.in_transit,
+      quantity = EXCLUDED.quantity,
+      description = EXCLUDED.description,
+      memory = EXCLUDED.memory,
+      color = EXCLUDED.color,
+      warranty = EXCLUDED.warranty,
+      type = EXCLUDED.type,
+      product = EXCLUDED.product,
+      characteristics = EXCLUDED.characteristics,
+      variants_count = EXCLUDED.variants_count,
+      weight = EXCLUDED.weight,
+      volume = EXCLUDED.volume,
+      article = EXCLUDED.article,
+      code = EXCLUDED.code,
+      external_code = EXCLUDED.external_code,
+      barcode = EXCLUDED.barcode,
+      archived = EXCLUDED.archived,
+      hidden = EXCLUDED.hidden,
+      buy_price = EXCLUDED.buy_price,
+      synced_at = EXCLUDED.synced_at,
+      raw = EXCLUDED.raw
+    `,
+    [
+      normalized.id,
+      normalized.title,
+      normalized.name,
+      normalized.price,
+      JSON.stringify(normalized.images),
+      normalized.category,
+      normalized.badge,
+      normalized.rating,
+      normalized.reviews,
+      normalized.delivery,
+      normalized.inStock,
+      normalized.stock,
+      normalized.reserve,
+      normalized.inTransit,
+      normalized.quantity,
+      normalized.description,
+      normalized.memory,
+      normalized.color,
+      normalized.warranty,
+      normalized.type,
+      normalized.product,
+      JSON.stringify(normalized.characteristics),
+      normalized.variantsCount,
+      normalized.weight,
+      normalized.volume,
+      normalized.article,
+      normalized.code,
+      normalized.externalCode,
+      normalized.barcode,
+      normalized.archived,
+      normalized.hidden,
+      normalized.buyPrice,
+      normalized.syncedAt,
+      product,
+    ]
+  );
+}
+
+
 async function syncMoySkladToFirebase() {
   if (syncInProgress) {
     console.log(
@@ -1315,6 +1444,31 @@ async function syncMoySkladToFirebase() {
             `Обновлён: ${product.name}`
           );
         }
+
+        // Phase 3: dual-write Firebase + PostgreSQL.
+        // Firebase remains the current source for the frontend for now.
+        try {
+          await upsertProductToPostgres({
+            ...firebaseProduct,
+            hidden: firebaseProduct.hidden,
+            memory: product.memory,
+            color: product.color,
+            warranty: product.warranty,
+            variantsCount: product.variantsCount,
+            weight: product.weight,
+            volume: product.volume,
+            type: product.type,
+            product: product.product,
+            characteristics: product.characteristics,
+            buyPrice: product.buyPrice,
+            archived: product.archived,
+          });
+        } catch (postgresError) {
+          console.error(
+            `PostgreSQL dual-write failed for ${product.name}:`,
+            postgresError?.message || postgresError
+          );
+        }
       } catch (productError) {
         skipped++;
 
@@ -1444,6 +1598,25 @@ async function startAutoSync() {
     SYNC_INTERVAL
   );
 }
+
+
+app.get("/api/health/postgres", async (req, res) => {
+  try {
+    const result = await checkPostgres();
+    res.json({
+      success: true,
+      postgres: result,
+      serverTime: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("PostgreSQL health check failed:", error);
+    res.status(503).json({
+      success: false,
+      message: "PostgreSQL недоступен",
+      error: error?.message || String(error),
+    });
+  }
+});
 
 /*
 |--------------------------------------------------------------------------
