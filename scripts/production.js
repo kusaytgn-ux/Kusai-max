@@ -1599,6 +1599,324 @@ async function startAutoSync() {
   );
 }
 
+/*
+|--------------------------------------------------------------------------
+| PostgreSQL products API
+|--------------------------------------------------------------------------
+*/
+
+function mapPostgresProduct(row) {
+  return {
+    id: row.id,
+    title: row.title ?? row.name ?? "",
+    name: row.name ?? row.title ?? "",
+    price: Number(row.price ?? 0),
+    images: Array.isArray(row.images) ? row.images : [],
+    category: row.category ?? "",
+    categoryGroup: row.category_group ?? null,
+    categoryPath: Array.isArray(row.category_path)
+      ? row.category_path
+      : [],
+    categoryLeaf: row.category_leaf ?? null,
+    badge: row.badge ?? null,
+    rating: Number(row.rating ?? 0),
+    reviews: Number(row.reviews ?? 0),
+    delivery: row.delivery ?? "Уточняется",
+    inStock: Boolean(row.in_stock),
+    stock: Number(row.stock ?? 0),
+    reserve: Number(row.reserve ?? 0),
+    inTransit: Number(row.in_transit ?? 0),
+    quantity: Number(row.quantity ?? 0),
+    description: row.description ?? "",
+    memory: row.memory ?? "",
+    color: row.color ?? "",
+    warranty: row.warranty ?? "",
+    type: row.type ?? null,
+    product: row.product ?? null,
+    characteristics: Array.isArray(row.characteristics)
+      ? row.characteristics
+      : [],
+    variantsCount: Number(row.variants_count ?? 0),
+    weight: row.weight == null ? null : Number(row.weight),
+    volume: row.volume == null ? null : Number(row.volume),
+    article: row.article ?? null,
+    code: row.code ?? null,
+    externalCode: row.external_code ?? null,
+    barcode: row.barcode ?? null,
+    archived: Boolean(row.archived),
+    updated: row.updated_at
+      ? new Date(row.updated_at).toISOString()
+      : null,
+    hidden: Boolean(row.hidden),
+    buyPrice:
+      row.buy_price == null ? null : Number(row.buy_price),
+    syncedAt: row.synced_at
+      ? new Date(row.synced_at).toISOString()
+      : null,
+  };
+}
+
+const PRODUCT_COLUMNS = `
+  id,
+  title,
+  name,
+  price,
+  images,
+  category,
+  category_group,
+  category_path,
+  category_leaf,
+  badge,
+  rating,
+  reviews,
+  delivery,
+  in_stock,
+  stock,
+  reserve,
+  in_transit,
+  quantity,
+  description,
+  memory,
+  color,
+  warranty,
+  type,
+  product,
+  characteristics,
+  variants_count,
+  weight,
+  volume,
+  article,
+  code,
+  external_code,
+  barcode,
+  archived,
+  updated_at,
+  hidden,
+  buy_price,
+  synced_at
+`;
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/products
+|
+| PostgreSQL catalog with cursor pagination
+|--------------------------------------------------------------------------
+*/
+
+app.get("/api/products", async (req, res) => {
+  try {
+    const requestedLimit = Number(req.query.limit ?? 50);
+    const limit = Math.max(
+      1,
+      Math.min(
+        Number.isFinite(requestedLimit) ? requestedLimit : 50,
+        100
+      )
+    );
+
+    const cursorTitle =
+      typeof req.query.cursorTitle === "string"
+        ? req.query.cursorTitle
+        : null;
+
+    const cursorId =
+      typeof req.query.cursorId === "string"
+        ? req.query.cursorId
+        : null;
+
+    let result;
+
+    if (cursorTitle !== null && cursorId !== null) {
+      result = await pgQuery(
+        `
+        SELECT ${PRODUCT_COLUMNS}
+        FROM products
+        WHERE (title, id) > ($1, $2)
+        ORDER BY title ASC, id ASC
+        LIMIT $3
+        `,
+        [cursorTitle, cursorId, limit]
+      );
+    } else {
+      result = await pgQuery(
+        `
+        SELECT ${PRODUCT_COLUMNS}
+        FROM products
+        ORDER BY title ASC, id ASC
+        LIMIT $1
+        `,
+        [limit]
+      );
+    }
+
+    const products = result.rows.map(mapPostgresProduct);
+
+    const last =
+      products.length > 0
+        ? products[products.length - 1]
+        : null;
+
+    res.json({
+      products,
+      nextCursor:
+        last
+          ? {
+              title: last.title,
+              id: last.id,
+            }
+          : null,
+      hasMore: products.length === limit,
+    });
+  } catch (error) {
+    console.error("GET /api/products failed:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Не удалось загрузить товары",
+    });
+  }
+});
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/products/search
+|--------------------------------------------------------------------------
+*/
+
+app.get("/api/products/search", async (req, res) => {
+  try {
+    const term =
+      typeof req.query.q === "string"
+        ? req.query.q.trim()
+        : "";
+
+    const requestedLimit = Number(req.query.limit ?? 80);
+
+    const limit = Math.max(
+      1,
+      Math.min(
+        Number.isFinite(requestedLimit) ? requestedLimit : 80,
+        100
+      )
+    );
+
+    if (term.length < 2) {
+      return res.json({
+        products: [],
+      });
+    }
+
+    const pattern = `%${term.toLowerCase()}%`;
+
+    const result = await pgQuery(
+      `
+      SELECT ${PRODUCT_COLUMNS}
+      FROM products
+      WHERE
+        LOWER(COALESCE(title, '')) LIKE $1
+        OR LOWER(COALESCE(name, '')) LIKE $1
+        OR LOWER(COALESCE(category, '')) LIKE $1
+        OR LOWER(COALESCE(memory, '')) LIKE $1
+        OR LOWER(COALESCE(color, '')) LIKE $1
+        OR LOWER(COALESCE(description, '')) LIKE $1
+      ORDER BY title ASC, id ASC
+      LIMIT $2
+      `,
+      [pattern, limit]
+    );
+
+    res.json({
+      products: result.rows.map(mapPostgresProduct),
+    });
+  } catch (error) {
+    console.error("GET /api/products/search failed:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Ошибка поиска товаров",
+    });
+  }
+});
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/products/categories
+|--------------------------------------------------------------------------
+*/
+
+app.get("/api/products/categories", async (req, res) => {
+  try {
+    const result = await pgQuery(`
+      SELECT DISTINCT category_name
+      FROM (
+        SELECT
+          COALESCE(
+            NULLIF(TRIM(category_group), ''),
+            NULLIF(TRIM(SPLIT_PART(category, '/', 1)), '')
+          ) AS category_name
+        FROM products
+      ) categories
+      WHERE category_name IS NOT NULL
+      ORDER BY category_name
+    `);
+
+    res.json({
+      categories: result.rows.map(
+        (row) => row.category_name
+      ),
+    });
+  } catch (error) {
+    console.error(
+      "GET /api/products/categories failed:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Ошибка загрузки категорий",
+    });
+  }
+});
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/products/:id
+|--------------------------------------------------------------------------
+*/
+
+app.get("/api/products/:id", async (req, res) => {
+  try {
+    const result = await pgQuery(
+      `
+      SELECT ${PRODUCT_COLUMNS}
+      FROM products
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [req.params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Товар не найден",
+      });
+    }
+
+    res.json({
+      product: mapPostgresProduct(result.rows[0]),
+    });
+  } catch (error) {
+    console.error("GET /api/products/:id failed:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Ошибка загрузки товара",
+    });
+  }
+});
+
 
 app.get("/api/health/postgres", async (req, res) => {
   try {

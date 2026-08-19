@@ -8,10 +8,6 @@ import {
   type ReactNode,
 } from "react";
 
-import type {
-  DocumentData,
-  QueryDocumentSnapshot,
-} from "firebase/firestore";
 
 import {
   getProducts,
@@ -47,12 +43,12 @@ export function ProductProvider({ children }: ProductProviderProps) {
   const [error, setError] = useState<string | null>(null);
 
   const [, setLastDoc] =
-    useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+    useState<string | null>(null);
 
   const loadingMoreRef = useRef(false);
   const hasMoreRef = useRef(true);
   const lastDocRef =
-    useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
+    useRef<string | null>(null);
 
   const loadInitialProducts = useCallback(async () => {
     setLoading(true);

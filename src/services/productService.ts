@@ -3,13 +3,9 @@ import {
   collection,
   deleteDoc,
   doc,
-  getDocs,
-  getDoc,
-  limit,
   onSnapshot,
   orderBy,
   query,
-  startAfter,
   updateDoc,
   type DocumentData,
   type QueryDocumentSnapshot,
@@ -21,9 +17,13 @@ import type { Product } from "../types/Product";
 const COLLECTION = "products";
 const productsRef = collection(db, COLLECTION);
 
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:3001"
+).replace(/\/$/, "");
+
 export interface ProductsPage {
   products: Product[];
-  lastDoc: QueryDocumentSnapshot<DocumentData> | null;
+  lastDoc: string | null;
   hasMore: boolean;
 }
 
@@ -83,63 +83,157 @@ function normalizeProduct(
   };
 }
 
+function normalizeApiProduct(data: Record<string, unknown>): Product {
+  return {
+    id: String(data.id ?? ""),
+    title: String(data.title ?? data.name ?? ""),
+    name: String(data.name ?? data.title ?? ""),
+    description: String(data.description ?? ""),
+    price: Number(data.price ?? 0),
+    category: String(data.category ?? ""),
+    categoryGroup:
+      typeof data.categoryGroup === "string"
+        ? data.categoryGroup
+        : null,
+    categoryPath: Array.isArray(data.categoryPath)
+      ? data.categoryPath.map(String)
+      : [],
+    categoryLeaf:
+      typeof data.categoryLeaf === "string"
+        ? data.categoryLeaf
+        : null,
+    stock: Number(data.stock ?? 0),
+    reserve: Number(data.reserve ?? 0),
+    inTransit: Number(data.inTransit ?? 0),
+    quantity: Number(data.quantity ?? 0),
+    inStock: Boolean(data.inStock),
+    hidden: Boolean(data.hidden),
+    images: Array.isArray(data.images)
+      ? data.images as string[]
+      : [],
+    characteristics: Array.isArray(data.characteristics)
+      ? data.characteristics as Product["characteristics"]
+      : [],
+    rating: Number(data.rating ?? 0),
+    reviews: Number(data.reviews ?? 0),
+    delivery: String(data.delivery ?? "Уточняется"),
+    warranty: String(data.warranty ?? ""),
+    archived: Boolean(data.archived),
+    memory: String(data.memory ?? ""),
+    color: String(data.color ?? ""),
+    badge:
+      data.badge === "Хит" ||
+      data.badge === "Новинка" ||
+      data.badge === "Акция"
+        ? data.badge
+        : undefined,
+    type:
+      typeof data.type === "string"
+        ? data.type
+        : null,
+    product:
+      typeof data.product === "string"
+        ? data.product
+        : null,
+    variantsCount: Number(data.variantsCount ?? 0),
+    weight:
+      data.weight == null
+        ? null
+        : Number(data.weight),
+    volume:
+      data.volume == null
+        ? null
+        : Number(data.volume),
+    article:
+      typeof data.article === "string"
+        ? data.article
+        : null,
+    code:
+      typeof data.code === "string"
+        ? data.code
+        : null,
+    externalCode:
+      typeof data.externalCode === "string"
+        ? data.externalCode
+        : null,
+    barcode:
+      typeof data.barcode === "string"
+        ? data.barcode
+        : null,
+    updated:
+      typeof data.updated === "string"
+        ? data.updated
+        : null,
+  };
+}
+
 export async function getProducts(
   pageSize = 50
 ): Promise<ProductsPage> {
   const safePageSize = Math.max(1, Math.min(pageSize, 100));
 
-  const q = query(
-    productsRef,
-    orderBy("title"),
-    limit(safePageSize)
+  const response = await fetch(
+    `${API_URL}/api/products?limit=${safePageSize}`
   );
 
-  const snapshot = await getDocs(q);
+  if (!response.ok) {
+    throw new Error("Не удалось загрузить товары");
+  }
 
-  const products = snapshot.docs.map((item) =>
-    normalizeProduct(item)
-  );
-
-  const lastDoc =
-    snapshot.docs.length > 0
-      ? snapshot.docs[snapshot.docs.length - 1]
-      : null;
+  const data = await response.json();
 
   return {
-    products,
-    lastDoc,
-    hasMore: snapshot.docs.length === safePageSize,
+    products: Array.isArray(data.products)
+      ? data.products.map(normalizeApiProduct)
+      : [],
+    lastDoc: data.nextCursor
+      ? JSON.stringify(data.nextCursor)
+      : null,
+    hasMore: Boolean(data.hasMore),
   };
 }
 
 export async function getNextProducts(
-  lastDoc: QueryDocumentSnapshot<DocumentData>,
+  lastCursor: string,
   pageSize = 50
 ): Promise<ProductsPage> {
   const safePageSize = Math.max(1, Math.min(pageSize, 100));
 
-  const q = query(
-    productsRef,
-    orderBy("title"),
-    startAfter(lastDoc),
-    limit(safePageSize)
+  let cursor: {
+    title: string;
+    id: string;
+  };
+
+  try {
+    cursor = JSON.parse(lastCursor);
+  } catch {
+    throw new Error("Некорректный cursor товаров");
+  }
+
+  const params = new URLSearchParams({
+    limit: String(safePageSize),
+    cursorTitle: cursor.title,
+    cursorId: cursor.id,
+  });
+
+  const response = await fetch(
+    `${API_URL}/api/products?${params.toString()}`
   );
 
-  const snapshot = await getDocs(q);
+  if (!response.ok) {
+    throw new Error("Не удалось загрузить следующие товары");
+  }
 
-  const products = snapshot.docs.map((item) =>
-    normalizeProduct(item)
-  );
-
-  const newLastDoc =
-    snapshot.docs.length > 0
-      ? snapshot.docs[snapshot.docs.length - 1]
-      : lastDoc;
+  const data = await response.json();
 
   return {
-    products,
-    lastDoc: newLastDoc,
-    hasMore: snapshot.docs.length === safePageSize,
+    products: Array.isArray(data.products)
+      ? data.products.map(normalizeApiProduct)
+      : [],
+    lastDoc: data.nextCursor
+      ? JSON.stringify(data.nextCursor)
+      : lastCursor,
+    hasMore: Boolean(data.hasMore),
   };
 }
 
@@ -147,41 +241,31 @@ export async function searchProducts(
   searchTerm: string,
   maxResults = 80
 ): Promise<Product[]> {
-  const term = searchTerm.trim().toLowerCase();
+  const term = searchTerm.trim();
 
   if (term.length < 2) {
     return [];
   }
 
   try {
-    const q = query(
-      productsRef,
-      orderBy("title"),
-      limit(500)
-    );
-
-    const snapshot = await getDocs(q);
-
-    const all = snapshot.docs.map((item) =>
-      normalizeProduct(item)
-    );
-
-    const filtered = all.filter((product) => {
-      const text = [
-        product.title,
-        product.name,
-        product.category,
-        product.memory,
-        product.color,
-        product.description,
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      return text.includes(term);
+    const params = new URLSearchParams({
+      q: term,
+      limit: String(Math.min(maxResults, 100)),
     });
 
-    return filtered.slice(0, maxResults);
+    const response = await fetch(
+      `${API_URL}/api/products/search?${params.toString()}`
+    );
+
+    if (!response.ok) {
+      throw new Error("Ошибка API поиска товаров");
+    }
+
+    const data = await response.json();
+
+    return Array.isArray(data.products)
+      ? data.products.map(normalizeApiProduct)
+      : [];
   } catch (error) {
     console.error("Ошибка поиска товаров:", error);
     return [];
@@ -189,33 +273,19 @@ export async function searchProducts(
 }
 
 export async function getAllCategories(): Promise<string[]> {
-  const snapshot = await getDocs(productsRef);
-  const categories = new Set<string>();
-
-  snapshot.forEach((item) => {
-    const data = item.data();
-
-    if (data.categoryGroup) {
-      categories.add(String(data.categoryGroup).trim());
-      return;
-    }
-
-    const rawCategory = String(data.category ?? "").trim();
-    if (!rawCategory) return;
-
-    const group = rawCategory
-      .split("/")
-      .map((part: string) => part.trim())
-      .filter(Boolean)[0];
-
-    if (group) {
-      categories.add(group);
-    }
-  });
-
-  return Array.from(categories).sort((a, b) =>
-    a.localeCompare(b, "ru")
+  const response = await fetch(
+    `${API_URL}/api/products/categories`
   );
+
+  if (!response.ok) {
+    throw new Error("Ошибка загрузки категорий");
+  }
+
+  const data = await response.json();
+
+  return Array.isArray(data.categories)
+    ? data.categories.map(String)
+    : [];
 }
 
 export function subscribeProducts(
@@ -329,10 +399,21 @@ export async function getProductById(
 ): Promise<Product | null> {
   if (!id) return null;
 
-  const snapshot = await getDoc(doc(db, COLLECTION, id));
-  if (!snapshot.exists()) return null;
-
-  return normalizeProduct(
-    snapshot as QueryDocumentSnapshot<DocumentData>
+  const response = await fetch(
+    `${API_URL}/api/products/${encodeURIComponent(id)}`
   );
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error("Ошибка загрузки товара");
+  }
+
+  const data = await response.json();
+
+  return data.product
+    ? normalizeApiProduct(data.product)
+    : null;
 }
