@@ -5,10 +5,7 @@ import {
   useState,
 } from "react";
 
-import {
-  collection,
-  getDocs,
-} from "firebase/firestore";
+
 
 import {
   MessageCircle,
@@ -19,7 +16,7 @@ import {
 } from "lucide-react";
 
 import { useConcierge } from "../../store/ConciergeContext";
-import { db } from "../../firebase/firebase";
+
 
 function AdminConcierge() {
   const {
@@ -66,41 +63,73 @@ function AdminConcierge() {
    * }
    */
 
-  useEffect(() => {
-    async function loadUsers() {
-      try {
-        const snapshot =
-          await getDocs(
-            collection(db, "clients")
-          );
+useEffect(() => {
+  async function loadUsers() {
+    try {
+      const phones = Array.from(
+        new Set(
+          messages
+            .map(
+              (message) =>
+                message.userLogin
+            )
+            .filter(Boolean)
+        )
+      );
 
-        const names: Record<string, string> =
-          {};
+      const names: Record<
+        string,
+        string
+      > = {};
 
-        snapshot.docs.forEach((userDoc) => {
-          const data =
-            userDoc.data();
+      await Promise.all(
+        phones.map(async (phone) => {
+          try {
+            const response =
+              await fetch(
+                `${
+                  (
+                    import.meta.env
+                      .VITE_API_URL ||
+                    "http://localhost:3001"
+                  ).replace(/\/$/, "")
+                }/api/clients/phone/${encodeURIComponent(
+                  phone
+                )}`
+              );
 
-          if (
-            data.phone &&
-            data.name
-          ) {
-            names[String(data.phone)] =
-              String(data.name);
+            if (!response.ok) {
+              return;
+            }
+
+            const data =
+              await response.json();
+
+            if (data.success) {
+              names[phone] =
+                data.client?.name ||
+                "Пользователь";
+            }
+          } catch (error) {
+            console.error(
+              "Ошибка получения клиента:",
+              error
+            );
           }
-        });
+        })
+      );
 
-        setUserNames(names);
-      } catch (error) {
-        console.error(
-          "Ошибка загрузки пользователей:",
-          error
-        );
-      }
+      setUserNames(names);
+    } catch (error) {
+      console.error(
+        "Ошибка загрузки пользователей:",
+        error
+      );
     }
+  }
 
-    loadUsers();
-  }, []);
+  void loadUsers();
+}, [messages]);
 
   /*
    * =========================
@@ -142,17 +171,17 @@ function AdminConcierge() {
               message.userLogin === b
           );
 
-      const timeA =
-        lastA?.createdAt?.toMillis?.() ??
-        (lastA?.createdAt?.seconds
-          ? lastA.createdAt.seconds * 1000
-          : 0);
+      const timeA = lastA?.createdAt
+        ? new Date(
+            String(lastA.createdAt)
+          ).getTime()
+        : 0;
 
-      const timeB =
-        lastB?.createdAt?.toMillis?.() ??
-        (lastB?.createdAt?.seconds
-          ? lastB.createdAt.seconds * 1000
-          : 0);
+      const timeB = lastB?.createdAt
+        ? new Date(
+            String(lastB.createdAt)
+          ).getTime()
+        : 0;
 
       return timeB - timeA;
     });
@@ -204,15 +233,31 @@ function AdminConcierge() {
    * =========================
    */
 
-  useEffect(() => {
-    if (!selectedUser) {
-      return;
-    }
+ useEffect(() => {
+  if (!selectedUser) {
+    return;
+  }
 
-    bottomRef.current?.scrollIntoView({
-      behavior: "smooth",
-    });
-  }, [chat, selectedUser]);
+  const hasUnread = messages.some(
+    (message) =>
+      message.userLogin === selectedUser &&
+      message.author === "user" &&
+      message.readByAdmin !== true
+  );
+
+  if (!hasUnread) {
+    return;
+  }
+
+  void markMessagesAsRead(
+    selectedUser,
+    "user"
+  );
+}, [
+  selectedUser,
+  messages,
+  markMessagesAsRead,
+]);
 
   /*
    * =========================
@@ -589,18 +634,13 @@ function AdminConcierge() {
                     <span className="mt-2 block text-right text-xs opacity-60">
 
                       {message.createdAt
-                        ?.toDate
-                        ? message.createdAt
-                            .toDate()
-                            .toLocaleTimeString(
-                              [],
-                              {
-                                hour: "2-digit",
-                                minute:
-                                  "2-digit",
-                              }
-                            )
-                        : ""}
+                        ? new Date(
+                            String(message.createdAt)
+                          ).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                      : ""}
 
                     </span>
 

@@ -7,23 +7,14 @@ import {
   type ReactNode,
 } from "react";
 
-import {
-  collection,
-  addDoc,
-  getDocs,
-  query,
-  where,
-  serverTimestamp,
-  doc,
-  updateDoc,
-} from "firebase/firestore";
+
 
 import {
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
 
-import { db, auth } from "../firebase/firebase";
+import { auth } from "../firebase/firebase";
 
 type User = {
   id: string;
@@ -118,128 +109,90 @@ export function AuthProvider({
   // ===================================================
 
   async function login(
-    name: string,
-    phone: string
-  ): Promise<Result> {
-    try {
-      const q = query(
-        collection(db, "clients"),
-        where("phone", "==", phone)
-      );
+  name: string,
+  phone: string
+): Promise<Result> {
+  try {
+    const apiUrl = (
+      import.meta.env.VITE_API_URL ||
+      "http://localhost:3001"
+    ).replace(/\/$/, "");
 
-      const snapshot =
-        await getDocs(q);
-
-      let client: any;
-
-      // Клиент существует
-      if (!snapshot.empty) {
-        const clientDoc =
-          snapshot.docs[0];
-
-        client = {
-          id: clientDoc.id,
-          ...clientDoc.data(),
-        };
-      }
-
-      // Новый клиент
-      else {
-        const newClient = {
+    const response = await fetch(
+      `${apiUrl}/api/auth/login`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
           name,
           phone,
-          login: name,
-
-          points: 100000,
-          bonuses: 100000,
-
-          orders: 0,
-
-          status: "NEW CLIENT",
-
-          role: "user",
-
-          createdAt:
-            serverTimestamp(),
-
-          source: "telegram",
-
-          welcomeBonus: true,
-        };
-
-        const docRef =
-          await addDoc(
-            collection(db, "clients"),
-            newClient
-          );
-
-        client = {
-          id: docRef.id,
-          ...newClient,
-        };
+        }),
       }
+    );
 
-      const currentUser: User = {
-        id: client.id,
+    const data = await response.json();
 
-        name:
-          client.name ?? name,
-
-        login:
-          client.login ??
-          client.name ??
-          name,
-
-        phone:
-          client.phone ?? phone,
-
-        points:
-          Number(
-            client.points ?? 0
-          ),
-
-        bonuses:
-          Number(
-            client.bonuses ??
-              client.points ??
-              0
-          ),
-
-        status:
-          client.status ??
-          "MAX START",
-
-        orders:
-          Number(
-            client.orders ?? 0
-          ),
-
-        role: "user",
-      };
-
-      localStorage.setItem(
-        "currentUser",
-        JSON.stringify(currentUser)
-      );
-
-      setUser(currentUser);
-
-      return {
-        success: true,
-        message: "Успешный вход",
-      };
-    } catch (error) {
-      console.error(
-        "Firebase client login error:",
-        error
-      );
-
+    if (!response.ok || !data.success) {
       return {
         success: false,
-        message: "Ошибка Firebase",
+        message:
+          data.message ||
+          "Ошибка входа",
       };
     }
+
+    const client = data.client;
+
+    const currentUser: User = {
+      id: client.id,
+      name: client.name ?? name,
+      login:
+        client.login ??
+        client.name ??
+        name,
+      phone: client.phone ?? phone,
+      points: Number(
+        client.points ?? 0
+      ),
+      bonuses: Number(
+        client.bonuses ??
+          client.points ??
+          0
+      ),
+      status:
+        client.status ??
+        "MAX START",
+      orders: Number(
+        client.orders ?? 0
+      ),
+      role: "user",
+    };
+
+    localStorage.setItem(
+      "currentUser",
+      JSON.stringify(currentUser)
+    );
+
+    setUser(currentUser);
+
+    return {
+      success: true,
+      message: "Успешный вход",
+    };
+  } catch (error) {
+    console.error(
+      "Client login error:",
+      error
+    );
+
+    return {
+      success: false,
+      message: "Ошибка соединения с сервером",
+    };
   }
+}
 
   // ===================================================
   // ВХОД АДМИНИСТРАТОРА
@@ -477,14 +430,34 @@ export function AuthProvider({
       if (
         user.role !== "admin"
       ) {
-        await updateDoc(
-          doc(
-            db,
-            "clients",
+        const response = await fetch(
+          `${(
+            import.meta.env.VITE_API_URL ||
+            "http://localhost:3001"
+          ).replace(/\/$/, "")}/api/clients/${encodeURIComponent(
             user.id
-          ),
-          data
+          )}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              login: data.login,
+            }),
+          }
         );
+
+        if (!response.ok) {
+          const result = await response.json().catch(
+            () => null
+          );
+
+          throw new Error(
+            result?.message ||
+              "Ошибка обновления профиля"
+          );
+        }
       }
 
       return {

@@ -2,6 +2,8 @@ import AdminUsers from "../components/admin/AdminUsers";
 import AdminTradeIn from "../components/admin/AdminTradeIn";
 import AdminConcierge from "../components/admin/AdminConcierge";
 import AdminCatalog from "../components/admin/AdminCatalog";
+import { useConcierge } from "../store/ConciergeContext";
+
 
 import { useEffect, useState } from "react";
 
@@ -16,17 +18,20 @@ import {
   Settings,
 } from "lucide-react";
 
-import {
-  collection,
-  onSnapshot,
-} from "firebase/firestore";
 
-import { db } from "../firebase/firebase";
+
+
 
 
 function AdminPage() {
   const [section, setSection] =
     useState("dashboard");
+
+    const { getTotalUnreadForAdmin } =
+      useConcierge();
+
+    const totalUnreadForAdmin =
+      getTotalUnreadForAdmin();
 
 
   const [usersCount, setUsersCount] =
@@ -104,34 +109,76 @@ function AdminPage() {
    */
 
   useEffect(() => {
-    const unsubscribe =
-      onSnapshot(
-        collection(db, "clients"),
+  let stopped = false;
+  let loadingRequest = false;
 
-        (snapshot) => {
-          setUsersCount(
-            snapshot.size
-          );
+  async function loadUsersCount() {
+    if (stopped || loadingRequest) {
+      return;
+    }
 
-          setLoadingUsers(false);
-        },
+    loadingRequest = true;
 
-        (error) => {
-          console.error(
-            "Realtime users error:",
-            error
-          );
-
-          setUsersCount(0);
-          setLoadingUsers(false);
-        }
+    try {
+      const response = await fetch(
+        `${
+          (
+            import.meta.env.VITE_API_URL ||
+            "http://localhost:3001"
+          ).replace(/\/$/, "")
+        }/api/clients`
       );
 
+      if (!response.ok) {
+        throw new Error(
+          "Не удалось загрузить клиентов"
+        );
+      }
 
-    return () => {
-      unsubscribe();
-    };
-  }, []);
+      const data =
+        await response.json();
+
+      if (!stopped) {
+        setUsersCount(
+          Array.isArray(data.clients)
+            ? data.clients.length
+            : 0
+        );
+
+        setLoadingUsers(false);
+      }
+    } catch (error) {
+      console.error(
+        "Ошибка загрузки пользователей:",
+        error
+      );
+
+      if (!stopped) {
+        setUsersCount(0);
+        setLoadingUsers(false);
+      }
+    } finally {
+      loadingRequest = false;
+    }
+  }
+
+  void loadUsersCount();
+
+  const interval =
+    window.setInterval(
+      () => {
+        void loadUsersCount();
+      },
+      3000
+    );
+
+  return () => {
+    stopped = true;
+    window.clearInterval(
+      interval
+    );
+  };
+}, []);
 
 
   /**
@@ -143,34 +190,76 @@ function AdminPage() {
    */
 
   useEffect(() => {
-    const unsubscribe =
-      onSnapshot(
-        collection(db, "tradeIn"),
+  let stopped = false;
+  let loadingRequest = false;
 
-        (snapshot) => {
-          setTradeInCount(
-            snapshot.size
-          );
+  async function loadTradeInCount() {
+    if (stopped || loadingRequest) {
+      return;
+    }
 
-          setLoadingTradeIn(false);
-        },
+    loadingRequest = true;
 
-        (error) => {
-          console.error(
-            "Realtime Trade-In error:",
-            error
-          );
-
-          setTradeInCount(0);
-          setLoadingTradeIn(false);
-        }
+    try {
+      const response = await fetch(
+        `${
+          (
+            import.meta.env.VITE_API_URL ||
+            "http://localhost:3001"
+          ).replace(/\/$/, "")
+        }/api/trade-in`
       );
 
+      if (!response.ok) {
+        throw new Error(
+          "Не удалось загрузить Trade-In"
+        );
+      }
 
-    return () => {
-      unsubscribe();
-    };
-  }, []);
+      const data =
+        await response.json();
+
+      if (!stopped) {
+        setTradeInCount(
+          Array.isArray(data.products)
+            ? data.products.length
+            : 0
+        );
+
+        setLoadingTradeIn(false);
+      }
+    } catch (error) {
+      console.error(
+        "Ошибка загрузки Trade-In:",
+        error
+      );
+
+      if (!stopped) {
+        setTradeInCount(0);
+        setLoadingTradeIn(false);
+      }
+    } finally {
+      loadingRequest = false;
+    }
+  }
+
+  void loadTradeInCount();
+
+  const interval =
+    window.setInterval(
+      () => {
+        void loadTradeInCount();
+      },
+      3000
+    );
+
+  return () => {
+    stopped = true;
+    window.clearInterval(
+      interval
+    );
+  };
+}, []);
 
 
   return (
@@ -259,13 +348,20 @@ function AdminPage() {
 
                   <Icon size={22} />
 
-                  <span
-                    className="
-                      font-semibold
-                    "
-                  >
-                    {item.title}
-                  </span>
+                  <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                    <span className="font-semibold">
+                      {item.title}
+                    </span>
+
+                    {item.id === "concierge" &&
+                      totalUnreadForAdmin > 0 && (
+                        <span className="flex h-7 min-w-7 shrink-0 items-center justify-center rounded-full bg-red-500 px-2 text-xs font-black text-white">
+                          {totalUnreadForAdmin > 99
+                            ? "99+"
+                            : totalUnreadForAdmin}
+                        </span>
+                      )}
+                  </div>
 
                 </button>
               );

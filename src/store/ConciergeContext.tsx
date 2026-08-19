@@ -2,35 +2,19 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
-
-import {
-  collection,
-  addDoc,
-  onSnapshot,
-  serverTimestamp,
-  updateDoc,
-  doc,
-  query,
-  orderBy,
-  writeBatch,
-} from "firebase/firestore";
-
-import { db } from "../firebase/firebase";
 
 export type ChatMessage = {
   id: string;
   userLogin: string;
   author: "user" | "admin";
   text: string;
-  createdAt?: any;
+  createdAt?: string | Date;
 
-  // Прочитано ли сообщение админа пользователем
   readByUser?: boolean;
-
-  // Прочитано ли сообщение пользователя администратором
   readByAdmin?: boolean;
 };
 
@@ -70,6 +54,80 @@ type ConciergeContextType = {
 const ConciergeContext =
   createContext<ConciergeContextType | null>(null);
 
+const API_URL = (
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:3001"
+).replace(/\/$/, "");
+
+function normalizeMessage(
+  message: Record<string, unknown>
+): ChatMessage {
+  return {
+    id: String(message.id ?? ""),
+    userLogin: String(
+      message.userLogin ?? ""
+    ),
+    author:
+      message.author === "admin"
+        ? "admin"
+        : "user",
+    text: String(message.text ?? ""),
+    readByUser:
+      Boolean(message.readByUser),
+    readByAdmin:
+      Boolean(message.readByAdmin),
+    createdAt:
+      typeof message.createdAt === "string"
+        ? message.createdAt
+        : message.createdAt
+          ? new Date(
+              String(message.createdAt)
+            )
+          : undefined,
+  };
+}
+
+async function fetchMessages(): Promise<
+  ChatMessage[]
+> {
+  const response = await fetch(
+    `${API_URL}/api/messages`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      "Не удалось загрузить сообщения"
+    );
+  }
+
+  const data = await response.json();
+
+  if (!Array.isArray(data.messages)) {
+    return [];
+  }
+
+  return data.messages
+    .map(
+      (message: Record<string, unknown>) =>
+        normalizeMessage(message)
+    )
+    .sort((a: ChatMessage, b: ChatMessage) => {
+      const timeA = new Date(
+        String(a.createdAt ?? 0)
+      ).getTime();
+
+      const timeB = new Date(
+        String(b.createdAt ?? 0)
+      ).getTime();
+
+      if (timeA === timeB) {
+        return a.id.localeCompare(b.id);
+      }
+
+      return timeA - timeB;
+    });
+}
+
 export function ConciergeProvider({
   children,
 }: {
@@ -78,151 +136,145 @@ export function ConciergeProvider({
   const [messages, setMessages] =
     useState<ChatMessage[]>([]);
 
+  const loadingRef = useRef(false);
+
   /*
-   * REALTIME ЗАГРУЗКА СООБЩЕНИЙ
+   * PostgreSQL polling.
+   *
+   * Каждые 2 секунды забираем актуальные
+   * сообщения с Render API.
    */
   useEffect(() => {
-    const messagesRef =
-      collection(db, "messages");
+    let stopped = false;
 
-    const messagesQuery = query(
-      messagesRef,
-      orderBy("createdAt", "asc")
-    );
+    async function loadMessages() {
+      if (
+        stopped ||
+        loadingRef.current
+      ) {
+        return;
+      }
 
-    const unsubscribe = onSnapshot(
-      messagesQuery,
-      (snapshot) => {
-        const list: ChatMessage[] =
-          snapshot.docs.map((messageDoc) => ({
-            id: messageDoc.id,
-            ...(messageDoc.data() as Omit<
-              ChatMessage,
-              "id"
-            >),
-          }));
+      loadingRef.current = true;
 
-        /*
-         * serverTimestamp() может быть null
-         * непосредственно после создания сообщения.
-         *
-         * Поэтому дополнительно сортируем
-         * сообщения на клиенте.
-         */
-        list.sort((a, b) => {
-          const timeA =
-            a.createdAt?.toMillis?.() ??
-            (a.createdAt?.seconds
-              ? a.createdAt.seconds * 1000
-              : 0);
+      try {
+        const list =
+          await fetchMessages();
 
-          const timeB =
-            b.createdAt?.toMillis?.() ??
-            (b.createdAt?.seconds
-              ? b.createdAt.seconds * 1000
-              : 0);
-
-          if (timeA === timeB) {
-            return a.id.localeCompare(b.id);
-          }
-
-          return timeA - timeB;
-        });
-
-        /*
-         * ВАЖНО:
-         * onSnapshot срабатывает сразу после addDoc.
-         * Поэтому сообщение появляется у второй стороны
-         * сразу, а не после отправки следующего сообщения.
-         */
-        setMessages(list);
-      },
-      (error) => {
+        if (!stopped) {
+          setMessages(list);
+        }
+      } catch (error) {
         console.error(
-          "Ошибка realtime-загрузки сообщений:",
+          "Ошибка загрузки сообщений:",
           error
         );
+      } finally {
+        loadingRef.current = false;
       }
+    }
+
+    void loadMessages();
+
+    const interval = window.setInterval(
+      () => {
+        void loadMessages();
+      },
+      2000
     );
 
     return () => {
-      unsubscribe();
+      stopped = true;
+      window.clearInterval(interval);
     };
   }, []);
 
   /*
-   * ПОЛЬЗОВАТЕЛЬ ОТПРАВЛЯЕТ СООБЩЕНИЕ
+   * Пользователь отправляет сообщение.
    */
   async function sendUserMessage(
     userLogin: string,
     text: string
   ) {
-    const cleanText = text.trim();
+    const cleanText =
+      text.trim();
 
-    if (!cleanText || !userLogin) {
+    if (
+      !cleanText ||
+      !userLogin
+    ) {
       return;
     }
 
-    await addDoc(
-      collection(db, "messages"),
+    const response = await fetch(
+      `${API_URL}/api/messages`,
       {
-        userLogin,
-        author: "user",
-        text: cleanText,
-
-        // Пользователь своё сообщение уже написал
-        readByUser: true,
-
-        // Для администратора сообщение новое
-        readByAdmin: false,
-
-        createdAt: serverTimestamp(),
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+        body: JSON.stringify({
+          userLogin,
+          author: "user",
+          text: cleanText,
+          readByUser: true,
+          readByAdmin: false,
+        }),
       }
     );
+
+    if (!response.ok) {
+      throw new Error(
+        "Не удалось отправить сообщение"
+      );
+    }
   }
 
   /*
-   * АДМИНИСТРАТОР ОТПРАВЛЯЕТ СООБЩЕНИЕ
-   *
-   * Админ может отправить сообщение даже если
-   * у пользователя раньше не было сообщений.
+   * Администратор отправляет сообщение.
    */
   async function sendAdminMessage(
     userLogin: string,
     text: string
   ) {
-    const cleanText = text.trim();
+    const cleanText =
+      text.trim();
 
-    if (!cleanText || !userLogin) {
+    if (
+      !cleanText ||
+      !userLogin
+    ) {
       return;
     }
 
-    await addDoc(
-      collection(db, "messages"),
+    const response = await fetch(
+      `${API_URL}/api/messages`,
       {
-        userLogin,
-        author: "admin",
-        text: cleanText,
-
-        // Для пользователя сообщение новое
-        readByUser: false,
-
-        // Администратор только что его отправил
-        readByAdmin: true,
-
-        createdAt: serverTimestamp(),
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+        body: JSON.stringify({
+          userLogin,
+          author: "admin",
+          text: cleanText,
+          readByUser: false,
+          readByAdmin: true,
+        }),
       }
     );
+
+    if (!response.ok) {
+      throw new Error(
+        "Не удалось отправить сообщение"
+      );
+    }
   }
 
   /*
-   * ПОМЕТИТЬ СООБЩЕНИЯ ПРОЧИТАННЫМИ
-   *
-   * author:
-   * "admin" -> пользователь прочитал сообщения админа
-   * "user"  -> админ прочитал сообщения пользователя
-   *
-   * Если author не передан — помечаем оба типа.
+   * Пометить сообщения прочитанными.
    */
   async function markMessagesAsRead(
     userLogin: string,
@@ -232,69 +284,125 @@ export function ConciergeProvider({
       return;
     }
 
-    const unreadMessages = messages.filter(
-      (message) => {
-        if (message.userLogin !== userLogin) {
-          return false;
-        }
+    const unreadMessages =
+      messages.filter(
+        (message) => {
+          if (
+            message.userLogin !==
+            userLogin
+          ) {
+            return false;
+          }
 
-        if (author === "admin") {
+          if (author === "admin") {
+            return (
+              message.author ===
+                "admin" &&
+              message.readByUser !== true
+            );
+          }
+
+          if (author === "user") {
+            return (
+              message.author ===
+                "user" &&
+              message.readByAdmin !==
+                true
+            );
+          }
+
           return (
-            message.author === "admin" &&
-            message.readByUser !== true
+            (
+              message.author ===
+                "admin" &&
+              message.readByUser !==
+                true
+            ) ||
+            (
+              message.author ===
+                "user" &&
+              message.readByAdmin !==
+                true
+            )
           );
         }
+      );
 
-        if (author === "user") {
-          return (
-            message.author === "user" &&
-            message.readByAdmin !== true
-          );
-        }
-
-        return (
-          (
-            message.author === "admin" &&
-            message.readByUser !== true
-          ) ||
-          (
-            message.author === "user" &&
-            message.readByAdmin !== true
-          )
-        );
-      }
-    );
-
-    if (unreadMessages.length === 0) {
+    if (
+      unreadMessages.length === 0
+    ) {
       return;
     }
 
     await Promise.all(
-      unreadMessages.map((message) => {
-        const messageRef = doc(
-          db,
-          "messages",
-          message.id
-        );
+      unreadMessages.map(
+        async (message) => {
+          const field =
+            message.author === "admin"
+              ? "readByUser"
+              : "readByAdmin";
 
-        if (message.author === "admin") {
-          return updateDoc(messageRef, {
-            readByUser: true,
-          });
+          const response =
+            await fetch(
+              `${API_URL}/api/messages/${encodeURIComponent(
+                message.id
+              )}/read`,
+              {
+                method: "PATCH",
+                headers: {
+                  "Content-Type":
+                    "application/json",
+                },
+                body: JSON.stringify({
+                  field,
+                }),
+              }
+            );
+
+          if (!response.ok) {
+            throw new Error(
+              `Не удалось отметить сообщение ${message.id}`
+            );
+          }
+        }
+      )
+    );
+
+    /*
+     * Немедленно обновляем локальное состояние,
+     * не дожидаясь следующего polling.
+     */
+    setMessages((current) =>
+      current.map((message) => {
+        const found =
+          unreadMessages.some(
+            (item) =>
+              item.id === message.id
+          );
+
+        if (!found) {
+          return message;
         }
 
-        return updateDoc(messageRef, {
+        if (
+          message.author === "admin"
+        ) {
+          return {
+            ...message,
+            readByUser: true,
+          };
+        }
+
+        return {
+          ...message,
           readByAdmin: true,
-        });
+        };
       })
     );
   }
 
   /*
-   * УДАЛЕНИЕ ВСЕГО ЧАТА
-   *
-   * Удаляем все сообщения конкретного пользователя
-   * одним batch-запросом.
+   * Удалить весь чат пользователя.
    */
   async function deleteChat(
     userLogin: string
@@ -303,67 +411,62 @@ export function ConciergeProvider({
       return;
     }
 
-    const chatMessages = messages.filter(
-      (message) =>
-        message.userLogin === userLogin
-    );
-
-    if (chatMessages.length === 0) {
-      return;
-    }
-
-    const batch = writeBatch(db);
-
-    chatMessages.forEach((message) => {
-      const messageRef = doc(
-        db,
-        "messages",
-        message.id
+    const response =
+      await fetch(
+        `${API_URL}/api/messages/chat/${encodeURIComponent(
+          userLogin
+        )}`,
+        {
+          method: "DELETE",
+        }
       );
 
-      batch.delete(messageRef);
-    });
+    if (!response.ok) {
+      throw new Error(
+        "Не удалось удалить чат"
+      );
+    }
 
-    await batch.commit();
+    setMessages((current) =>
+      current.filter(
+        (message) =>
+          message.userLogin !==
+          userLogin
+      )
+    );
   }
 
-  /*
-   * НОВЫЕ СООБЩЕНИЯ ДЛЯ ПОЛЬЗОВАТЕЛЯ
-   */
   function getUnreadForUser(
     userLogin: string
   ) {
     return messages.filter(
       (message) =>
-        message.userLogin === userLogin &&
-        message.author === "admin" &&
+        message.userLogin ===
+          userLogin &&
+        message.author ===
+          "admin" &&
         message.readByUser !== true
     ).length;
   }
 
-  /*
-   * НОВЫЕ СООБЩЕНИЯ ОТ ПОЛЬЗОВАТЕЛЯ
-   * ДЛЯ АДМИНИСТРАТОРА
-   */
   function getUnreadForAdmin(
     userLogin: string
   ) {
     return messages.filter(
       (message) =>
-        message.userLogin === userLogin &&
-        message.author === "user" &&
+        message.userLogin ===
+          userLogin &&
+        message.author ===
+          "user" &&
         message.readByAdmin !== true
     ).length;
   }
 
-  /*
-   * ОБЩЕЕ КОЛИЧЕСТВО НЕПРОЧИТАННЫХ
-   * ДЛЯ АДМИНИСТРАТОРА
-   */
   function getTotalUnreadForAdmin() {
     return messages.filter(
       (message) =>
-        message.author === "user" &&
+        message.author ===
+          "user" &&
         message.readByAdmin !== true
     ).length;
   }

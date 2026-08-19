@@ -131,16 +131,13 @@ function ConciergePage() {
                 </p>
 
                 <span className="text-right text-xs opacity-60">
-                  {message.createdAt?.toDate
-                    ? message.createdAt
-                        .toDate()
-                        .toLocaleTimeString(
-                          [],
-                          {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          }
-                        )
+                    {message.createdAt
+                      ? new Date(
+                          String(message.createdAt)
+                        ).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
                     : ""}
                 </span>
 

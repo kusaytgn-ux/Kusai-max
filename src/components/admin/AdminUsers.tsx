@@ -2,192 +2,210 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
-collection,
-deleteDoc,
-doc,
-onSnapshot,
-query,
-orderBy,
-getDocs,
-} from "firebase/firestore";
-
-import { db } from "../../firebase/firebase";
-
-import {
-Trash2,
-UserRound,
-Phone,
-Search,
-Loader2,
+  Trash2,
+  UserRound,
+  Phone,
+  Search,
+  Loader2,
 } from "lucide-react";
 
 type User = {
-id: string;
-name: string;
-phone: string;
-status?: string;
-points?: number;
-bonuses?: number;
-orders?: number;
-role?: string;
+  id: string;
+  name: string;
+  phone: string;
+  status?: string;
+  points?: number;
+  bonuses?: number;
+  orders?: number;
+  role?: string;
 };
+
+const API_URL = (
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:3001"
+).replace(/\/$/, "");
 
 function AdminUsers() {
-const navigate = useNavigate();
+  const navigate = useNavigate();
 
-const [users, setUsers] = useState<User[]>([]);
-const [loading, setLoading] = useState(true);
-const [search, setSearch] = useState("");
+  const [users, setUsers] =
+    useState<User[]>([]);
 
-const [deletingId, setDeletingId] =
-useState<string | null>(null);
+  const [loading, setLoading] =
+    useState(true);
 
-// ==========================================
-// REALTIME ЗАГРУЗКА ПОЛЬЗОВАТЕЛЕЙ
-// ==========================================
+  const [search, setSearch] =
+    useState("");
 
-useEffect(() => {
-setLoading(true);
+  const [deletingId, setDeletingId] =
+    useState<string | null>(null);
 
+  useEffect(() => {
+    let stopped = false;
+    let loadingRequest = false;
 
-const clientsQuery = query(
-  collection(db, "clients"),
-  orderBy("createdAt", "desc")
-);
+    async function loadUsers() {
+      if (
+        stopped ||
+        loadingRequest
+      ) {
+        return;
+      }
 
-const unsubscribe = onSnapshot(
-  clientsQuery,
-  (snapshot) => {
-    const clients: User[] =
-      snapshot.docs.map((clientDoc) => ({
-        id: clientDoc.id,
-        ...clientDoc.data(),
-      })) as User[];
+      loadingRequest = true;
 
-    setUsers(clients);
-    setLoading(false);
-  },
-  (error) => {
-    console.error(
-      "Ошибка realtime загрузки пользователей:",
-      error
-    );
+      try {
+        const response =
+          await fetch(
+            `${API_URL}/api/clients`
+          );
 
-    setUsers([]);
-    setLoading(false);
+        if (!response.ok) {
+          throw new Error(
+            "Не удалось загрузить клиентов"
+          );
+        }
+
+        const data =
+          await response.json();
+
+        if (!stopped) {
+          setUsers(
+            Array.isArray(
+              data.clients
+            )
+              ? data.clients
+              : []
+          );
+
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error(
+          "Ошибка загрузки пользователей:",
+          error
+        );
+
+        if (!stopped) {
+          setUsers([]);
+          setLoading(false);
+        }
+      } finally {
+        loadingRequest = false;
+      }
+    }
+
+    void loadUsers();
+
+    const interval =
+      window.setInterval(
+        () => {
+          void loadUsers();
+        },
+        3000
+      );
+
+    return () => {
+      stopped = true;
+      window.clearInterval(
+        interval
+      );
+    };
+  }, []);
+
+  async function handleDeleteUser(
+    user: User
+  ) {
+    const confirmed =
+      window.confirm(
+        `Удалить пользователя "${user.name}"?\n\n` +
+          `Телефон: ${user.phone}\n\n` +
+          `Будут удалены данные пользователя и вся история его операций.\n\n` +
+          `Это действие нельзя отменить.`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeletingId(user.id);
+
+      const response =
+        await fetch(
+          `${API_URL}/api/clients/${encodeURIComponent(
+            user.id
+          )}`,
+          {
+            method: "DELETE",
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
+        throw new Error(
+          data.message ||
+            "Ошибка удаления клиента"
+        );
+      }
+
+      setUsers((current) =>
+        current.filter(
+          (item) =>
+            item.id !== user.id
+        )
+      );
+
+      console.log(
+        "Пользователь удалён:",
+        user.id
+      );
+    } catch (error) {
+      console.error(
+        "Ошибка удаления пользователя:",
+        error
+      );
+
+      alert(
+        "Не удалось удалить пользователя."
+      );
+    } finally {
+      setDeletingId(null);
+    }
   }
-);
 
-return () => {
-  unsubscribe();
-};
+  // ==========================================
+  // ПОИСК
+  // ==========================================
 
+  const searchValue =
+    search.trim().toLowerCase();
 
-}, []);
+  const filteredUsers =
+    users.filter((user) => {
+      if (!searchValue) {
+        return true;
+      }
 
-// ==========================================
-// УДАЛЕНИЕ ПОЛЬЗОВАТЕЛЯ
-// ==========================================
+      return (
+        user.name
+          ?.toLowerCase()
+          .includes(searchValue) ||
+        user.phone
+          ?.toLowerCase()
+          .includes(searchValue)
+      );
+    });
 
-async function handleDeleteUser(user: User) {
-const confirmed = window.confirm(
-`Удалить пользователя "${user.name}"?\n\n` +
-`Телефон: ${user.phone}\n\n` +
-`Будут удалены данные пользователя и вся история его операций.\n\n` +
-`Это действие нельзя отменить.`
-);
+  // ==========================================
+  // RENDER
+  // ==========================================
 
-
-if (!confirmed) {
-  return;
-}
-
-try {
-  setDeletingId(user.id);
-
-  // ------------------------------------------
-  // 1. Удаляем операции пользователя
-  // ------------------------------------------
-
-  const operationsRef = collection(
-    db,
-    "clients",
-    user.id,
-    "operations"
-  );
-
-  const operationsSnapshot =
-    await getDocs(operationsRef);
-
-  await Promise.all(
-    operationsSnapshot.docs.map(
-      (operationDoc) =>
-        deleteDoc(operationDoc.ref)
-    )
-  );
-
-  // ------------------------------------------
-  // 2. Удаляем самого пользователя
-  // ------------------------------------------
-
-  await deleteDoc(
-    doc(db, "clients", user.id)
-  );
-
-  // ------------------------------------------
-  // Realtime onSnapshot автоматически
-  // уберёт пользователя из списка.
-  // ------------------------------------------
-
-  console.log(
-    "Пользователь удалён:",
-    user.id
-  );
-} catch (error) {
-  console.error(
-    "Ошибка удаления пользователя:",
-    error
-  );
-
-  alert(
-    "Не удалось удалить пользователя.\n\n" +
-      "Проверьте подключение к Firebase и права Firestore."
-  );
-} finally {
-  setDeletingId(null);
-}
-
-
-}
-
-// ==========================================
-// ПОИСК
-// ==========================================
-
-const searchValue =
-search.trim().toLowerCase();
-
-const filteredUsers =
-users.filter((user) => {
-if (!searchValue) {
-return true;
-}
-
-
-  return (
-    user.name
-      ?.toLowerCase()
-      .includes(searchValue) ||
-    user.phone
-      ?.toLowerCase()
-      .includes(searchValue)
-  );
-});
-
-
-// ==========================================
-// RENDER
-// ==========================================
 
 return ( <div>
 {/* Заголовок */}

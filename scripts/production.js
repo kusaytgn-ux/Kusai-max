@@ -1,9 +1,16 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import { db } from "../api/firebaseAdmin.js";
+import {
+  initializeApp,
+  cert,
+  getApps,
+} from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
+import "dotenv/config";
 import { Timestamp } from "firebase-admin/firestore";
 import { query as pgQuery, checkPostgres } from "../api/postgres.js";
+import crypto from "node:crypto";
 import {
   getProducts,
   getProductById,
@@ -15,6 +22,8 @@ import {
   getOneCCustomer,
   normalizePhone,
 } from "../api/oneC.js";
+import { db } from "../api/firebaseAdmin.js";
+
 
 const app = express();
 
@@ -40,6 +49,1156 @@ app.get("/", (req, res) => {
   });
 });
 
+
+/*
+|--------------------------------------------------------------------------
+| CLIENTS + MESSAGES API
+|--------------------------------------------------------------------------
+*/
+
+function serializeClient(row) {
+  return {
+    id: row.id,
+    name: row.name || "",
+    login: row.login || row.name || "",
+    phone: row.phone || "",
+    points: Number(row.points || 0),
+    bonuses: Number(row.bonuses || 0),
+    orders: Number(row.orders || 0),
+    status: row.status || "MAX START",
+    role: row.role || "user",
+  };
+}
+
+app.get("/api/clients/:id", async (req, res) => {
+  try {
+    const result = await pgQuery(
+      `
+      SELECT
+        id,
+        name,
+        phone,
+        login,
+        points,
+        bonuses,
+        orders,
+        status,
+        role
+      FROM clients
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [req.params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Клиент не найден",
+      });
+    }
+
+    const row = result.rows[0];
+
+    return res.json({
+      success: true,
+      client: {
+        id: row.id,
+        name: row.name || "",
+        phone: row.phone || "",
+        login: row.login || "",
+        points: Number(row.points || 0),
+        bonuses: Number(row.bonuses || 0),
+        orders: Number(row.orders || 0),
+        status:
+          row.status || "NEW CLIENT",
+        role: row.role || "user",
+      },
+    });
+  } catch (error) {
+    console.error(
+      "GET /api/clients/:id failed:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка загрузки клиента",
+    });
+  }
+});
+
+app.get(
+  "/api/clients/:id/operations",
+  async (req, res) => {
+    try {
+      const result = await pgQuery(
+        `
+        SELECT
+          id,
+          type,
+          points,
+          reason,
+          operation_date
+        FROM client_operations
+        WHERE client_id = $1
+        ORDER BY operation_date DESC NULLS LAST, id DESC
+        `,
+        [req.params.id]
+      );
+
+      return res.json({
+        success: true,
+        operations:
+          result.rows.map((row) => ({
+            id: row.id,
+            type: row.type,
+            points: Number(row.points || 0),
+            reason: row.reason || "",
+            operationDate:
+              row.operation_date,
+          })),
+      });
+    } catch (error) {
+      console.error(
+        "GET /api/clients/:id/operations failed:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка загрузки истории клиента",
+      });
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| PATCH /api/clients/:id
+|--------------------------------------------------------------------------
+*/
+
+app.patch(
+  "/api/clients/:id",
+  async (req, res) => {
+    try {
+      const login =
+        typeof req.body?.login === "string"
+          ? req.body.login.trim()
+          : "";
+
+      if (!login) {
+        return res.status(400).json({
+          success: false,
+          message: "Логин не указан",
+        });
+      }
+
+      const result = await pgQuery(
+        `
+        UPDATE clients
+        SET
+          login = $1,
+          updated_at = NOW()
+        WHERE id = $2
+        RETURNING
+          id,
+          name,
+          phone,
+          login,
+          points,
+          bonuses,
+          orders,
+          status,
+          role
+        `,
+        [login, req.params.id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Клиент не найден",
+        });
+      }
+
+      const row = result.rows[0];
+
+      return res.json({
+        success: true,
+        client: {
+          id: row.id,
+          name: row.name || "",
+          phone: row.phone || "",
+          login: row.login || "",
+          points: Number(row.points || 0),
+          bonuses: Number(row.bonuses || 0),
+          orders: Number(row.orders || 0),
+          status: row.status || "NEW CLIENT",
+          role: row.role || "user",
+        },
+      });
+    } catch (error) {
+      console.error(
+        "PATCH /api/clients/:id failed:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка обновления профиля",
+      });
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/clients
+|--------------------------------------------------------------------------
+*/
+
+app.get("/api/clients", async (req, res) => {
+  try {
+    const result = await pgQuery(
+      `
+      SELECT
+        id,
+        name,
+        phone,
+        login,
+        points,
+        bonuses,
+        orders,
+        status,
+        role,
+        created_at
+      FROM clients
+      ORDER BY created_at DESC NULLS LAST, id DESC
+      `
+    );
+
+    return res.json({
+      success: true,
+      clients: result.rows.map((row) => ({
+        id: row.id,
+        name: row.name || "",
+        phone: row.phone || "",
+        login: row.login || "",
+        points: Number(row.points || 0),
+        bonuses: Number(row.bonuses || 0),
+        orders: Number(row.orders || 0),
+        status: row.status || "NEW CLIENT",
+        role: row.role || "user",
+        createdAt: row.created_at,
+      })),
+    });
+  } catch (error) {
+    console.error(
+      "GET /api/clients failed:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка загрузки клиентов",
+    });
+  }
+});
+
+/*
+|--------------------------------------------------------------------------
+| DELETE /api/clients/:id
+|--------------------------------------------------------------------------
+*/
+
+app.delete(
+  "/api/clients/:id",
+  async (req, res) => {
+    try {
+      const result = await pgQuery(
+        `
+        DELETE FROM clients
+        WHERE id = $1
+        RETURNING id
+        `,
+        [req.params.id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Клиент не найден",
+        });
+      }
+
+      return res.json({
+        success: true,
+        id: result.rows[0].id,
+      });
+    } catch (error) {
+      console.error(
+        "DELETE /api/clients/:id failed:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: "Ошибка удаления клиента",
+      });
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/clients/phone/:phone
+|--------------------------------------------------------------------------
+*/
+
+app.get("/api/clients/phone/:phone", async (req, res) => {
+  try {
+    const phone = normalizePhone(req.params.phone);
+
+    const result = await pgQuery(
+      `
+      SELECT
+        id,
+        name,
+        phone,
+        login,
+        points,
+        bonuses,
+        orders,
+        status,
+        role
+      FROM clients
+      WHERE
+        regexp_replace(phone, '\\D', '', 'g') =
+        regexp_replace($1, '\\D', '', 'g')
+        OR phone = $1
+      LIMIT 1
+      `,
+      [phone]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Клиент не найден",
+      });
+    }
+
+    return res.json({
+      success: true,
+      client: serializeClient(result.rows[0]),
+    });
+  } catch (error) {
+    console.error(
+      "GET /api/clients/phone/:phone failed:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка поиска клиента",
+    });
+  }
+});
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/messages
+|
+| Без userLogin — все сообщения.
+| С userLogin — только один чат.
+|--------------------------------------------------------------------------
+*/
+
+app.get("/api/messages", async (req, res) => {
+  try {
+    const userLogin =
+      typeof req.query.userLogin === "string"
+        ? req.query.userLogin.trim()
+        : "";
+
+    let result;
+
+    if (userLogin) {
+      result = await pgQuery(
+        `
+        SELECT
+          id,
+          user_login,
+          author,
+          text,
+          read_by_user,
+          read_by_admin,
+          created_at
+        FROM messages
+        WHERE user_login = $1
+        ORDER BY created_at ASC, id ASC
+        `,
+        [userLogin]
+      );
+    } else {
+      result = await pgQuery(
+        `
+        SELECT
+          id,
+          user_login,
+          author,
+          text,
+          read_by_user,
+          read_by_admin,
+          created_at
+        FROM messages
+        ORDER BY created_at ASC, id ASC
+        `
+      );
+    }
+
+    return res.json({
+      success: true,
+      messages: result.rows.map((row) => ({
+        id: row.id,
+        userLogin: row.user_login,
+        author: row.author,
+        text: row.text,
+        readByUser: Boolean(row.read_by_user),
+        readByAdmin: Boolean(row.read_by_admin),
+        createdAt: row.created_at,
+      })),
+    });
+  } catch (error) {
+    console.error(
+      "GET /api/messages failed:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка загрузки сообщений",
+    });
+  }
+});
+
+/*
+|--------------------------------------------------------------------------
+| POST /api/messages
+|--------------------------------------------------------------------------
+*/
+
+app.post("/api/messages", async (req, res) => {
+  try {
+    const userLogin = String(
+      req.body?.userLogin || ""
+    ).trim();
+
+    const author = String(
+      req.body?.author || ""
+    ).trim();
+
+    const text = String(
+      req.body?.text || ""
+    ).trim();
+
+    if (!userLogin || !text) {
+      return res.status(400).json({
+        success: false,
+        message: "Не указан пользователь или текст",
+      });
+    }
+
+    if (author !== "user" && author !== "admin") {
+      return res.status(400).json({
+        success: false,
+        message: "Некорректный автор",
+      });
+    }
+
+    const id = crypto.randomUUID();
+
+    const readByUser =
+      req.body?.readByUser === true;
+
+    const readByAdmin =
+      req.body?.readByAdmin === true;
+
+    const result = await pgQuery(
+      `
+      INSERT INTO messages (
+        id,
+        user_login,
+        author,
+        text,
+        read_by_user,
+        read_by_admin,
+        created_at,
+        raw
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, $6, NOW(), $7::jsonb
+      )
+      RETURNING
+        id,
+        user_login,
+        author,
+        text,
+        read_by_user,
+        read_by_admin,
+        created_at
+      `,
+      [
+        id,
+        userLogin,
+        author,
+        text,
+        readByUser,
+        readByAdmin,
+        JSON.stringify(req.body?.raw ?? {}),
+      ]
+    );
+
+    const row = result.rows[0];
+
+    return res.status(201).json({
+      success: true,
+      message: {
+        id: row.id,
+        userLogin: row.user_login,
+        author: row.author,
+        text: row.text,
+        readByUser: Boolean(row.read_by_user),
+        readByAdmin: Boolean(row.read_by_admin),
+        createdAt: row.created_at,
+      },
+    });
+  } catch (error) {
+    console.error(
+      "POST /api/messages failed:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка создания сообщения",
+    });
+  }
+});
+
+/*
+|--------------------------------------------------------------------------
+| TRADE-IN API
+|--------------------------------------------------------------------------
+*/
+
+function mapTradeInRow(row) {
+  return {
+    id: row.id,
+    title: row.title || "",
+    description: row.description || "",
+    price: Number(row.price || 0),
+    memory: row.memory || "",
+    color: row.color || "",
+    condition: row.condition || "",
+    warranty: row.warranty || "",
+    images: Array.isArray(row.images)
+      ? row.images
+      : [],
+    status:
+      row.status === "sold"
+        ? "sold"
+        : "available",
+    createdAt: row.created_at
+      ? new Date(
+          row.created_at
+        ).toISOString()
+      : null,
+  };
+}
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/trade-in
+|--------------------------------------------------------------------------
+*/
+
+app.get("/api/trade-in", async (req, res) => {
+  try {
+    const result = await pgQuery(`
+      SELECT
+        id,
+        title,
+        description,
+        price,
+        memory,
+        color,
+        condition,
+        warranty,
+        images,
+        status,
+        created_at
+      FROM trade_in
+      ORDER BY created_at DESC NULLS LAST, id DESC
+    `);
+
+    return res.json({
+      success: true,
+      products:
+        result.rows.map(
+          mapTradeInRow
+        ),
+    });
+  } catch (error) {
+    console.error(
+      "GET /api/trade-in failed:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Ошибка загрузки Trade-In",
+    });
+  }
+});
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/trade-in/:id
+|--------------------------------------------------------------------------
+*/
+
+app.get(
+  "/api/trade-in/:id",
+  async (req, res) => {
+    try {
+      const result =
+        await pgQuery(
+          `
+          SELECT
+            id,
+            title,
+            description,
+            price,
+            memory,
+            color,
+            condition,
+            warranty,
+            images,
+            status,
+            created_at
+          FROM trade_in
+          WHERE id = $1
+          LIMIT 1
+          `,
+          [req.params.id]
+        );
+
+      if (
+        result.rows.length === 0
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Устройство не найдено",
+        });
+      }
+
+      return res.json({
+        success: true,
+        product:
+          mapTradeInRow(
+            result.rows[0]
+          ),
+      });
+    } catch (error) {
+      console.error(
+        "GET /api/trade-in/:id failed:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка загрузки устройства",
+      });
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| POST /api/trade-in
+|--------------------------------------------------------------------------
+*/
+
+app.post(
+  "/api/trade-in",
+  async (req, res) => {
+    try {
+      const {
+        title,
+        description,
+        price,
+        memory,
+        color,
+        condition,
+        warranty,
+        images,
+        status,
+        createdAt,
+      } = req.body || {};
+
+      const cleanTitle =
+        String(title || "").trim();
+
+      if (!cleanTitle) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Введите название устройства",
+        });
+      }
+
+      const cleanImages =
+        Array.isArray(images)
+          ? images
+              .map((image) =>
+                String(image).trim()
+              )
+              .filter(Boolean)
+          : [];
+
+      const id = crypto.randomUUID();
+
+      const result =
+        await pgQuery(
+          `
+          INSERT INTO trade_in (
+            id,
+            title,
+            description,
+            price,
+            memory,
+            color,
+            condition,
+            warranty,
+            images,
+            status,
+            created_at
+          )
+          VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            $8,
+            $9::jsonb,
+            $10,
+            COALESCE($11::timestamptz, NOW())
+          )
+          RETURNING
+            id,
+            title,
+            description,
+            price,
+            memory,
+            color,
+            condition,
+            warranty,
+            images,
+            status,
+            created_at
+          `,
+          [
+            id,
+            cleanTitle,
+            String(
+              description || ""
+            ),
+            Number(price || 0),
+            String(memory || ""),
+            String(color || ""),
+            String(
+              condition || ""
+            ),
+            String(
+              warranty || ""
+            ),
+            JSON.stringify(
+              cleanImages
+            ),
+            status === "sold"
+              ? "sold"
+              : "available",
+            createdAt
+              ? new Date(
+                  createdAt
+                )
+              : null,
+          ]
+        );
+
+      return res.status(201).json({
+        success: true,
+        product:
+          mapTradeInRow(
+            result.rows[0]
+          ),
+      });
+    } catch (error) {
+      console.error(
+        "POST /api/trade-in failed:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка создания Trade-In",
+      });
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| PATCH /api/trade-in/:id
+|--------------------------------------------------------------------------
+*/
+app.patch(
+  "/api/trade-in/:id",
+  async (req, res) => {
+    try {
+      const fields = [];
+      const values = [];
+      let index = 1;
+
+      const allowedFields = {
+        title: "title",
+        description: "description",
+        price: "price",
+        memory: "memory",
+        color: "color",
+        condition: "condition",
+        warranty: "warranty",
+        images: "images",
+        status: "status",
+      };
+
+      for (const [
+        key,
+        column,
+      ] of Object.entries(
+        allowedFields
+      )) {
+        if (
+          req.body?.[key] ===
+          undefined
+        ) {
+          continue;
+        }
+
+        let value =
+          req.body[key];
+
+        if (key === "images") {
+          value = JSON.stringify(
+            Array.isArray(value)
+              ? value
+                  .map((image) =>
+                    String(image).trim()
+                  )
+                  .filter(Boolean)
+              : []
+          );
+
+          fields.push(
+            `${column} = $${index}::jsonb`
+          );
+        } else if (
+          key === "price"
+        ) {
+          value = Number(value);
+          fields.push(
+            `${column} = $${index}`
+          );
+        } else if (
+          key === "status"
+        ) {
+          value =
+            value === "sold"
+              ? "sold"
+              : "available";
+
+          fields.push(
+            `${column} = $${index}`
+          );
+        } else {
+          value = String(
+            value ?? ""
+          );
+
+          fields.push(
+            `${column} = $${index}`
+          );
+        }
+
+        values.push(value);
+        index += 1;
+      }
+
+      if (fields.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Нет данных для обновления",
+        });
+      }
+
+      values.push(
+        req.params.id
+      );
+
+      const result =
+        await pgQuery(
+          `
+          UPDATE trade_in
+          SET ${fields.join(", ")}
+          WHERE id = $${index}
+          RETURNING
+            id,
+            title,
+            description,
+            price,
+            memory,
+            color,
+            condition,
+            warranty,
+            images,
+            status,
+            created_at
+          `,
+          values
+        );
+
+      if (
+        result.rows.length === 0
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Устройство не найдено",
+        });
+      }
+
+      return res.json({
+        success: true,
+        product:
+          mapTradeInRow(
+            result.rows[0]
+          ),
+      });
+    } catch (error) {
+      console.error(
+        "PATCH /api/trade-in/:id failed:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка обновления Trade-In",
+      });
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| DELETE /api/trade-in/:id
+|--------------------------------------------------------------------------
+*/
+
+app.delete(
+  "/api/trade-in/:id",
+  async (req, res) => {
+    try {
+      const result =
+        await pgQuery(
+          `
+          DELETE FROM trade_in
+          WHERE id = $1
+          RETURNING id
+          `,
+          [req.params.id]
+        );
+
+      if (
+        result.rows.length === 0
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Устройство не найдено",
+        });
+      }
+
+      return res.json({
+        success: true,
+        id: result.rows[0].id,
+      });
+    } catch (error) {
+      console.error(
+        "DELETE /api/trade-in/:id failed:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка удаления Trade-In",
+      });
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| PATCH /api/messages/:id/read
+|--------------------------------------------------------------------------
+*/
+
+app.patch(
+  "/api/messages/:id/read",
+  async (req, res) => {
+    try {
+      const field =
+        req.body?.field === "readByAdmin"
+          ? "read_by_admin"
+          : req.body?.field === "readByUser"
+          ? "read_by_user"
+          : null;
+
+      if (!field) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Поле прочитанности не указано",
+        });
+      }
+
+      const result = await pgQuery(
+        `
+        UPDATE messages
+        SET ${field} = TRUE
+        WHERE id = $1
+        RETURNING
+          id,
+          user_login,
+          author,
+          text,
+          read_by_user,
+          read_by_admin,
+          created_at
+        `,
+        [req.params.id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Сообщение не найдено",
+        });
+      }
+
+      const row = result.rows[0];
+
+      return res.json({
+        success: true,
+        message: {
+          id: row.id,
+          userLogin: row.user_login,
+          author: row.author,
+          text: row.text,
+          readByUser: Boolean(
+            row.read_by_user
+          ),
+          readByAdmin: Boolean(
+            row.read_by_admin
+          ),
+          createdAt: row.created_at,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "PATCH /api/messages/:id/read failed:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка обновления прочитанности",
+      });
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| DELETE /api/messages/chat/:userLogin
+|--------------------------------------------------------------------------
+*/
+
+app.delete(
+  "/api/messages/chat/:userLogin",
+  async (req, res) => {
+    try {
+      const userLogin =
+        req.params.userLogin.trim();
+
+      if (!userLogin) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Не указан пользователь",
+        });
+      }
+
+      const result = await pgQuery(
+        `
+        DELETE FROM messages
+        WHERE user_login = $1
+        `,
+        [userLogin]
+      );
+
+      return res.json({
+        success: true,
+        deleted: result.rowCount || 0,
+      });
+    } catch (error) {
+      console.error(
+        "DELETE /api/messages/chat/:userLogin failed:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: "Ошибка удаления чата",
+      });
+    }
+  }
+);
 
 
 /*
@@ -363,7 +1522,7 @@ app.get(
               "",
 
             phone:
-              
+
               normalizedPhone,
 
             bonusBalance:
@@ -401,7 +1560,7 @@ app.get(
           customer.name || "",
 
         phone:
-          
+
           normalizedPhone,
 
         login:
@@ -483,7 +1642,7 @@ app.get(
             customer.name || "",
 
           phone:
-            
+
             normalizedPhone,
 
           bonusBalance:
@@ -1698,6 +2857,582 @@ const PRODUCT_COLUMNS = `
 
 /*
 |--------------------------------------------------------------------------
+| PRODUCTS CRUD
+|--------------------------------------------------------------------------
+*/
+
+function mapProductRow(row) {
+  return {
+    id: row.id,
+    title: row.title || "",
+    name: row.name || row.title || "",
+    price: Number(row.price || 0),
+    images: Array.isArray(row.images) ? row.images : [],
+    category: row.category || "",
+    categoryGroup: row.category_group || null,
+    categoryPath: Array.isArray(row.category_path)
+      ? row.category_path
+      : [],
+    categoryLeaf: row.category_leaf || null,
+    badge:
+      row.badge === "Хит" ||
+      row.badge === "Новинка" ||
+      row.badge === "Акция"
+        ? row.badge
+        : undefined,
+    rating: Number(row.rating || 0),
+    reviews: Number(row.reviews || 0),
+    delivery: row.delivery || "Уточняется",
+    inStock: Boolean(row.in_stock),
+    stock: Number(row.stock || 0),
+    reserve: Number(row.reserve || 0),
+    inTransit: Number(row.in_transit || 0),
+    quantity: Number(row.quantity || 0),
+    description: row.description || "",
+    memory: row.memory || "",
+    color: row.color || "",
+    warranty: row.warranty || "",
+    type: row.type || null,
+    product: row.product || null,
+    characteristics: Array.isArray(row.characteristics)
+      ? row.characteristics
+      : [],
+    variantsCount: Number(row.variants_count || 0),
+    weight:
+      row.weight == null
+        ? null
+        : Number(row.weight),
+    volume:
+      row.volume == null
+        ? null
+        : Number(row.volume),
+    article: row.article || null,
+    code: row.code || null,
+    externalCode: row.external_code || null,
+    barcode: row.barcode || null,
+    archived: Boolean(row.archived),
+    updated: row.updated_at
+      ? new Date(row.updated_at).toISOString()
+      : null,
+    hidden: Boolean(row.hidden),
+  };
+}
+
+/*
+|--------------------------------------------------------------------------
+| POST /api/products
+|--------------------------------------------------------------------------
+*/
+
+app.post("/api/products", async (req, res) => {
+  try {
+    const product = req.body || {};
+
+    const title =
+      String(
+        product.title ??
+          product.name ??
+          ""
+      ).trim();
+
+    if (!title) {
+      return res.status(400).json({
+        success: false,
+        message: "Не указано название товара",
+      });
+    }
+
+    const id = crypto.randomUUID();
+
+    const name = String(
+      product.name ??
+        title
+    );
+
+    const images = Array.isArray(
+      product.images
+    )
+      ? product.images
+          .map(String)
+          .filter(Boolean)
+      : [];
+
+    const categoryPath = Array.isArray(
+      product.categoryPath
+    )
+      ? product.categoryPath.map(String)
+      : [];
+
+    const characteristics =
+      Array.isArray(
+        product.characteristics
+      )
+        ? product.characteristics
+        : [];
+
+    const stock = Number(
+      product.stock ?? 0
+    );
+
+    const reserve = Number(
+      product.reserve ?? 0
+    );
+
+    const inTransit = Number(
+      product.inTransit ?? 0
+    );
+
+    const quantity = Number(
+      product.quantity ?? 0
+    );
+
+    const inStock =
+      product.inStock !== undefined
+        ? Boolean(product.inStock)
+        : stock > 0 || quantity > 0;
+
+    const result = await pgQuery(
+      `
+      INSERT INTO products (
+        id,
+        title,
+        name,
+        price,
+        images,
+        category,
+        category_group,
+        category_path,
+        category_leaf,
+        badge,
+        rating,
+        reviews,
+        delivery,
+        in_stock,
+        stock,
+        reserve,
+        in_transit,
+        quantity,
+        description,
+        memory,
+        color,
+        warranty,
+        type,
+        product,
+        characteristics,
+        variants_count,
+        weight,
+        volume,
+        article,
+        code,
+        external_code,
+        barcode,
+        archived,
+        updated_at,
+        hidden,
+        raw
+      )
+      VALUES (
+        $1, $2, $3, $4, $5::jsonb, $6, $7, $8::jsonb, $9,
+        $10, $11, $12, $13, $14, $15, $16, $17, $18,
+        $19, $20, $21, $22, $23, $24, $25::jsonb, $26,
+        $27, $28, $29, $30, $31, $32, $33, NOW(), $34, $35::jsonb
+      )
+      RETURNING *
+      `,
+      [
+        id,
+        title,
+        name,
+        Number(product.price ?? 0),
+        JSON.stringify(images),
+        String(product.category ?? ""),
+        product.categoryGroup ?? null,
+        JSON.stringify(categoryPath),
+        product.categoryLeaf ?? null,
+        product.badge ?? null,
+        Number(product.rating ?? 0),
+        Number(product.reviews ?? 0),
+        String(
+          product.delivery ??
+            "Уточняется"
+        ),
+        inStock,
+        stock,
+        reserve,
+        inTransit,
+        quantity,
+        String(
+          product.description ?? ""
+        ),
+        String(product.memory ?? ""),
+        String(product.color ?? ""),
+        String(product.warranty ?? ""),
+        product.type ?? null,
+        product.product ?? null,
+        JSON.stringify(characteristics),
+        Number(
+          product.variantsCount ?? 0
+        ),
+        product.weight == null
+          ? null
+          : Number(product.weight),
+        product.volume == null
+          ? null
+          : Number(product.volume),
+        product.article ?? null,
+        product.code ?? null,
+        product.externalCode ?? null,
+        product.barcode ?? null,
+        Boolean(
+          product.archived ?? false
+        ),
+        Boolean(
+          product.hidden ?? false
+        ),
+        JSON.stringify(product.raw ?? {}),
+      ]
+    );
+
+    return res.status(201).json({
+      success: true,
+      product: mapProductRow(
+        result.rows[0]
+      ),
+    });
+  } catch (error) {
+    console.error(
+      "POST /api/products failed:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка создания товара",
+    });
+  }
+});
+
+/*
+|--------------------------------------------------------------------------
+| PATCH /api/products/:id
+|--------------------------------------------------------------------------
+*/
+
+app.patch(
+  "/api/products/:id",
+  async (req, res) => {
+    try {
+      const input = req.body || {};
+
+      const fields = [];
+      const values = [];
+      let index = 1;
+
+      const scalarFields = {
+        title: "title",
+        name: "name",
+        price: "price",
+        category: "category",
+        categoryGroup: "category_group",
+        categoryLeaf: "category_leaf",
+        badge: "badge",
+        rating: "rating",
+        reviews: "reviews",
+        delivery: "delivery",
+        inStock: "in_stock",
+        stock: "stock",
+        reserve: "reserve",
+        inTransit: "in_transit",
+        quantity: "quantity",
+        description: "description",
+        memory: "memory",
+        color: "color",
+        warranty: "warranty",
+        type: "type",
+        product: "product",
+        variantsCount: "variants_count",
+        weight: "weight",
+        volume: "volume",
+        article: "article",
+        code: "code",
+        externalCode: "external_code",
+        barcode: "barcode",
+        archived: "archived",
+        hidden: "hidden",
+      };
+
+      for (
+        const [key, column]
+        of Object.entries(
+          scalarFields
+        )
+      ) {
+        if (
+          input[key] === undefined
+        ) {
+          continue;
+        }
+
+        let value =
+          input[key];
+
+        if (
+          [
+            "price",
+            "rating",
+            "stock",
+            "reserve",
+            "inTransit",
+            "quantity",
+            "weight",
+            "volume",
+            "variantsCount",
+            "reviews",
+          ].includes(key)
+        ) {
+          value =
+            value == null
+              ? null
+              : Number(value);
+        } else if (
+          [
+            "inStock",
+            "archived",
+            "hidden",
+          ].includes(key)
+        ) {
+          value = Boolean(value);
+        } else {
+          value =
+            value == null
+              ? null
+              : String(value);
+        }
+
+        fields.push(
+          `${column} = $${index}`
+        );
+        values.push(value);
+        index += 1;
+      }
+
+      if (
+        input.images !== undefined
+      ) {
+        fields.push(
+          `images = $${index}::jsonb`
+        );
+        values.push(
+          JSON.stringify(
+            Array.isArray(
+              input.images
+            )
+              ? input.images
+                  .map(String)
+                  .filter(Boolean)
+              : []
+          )
+        );
+        index += 1;
+      }
+
+      if (
+        input.categoryPath !==
+        undefined
+      ) {
+        fields.push(
+          `category_path = $${index}::jsonb`
+        );
+        values.push(
+          JSON.stringify(
+            Array.isArray(
+              input.categoryPath
+            )
+              ? input.categoryPath.map(
+                  String
+                )
+              : []
+          )
+        );
+        index += 1;
+      }
+
+      if (
+        input.characteristics !==
+        undefined
+      ) {
+        fields.push(
+          `characteristics = $${index}::jsonb`
+        );
+        values.push(
+          JSON.stringify(
+            Array.isArray(
+              input.characteristics
+            )
+              ? input.characteristics
+              : []
+          )
+        );
+        index += 1;
+      }
+
+      if (
+        input.title !== undefined &&
+        input.name === undefined
+      ) {
+        fields.push(
+          `name = $${index}`
+        );
+        values.push(
+          String(input.title)
+        );
+        index += 1;
+      }
+
+      if (
+        (
+          input.stock !==
+            undefined ||
+          input.quantity !==
+            undefined
+        ) &&
+        input.inStock ===
+          undefined
+      ) {
+        const stock =
+          Number(
+            input.stock ??
+              0
+          );
+
+        const quantity =
+          Number(
+            input.quantity ??
+              0
+          );
+
+        fields.push(
+          `in_stock = $${index}`
+        );
+        values.push(
+          stock > 0 ||
+            quantity > 0
+        );
+        index += 1;
+      }
+
+      fields.push(
+        `updated_at = NOW()`
+      );
+
+      if (
+        fields.length === 1
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Нет данных для обновления",
+        });
+      }
+
+      values.push(
+        req.params.id
+      );
+
+      const result =
+        await pgQuery(
+          `
+          UPDATE products
+          SET ${fields.join(", ")}
+          WHERE id = $${index}
+          RETURNING *
+          `,
+          values
+        );
+
+      if (
+        result.rows.length === 0
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Товар не найден",
+        });
+      }
+
+      return res.json({
+        success: true,
+        product:
+          mapProductRow(
+            result.rows[0]
+          ),
+      });
+    } catch (error) {
+      console.error(
+        "PATCH /api/products/:id failed:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка обновления товара",
+      });
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| DELETE /api/products/:id
+|--------------------------------------------------------------------------
+*/
+
+app.delete(
+  "/api/products/:id",
+  async (req, res) => {
+    try {
+      const result =
+        await pgQuery(
+          `
+          DELETE FROM products
+          WHERE id = $1
+          RETURNING id
+          `,
+          [req.params.id]
+        );
+
+      if (
+        result.rows.length === 0
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Товар не найден",
+        });
+      }
+
+      return res.json({
+        success: true,
+        id: result.rows[0].id,
+      });
+    } catch (error) {
+      console.error(
+        "DELETE /api/products/:id failed:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка удаления товара",
+      });
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
 | GET /api/products
 |
 | PostgreSQL catalog with cursor pagination
@@ -1913,6 +3648,263 @@ app.get("/api/products/:id", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Ошибка загрузки товара",
+    });
+  }
+});
+
+/*
+|--------------------------------------------------------------------------
+| POST /api/auth/login
+|
+| Клиентский вход через PostgreSQL.
+| Firebase остаётся fallback/dual-write на переходном этапе.
+|--------------------------------------------------------------------------
+*/
+
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const name = String(req.body?.name || "").trim();
+    const rawPhone = String(req.body?.phone || "").trim();
+
+    if (!name || !rawPhone) {
+      return res.status(400).json({
+        success: false,
+        message: "Введите имя и телефон",
+      });
+    }
+
+    const phone = normalizePhone(rawPhone);
+
+    // 1. Сначала ищем в PostgreSQL.
+    const pgResult = await pgQuery(
+      `
+      SELECT
+        id,
+        name,
+        phone,
+        login,
+        points,
+        bonuses,
+        orders,
+        status,
+        role
+      FROM clients
+      WHERE phone = $1
+      LIMIT 1
+      `,
+      [phone]
+    );
+
+    if (pgResult.rows.length > 0) {
+      const client = pgResult.rows[0];
+
+      return res.json({
+        success: true,
+        message: "Успешный вход",
+        client: {
+          id: client.id,
+          name: client.name || name,
+          login: client.login || client.name || name,
+          phone: client.phone || phone,
+          points: Number(client.points || 0),
+          bonuses: Number(client.bonuses || 0),
+          orders: Number(client.orders || 0),
+          status: client.status || "MAX START",
+          role: client.role || "user",
+        },
+      });
+    }
+
+    // 2. Fallback: старый Firebase.
+    const firebaseSnapshot = await db
+      .collection("clients")
+      .where("phone", "==", phone)
+      .limit(1)
+      .get();
+
+    if (!firebaseSnapshot.empty) {
+      const firebaseDoc = firebaseSnapshot.docs[0];
+      const firebaseData = firebaseDoc.data();
+
+      await pgQuery(
+        `
+        INSERT INTO clients (
+          id,
+          name,
+          phone,
+          login,
+          points,
+          bonuses,
+          orders,
+          status,
+          role,
+          source,
+          welcome_bonus,
+          address,
+          created_at,
+          raw
+        )
+        VALUES (
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+          $11,$12,$13,$14
+        )
+        ON CONFLICT (id) DO UPDATE SET
+          name = EXCLUDED.name,
+          phone = EXCLUDED.phone,
+          login = EXCLUDED.login,
+          points = EXCLUDED.points,
+          bonuses = EXCLUDED.bonuses,
+          orders = EXCLUDED.orders,
+          status = EXCLUDED.status,
+          role = EXCLUDED.role,
+          source = EXCLUDED.source,
+          welcome_bonus = EXCLUDED.welcome_bonus,
+          address = EXCLUDED.address,
+          created_at = EXCLUDED.created_at,
+          raw = EXCLUDED.raw
+        `,
+        [
+          firebaseDoc.id,
+          firebaseData.name || name,
+          firebaseData.phone || phone,
+          firebaseData.login ||
+            firebaseData.name ||
+            name,
+          Number(firebaseData.points || 0),
+          Number(firebaseData.bonuses || firebaseData.points || 0),
+          Number(firebaseData.orders || 0),
+          firebaseData.status || "NEW CLIENT",
+          firebaseData.role || "user",
+          firebaseData.source || null,
+          Boolean(firebaseData.welcomeBonus),
+          firebaseData.address || null,
+          firebaseData.createdAt?.toDate?.() || null,
+          firebaseData,
+        ]
+      );
+
+      const client = {
+        id: firebaseDoc.id,
+        name: firebaseData.name || name,
+        login:
+          firebaseData.login ||
+          firebaseData.name ||
+          name,
+        phone: firebaseData.phone || phone,
+        points: Number(firebaseData.points || 0),
+        bonuses: Number(
+          firebaseData.bonuses ||
+            firebaseData.points ||
+            0
+        ),
+        orders: Number(firebaseData.orders || 0),
+        status: firebaseData.status || "MAX START",
+        role: "user",
+      };
+
+      return res.json({
+        success: true,
+        message: "Успешный вход",
+        client,
+      });
+    }
+
+    // 3. Совсем новый клиент.
+    const firebaseRef = db
+      .collection("clients")
+      .doc();
+
+    const clientId = firebaseRef.id;
+
+    const newClient = {
+      name,
+      phone,
+      login: name,
+      points: 100000,
+      bonuses: 100000,
+      orders: 0,
+      status: "NEW CLIENT",
+      role: "user",
+      source: "telegram",
+      welcomeBonus: true,
+      createdAt: Timestamp.now(),
+    };
+
+    await firebaseRef.set(newClient);
+
+    try {
+      await pgQuery(
+        `
+        INSERT INTO clients (
+          id,
+          name,
+          phone,
+          login,
+          points,
+          bonuses,
+          orders,
+          status,
+          role,
+          source,
+          welcome_bonus,
+          created_at,
+          raw
+        )
+        VALUES (
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+          $11,$12,$13
+        )
+        `,
+        [
+          clientId,
+          name,
+          phone,
+          name,
+          100000,
+          100000,
+          0,
+          "NEW CLIENT",
+          "user",
+          "telegram",
+          true,
+          new Date(),
+          newClient,
+        ]
+      );
+    } catch (postgresError) {
+      console.error(
+        "PostgreSQL client create failed:",
+        postgresError
+      );
+
+      // Firebase уже записан, поэтому пользователь не теряется.
+      // Следующий login выполнит backfill в PostgreSQL.
+    }
+
+    return res.json({
+      success: true,
+      message: "Успешный вход",
+      client: {
+        id: clientId,
+        name,
+        login: name,
+        phone,
+        points: 100000,
+        bonuses: 100000,
+        orders: 0,
+        status: "NEW CLIENT",
+        role: "user",
+      },
+    });
+  } catch (error) {
+    console.error(
+      "POST /api/auth/login failed:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка авторизации",
     });
   }
 });
