@@ -1,5 +1,4 @@
 import { useMemo, useState, useEffect, useRef } from "react";
-import { Virtuoso } from "react-virtuoso";
 import Header from "../components/layout/Header";
 import BottomNavigation from "../components/navigation/BottomNavigation";
 import ProductCard from "../components/cards/ProductCard";
@@ -571,53 +570,46 @@ function CatalogPage() {
         )}
 
         {/* Товары */}
-        <div className="mt-6">
-          {!selectedSection && searchResults === null ? (
-            <div className="mt-10 rounded-3xl bg-zinc-900 p-8 text-center">
-              <div className="text-4xl">📂</div>
-              <h2 className="mt-4 text-xl font-bold text-white">
-                Выберите категорию
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-zinc-500">
-                Сначала выберите раздел, затем бренд — и сразу увидите нужные
-                товары.
-              </p>
-            </div>
-          ) : productsToShow.length > 0 ? (
-            <Virtuoso
-              useWindowScroll
-              data={productsToShow}
-              overscan={300}
-              itemContent={(_, product) => (
-                <div className="pb-6">
-                  <ProductCard product={product} />
-                </div>
-              )}
-              components={{
-                Footer: () => (
-                  <>
-                    {loadingMore && searchResults === null && (
-                      <div className="flex justify-center py-8">
-                        <div className="text-center">
-                          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-zinc-800 border-t-yellow-400" />
-                          <p className="mt-3 text-xs text-zinc-600">
-                            Загружаем ещё товары...
+                    <div className="mt-6">
+                      {!selectedSection && searchResults === null ? (
+                        <div className="mt-10 rounded-3xl bg-zinc-900 p-8 text-center">
+                          <div className="text-4xl">📂</div>
+                          <h2 className="mt-4 text-xl font-bold text-white">
+                            Выберите категорию
+                          </h2>
+                          <p className="mt-2 text-sm leading-6 text-zinc-500">
+                            Сначала выберите раздел, затем бренд — и сразу увидите нужные
+                            товары.
                           </p>
                         </div>
-                      </div>
-                    )}
+                      ) : productsToShow.length > 0 ? (
+                        <div className="space-y-6">
+              {productsToShow.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                />
+              ))}
 
-                    {!hasMore &&
-                      products.length > 0 &&
-                      searchResults === null && (
-                        <p className="mt-4 pb-8 text-center text-xs text-zinc-700">
-                          Вы посмотрели весь каталог
-                        </p>
-                      )}
-                  </>
-                ),
-              }}
-            />
+              {loadingMore && searchResults === null && (
+                <div className="flex justify-center py-8">
+                  <div className="text-center">
+                    <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-zinc-800 border-t-yellow-400" />
+                    <p className="mt-3 text-xs text-zinc-600">
+                      Загружаем ещё товары...
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {!hasMore &&
+                products.length > 0 &&
+                searchResults === null && (
+                  <p className="pb-8 text-center text-xs text-zinc-700">
+                    Вы посмотрели весь каталог
+                  </p>
+                )}
+            </div>
           ) : (
             <div className="rounded-3xl bg-zinc-900 p-8 text-center">
               <div className="text-4xl">🔎</div>
