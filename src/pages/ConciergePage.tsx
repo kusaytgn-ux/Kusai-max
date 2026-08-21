@@ -29,6 +29,12 @@ function ConciergePage() {
   const bottomRef =
     useRef<HTMLDivElement>(null);
 
+  const inputRef =
+    useRef<HTMLInputElement>(null);
+
+  const touchStartY =
+    useRef(0);
+
   useEffect(() => {
     if (location.state?.message) {
       setText(location.state.message);
@@ -131,13 +137,13 @@ function ConciergePage() {
                 </p>
 
                 <span className="text-right text-xs opacity-60">
-                    {message.createdAt
-                      ? new Date(
-                          String(message.createdAt)
-                        ).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
+                  {message.createdAt
+                    ? new Date(
+                        String(message.createdAt)
+                      ).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
                     : ""}
                 </span>
 
@@ -156,11 +162,30 @@ function ConciergePage() {
         <div className="mx-auto flex max-w-md items-center gap-3 px-5">
 
           <input
+            ref={inputRef}
             value={text}
             onChange={(event) =>
               setText(event.target.value)
             }
             placeholder="Введите сообщение..."
+            onTouchStart={(event) => {
+              touchStartY.current =
+                event.touches[0].clientY;
+            }}
+            onTouchMove={(event) => {
+              const currentY =
+                event.touches[0].clientY;
+
+              if (
+                currentY -
+                  touchStartY.current >
+                  20 &&
+                document.activeElement ===
+                  inputRef.current
+              ) {
+                inputRef.current?.blur();
+              }
+            }}
             className="
               flex-1
               rounded-2xl

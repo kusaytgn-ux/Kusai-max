@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { fetch, Agent } from "undici";
 
+
 const ONE_C_URL =
   "https://1c-srv.nalogreg.ru/kusaiRetailWork/hs/kusaiMaxConnector";
 
@@ -147,6 +148,50 @@ export async function checkOneCHealth() {
   }
 
   return JSON.parse(text);
+}
+
+export async function getAllOneCCustomers() {
+  const url = `${ONE_C_URL}/getAllCustomers`;
+
+  console.log("");
+  console.log("======================================");
+  console.log("1С: ПОЛУЧЕНИЕ ВСЕХ КЛИЕНТОВ");
+  console.log("======================================");
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: ONE_C_AUTH,
+      Accept: "application/json",
+    },
+    dispatcher: oneCAgent,
+  });
+
+  const text = await response.text();
+
+  console.log(
+    `1С getAllCustomers: HTTP ${response.status}`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `1С getAllCustomers HTTP ${response.status}: ${text}`
+    );
+  }
+
+  const data = JSON.parse(text);
+
+  if (!Array.isArray(data)) {
+    throw new Error(
+      "1С getAllCustomers вернул не массив клиентов"
+    );
+  }
+
+  console.log(
+    `1С: получено клиентов: ${data.length}`
+  );
+
+  return data;
 }
 
 /*

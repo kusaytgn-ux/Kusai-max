@@ -1,11 +1,6 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import {
-  initializeApp,
-  cert,
-  getApps,
-} from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import "dotenv/config";
 import { Timestamp } from "firebase-admin/firestore";
@@ -20,9 +15,11 @@ import {
 import {
   checkOneCHealth,
   getOneCCustomer,
+   getAllOneCCustomers,
   normalizePhone,
 } from "../api/oneC.js";
 import { db } from "../api/firebaseAdmin.js";
+
 
 
 const app = express();
@@ -69,6 +66,364 @@ function serializeClient(row) {
     role: row.role || "user",
   };
 }
+// бэкап
+async function syncCustomersToPostgres(customers) {
+  let synced = 0;
+  let created = 0;
+  let updated = 0;
+  let operations = 0;
+
+  for (const customer of customers) {
+    const customerId = String(customer.customerId || "").trim();
+
+    if (!customerId) {
+      continue;
+    }
+
+    const name = String(customer.name || "").trim();
+    const phone = normalizePhone(String(customer.phone || ""));
+    const bonusBalance = Number(customer.bonusBalance || 0);
+
+    // Ищем клиента сначала по customerId 1С
+    const existing = await pgQuery(
+      `
+      SELECT id
+      FROM clients
+      WHERE onec_customer_id = $1
+      LIMIT 1
+      `,
+      [customerId]
+    );
+
+    let clientId;
+
+    if (existing.rows.length > 0) {
+      clientId = existing.rows[0].id;
+
+      await pgQuery(
+        `
+        UPDATE clients
+        SET
+          name = $1,
+          phone = $2,
+          points = $3,
+          bonuses = $3,
+          status = COALESCE(status, 'ACTIVE'),
+          updated_at = NOW(),
+          raw = $4
+        WHERE id = $5
+        `,
+        [
+          name,
+          phone,
+          bonusBalance,
+          customer,
+          clientId,
+        ]
+      );
+
+      updated++;
+    } else {
+      // Если customerId ещё не привязан —
+      // пробуем найти клиента по телефону.
+      const byPhone = await pgQuery(
+        `
+        SELECT id
+        FROM clients
+        WHERE phone = $1
+        LIMIT 1
+        `,
+        [phone]
+      );
+
+      if (byPhone.rows.length > 0) {
+        clientId = byPhone.rows[0].id;
+
+        await pgQuery(
+          `
+          UPDATE clients
+          SET
+            onec_customer_id = $1,
+            name = $2,
+            phone = $3,
+            points = $4,
+            bonuses = $4,
+            updated_at = NOW(),
+            raw = $5
+          WHERE id = $6
+          `,
+          [
+            customerId,
+            name,
+            phone,
+            bonusBalance,
+            customer,
+            clientId,
+          ]
+        );
+
+        updated++;
+      } else {
+        clientId = crypto.randomUUID();
+
+        await pgQuery(
+          `
+          INSERT INTO clients (
+            id,
+            name,
+            phone,
+            login,
+            points,
+            bonuses,
+            orders,
+            status,
+            role,
+            source,
+            welcome_bonus,
+            onec_customer_id,
+            created_at,
+            updated_at,
+            raw
+          )
+          VALUES (
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+            $11,$12,$13,$14,$15
+          )
+          `,
+          [
+            clientId,
+            name,
+            phone,
+            name,
+            bonusBalance,
+            bonusBalance,
+            0,
+            "ACTIVE",
+            "user",
+            "1c",
+            false,
+            customerId,
+            new Date(),
+            new Date(),
+            customer,
+          ]
+        );
+
+        created++;
+      }
+    }
+
+    // История продаж / операций
+    if (Array.isArray(customer.salesHistory)) {
+      for (const sale of customer.salesHistory) {
+        const operationId = String(sale.id || "").trim();
+
+        if (!operationId) {
+          continue;
+        }
+
+        const sum = Number(sale.sum || 0);
+
+        await pgQuery(
+          `
+          INSERT INTO client_operations (
+            client_id,
+            id,
+            type,
+            points,
+            reason,
+            operation_date
+          )
+          VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6
+          )
+          ON CONFLICT (client_id, id)
+          DO UPDATE SET
+            type = EXCLUDED.type,
+            points = EXCLUDED.points,
+            reason = EXCLUDED.reason,
+            operation_date = EXCLUDED.operation_date
+          `,
+          [
+            clientId,
+            operationId,
+            sum < 0 ? "remove" : "add",
+            sum,
+            sale.goods || "",
+            sale.date ? new Date(sale.date) : null,
+          ]
+        );
+
+        operations++;
+      }
+    }
+
+    synced++;
+  }
+
+  return {
+    synced,
+    created,
+    updated,
+    operations,
+  };
+}
+
+
+
+
+app.post("/api/1c/sync-customers", async (req, res) => {
+  try {
+    const customers = Array.isArray(req.body)
+      ? req.body
+      : req.body?.customers;
+
+    if (!Array.isArray(customers)) {
+      return res.status(400).json({
+        success: false,
+        message: "Ожидается массив customers",
+      });
+    }
+
+    const result = await syncCustomersToPostgres(customers);
+
+    return res.json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    console.error(
+      "POST /api/1c/sync-customers failed:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка синхронизации клиентов 1С",
+      error: error.message,
+    });
+  }
+});
+
+app.post("/api/1c/sync-all-customers", async (req, res) => {
+  try {
+    console.log("");
+    console.log("======================================");
+    console.log("1С: НАЧАЛО ПОЛНОЙ СИНХРОНИЗАЦИИ КЛИЕНТОВ");
+    console.log("======================================");
+
+    const customers = await getAllOneCCustomers();
+
+    console.log(
+      `1С: получено клиентов: ${customers.length}`
+    );
+
+    const BATCH_SIZE = 50;
+
+    let totalSynced = 0;
+    let totalCreated = 0;
+    let totalUpdated = 0;
+    let totalOperations = 0;
+
+    for (
+      let i = 0;
+      i < customers.length;
+      i += BATCH_SIZE
+    ) {
+      const batch = customers.slice(
+        i,
+        i + BATCH_SIZE
+      );
+
+      const batchNumber =
+        Math.floor(i / BATCH_SIZE) + 1;
+
+      const totalBatches =
+        Math.ceil(
+          customers.length / BATCH_SIZE
+        );
+
+      console.log("");
+      console.log(
+        `1С: обработка пачки ${batchNumber}/${totalBatches}`
+      );
+      console.log(
+        `1С: клиентов в пачке: ${batch.length}`
+      );
+
+      const result =
+        await syncCustomersToPostgres(batch);
+
+      totalSynced += result.synced;
+      totalCreated += result.created;
+      totalUpdated += result.updated;
+      totalOperations += result.operations;
+
+      console.log(
+        `1С: пачка ${batchNumber} завершена`,
+        result
+      );
+    }
+
+    const result = {
+      synced: totalSynced,
+      created: totalCreated,
+      updated: totalUpdated,
+      operations: totalOperations,
+    };
+
+    console.log("");
+    console.log("======================================");
+    console.log("1С: ПОЛНАЯ СИНХРОНИЗАЦИЯ ЗАВЕРШЕНА");
+    console.log("======================================");
+
+    console.log(result);
+
+    return res.json({
+      success: true,
+      source: "1C",
+      totalFromOneC: customers.length,
+      batchSize: BATCH_SIZE,
+      totalBatches: Math.ceil(
+        customers.length / BATCH_SIZE
+      ),
+      ...result,
+    });
+  } catch (error) {
+    console.error(
+      "1С full customers sync failed:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+app.get("/api/1c/test-customers", async (req, res) => {
+  try {
+    const customers = await getAllOneCCustomers();
+
+    return res.json({
+      success: true,
+      count: customers.length,
+    });
+  } catch (error) {
+    console.error("1С test customers failed:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
 
 app.get("/api/clients/:id", async (req, res) => {
   try {
@@ -2719,6 +3074,35 @@ app.get(
 |--------------------------------------------------------------------------
 */
 
+const ONE_C_SYNC_INTERVAL = 24 * 60 * 60 * 1000;
+
+async function startOneCDailySync() {
+  console.log("1С daily sync запущен");
+
+  const run = async () => {
+    try {
+      console.log("======================================");
+      console.log("1С: НАЧАЛО СУТОЧНОЙ СИНХРОНИЗАЦИИ");
+      console.log("======================================");
+
+      // здесь будет getAllCustomers
+      // здесь UPSERT клиентов
+      // здесь UPSERT продаж
+
+      console.log("1С: СИНХРОНИЗАЦИЯ ЗАВЕРШЕНА");
+    } catch (error) {
+      console.error(
+        "1С: ОШИБКА СИНХРОНИЗАЦИИ:",
+        error?.message || error
+      );
+    }
+  };
+
+  await run();
+
+  setInterval(run, ONE_C_SYNC_INTERVAL);
+}
+
 const SYNC_INTERVAL =
   30 * 60 * 1000;
 
@@ -3943,5 +4327,6 @@ app.listen(
     );
 
     await startAutoSync();
+    await startOneCDailySync();
   }
 );
