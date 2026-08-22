@@ -216,6 +216,10 @@ async function syncCustomersToPostgres(customers) {
     // История продаж / операций
     if (Array.isArray(customer.salesHistory)) {
       for (const sale of customer.salesHistory) {
+        console.log(
+  "SALE FROM 1C:",
+  JSON.stringify(sale, null, 2)
+);
         const operationId = String(sale.id || "").trim();
 
         if (!operationId) {
@@ -491,7 +495,7 @@ app.get(
         `
         SELECT
           id,
-          type,
+          type, 
           points,
           reason,
           operation_date
@@ -504,19 +508,27 @@ app.get(
 
       return res.json({
         success: true,
-        operations: result.rows.map((row) => ({
-          id: row.id,
-          type: row.type,
+        operations: result.rows.map((row) => {
+          const amount = Number(row.points || 0);
 
-          // В client_operations сейчас:
-          // reason = sale.goods
-          // points = sale.sum
-          productName: row.reason || "Покупка",
-          amount: Number(row.points || 0),
+          return {
+            id: row.id,
+            type: row.type,
 
-          operationDate:
-            row.operation_date,
-        })),
+            // Реальная сумма покупки
+            amount,
+
+            // 1% от покупки, округление вверх
+            bonuses: Math.ceil(amount * 0.01),
+
+            // Название товара
+            productName:
+              row.reason || "Покупка",
+
+            operationDate:
+              row.operation_date,
+          };
+        }),
       });
     } catch (error) {
       console.error(

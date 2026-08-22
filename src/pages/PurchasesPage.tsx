@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 
 import { useNavigate } from "react-router-dom";
+
 import { useAuth } from "../auth/AuthContext";
 
 type Purchase = {
@@ -14,6 +15,7 @@ type Purchase = {
   type: string;
   productName: string;
   amount: number;
+  bonuses: number;
   operationDate: string | null;
 };
 
@@ -24,9 +26,8 @@ const API_URL = (
 
 function PurchasesPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
 
-  //const userId = user?.id;
+  const { user } = useAuth();
 
   const [purchases, setPurchases] =
     useState<Purchase[]>([]);
@@ -38,68 +39,89 @@ function PurchasesPage() {
     useState("");
 
   useEffect(() => {
-  if (!user?.id) {
-    setLoading(false);
-    return;
-  }
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
 
-  const clientId: string = user.id;
+    const clientId: string = user.id;
 
-  async function loadPurchases() {
-    try {
-      setLoading(true);
-      setError("");
+    async function loadPurchases() {
+      try {
+        setLoading(true);
+        setError("");
 
-      const response = await fetch(
-        `${API_URL}/api/clients/${encodeURIComponent(
-          clientId
-        )}/operations`
-      );
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(
-          data.message ||
-            "Не удалось загрузить покупки"
+        const response = await fetch(
+          `${API_URL}/api/clients/${encodeURIComponent(
+            clientId
+          )}/operations`
         );
-      }
 
-      const operations = Array.isArray(
-        data.operations
-      )
-        ? data.operations
-        : [];
+        const data = await response.json();
 
-      const mappedPurchases: Purchase[] =
-        operations.map((operation: any) => ({
-            id: String(operation.id),
-            type: String(operation.type || ""),
-            productName:
-            operation.reason || "Покупка",
-            amount: Number(
-            operation.points || 0
-            ),
-            operationDate:
-            operation.operationDate || null,
-        }));
-            setPurchases(mappedPurchases);
-            } catch (error) {
-            console.error(
-                "Ошибка загрузки покупок:",
-                error
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data.message ||
+              "Не удалось загрузить покупки"
+          );
+        }
+
+        const operations = Array.isArray(
+          data.operations
+        )
+          ? data.operations
+          : [];
+
+        const mappedPurchases: Purchase[] =
+          operations.map((operation: any) => {
+            const amount = Number(
+              operation.amount ??
+                operation.points ??
+                0
             );
 
-      setError(
-        "Не удалось загрузить историю покупок"
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
+            return {
+              id: String(operation.id),
 
-  void loadPurchases();
-}, [user?.id]);
+              type: String(
+                operation.type || "sale"
+              ),
+
+              productName:
+                operation.productName ||
+                operation.reason ||
+                "Покупка",
+
+              amount,
+
+              bonuses: Number(
+                operation.bonuses ??
+                  Math.ceil(amount * 0.01)
+              ),
+
+              operationDate:
+                operation.operationDate ||
+                null,
+            };
+          });
+
+        setPurchases(mappedPurchases);
+      } catch (error) {
+        console.error(
+          "Ошибка загрузки покупок:",
+          error
+        );
+
+        setError(
+          "Не удалось загрузить историю покупок"
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void loadPurchases();
+  }, [user?.id]);
 
   function formatDate(
     value: string | null
@@ -167,6 +189,7 @@ function PurchasesPage() {
         </button>
 
         <div className="ml-4">
+
           <h1 className="text-2xl font-black">
             Мои покупки
           </h1>
@@ -174,6 +197,7 @@ function PurchasesPage() {
           <p className="mt-1 text-xs text-zinc-500">
             История покупок
           </p>
+
         </div>
 
       </header>
@@ -238,6 +262,7 @@ function PurchasesPage() {
                 text-center
               "
             >
+
               <div
                 className="
                   mx-auto
@@ -263,6 +288,7 @@ function PurchasesPage() {
               <p className="mt-2 text-sm leading-6 text-zinc-500">
                 Здесь появится история ваших покупок.
               </p>
+
             </div>
           )}
 
@@ -274,6 +300,7 @@ function PurchasesPage() {
             <div className="space-y-4">
 
               {purchases.map((purchase) => (
+
                 <div
                   key={purchase.id}
                   className="
@@ -321,16 +348,16 @@ function PurchasesPage() {
                         )}
                       </p>
 
-                    </div>
-
-                    {/* Цена */}
-
-                    <div className="shrink-0 text-right">
-
-                      <p className="text-lg font-black text-yellow-400">
+                      <p className="mt-2 text-lg font-black text-yellow-400">
                         {formatPrice(
                           purchase.amount
                         )}
+                      </p>
+
+                      <p className="mt-1 text-xs font-medium text-yellow-400/70">
+                        +{purchase.bonuses.toLocaleString(
+                          "ru-RU"
+                        )} бонусов
                       </p>
 
                     </div>
@@ -338,6 +365,7 @@ function PurchasesPage() {
                   </div>
 
                 </div>
+
               ))}
 
             </div>
