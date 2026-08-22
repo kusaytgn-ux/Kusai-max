@@ -72,32 +72,23 @@ function PurchasesPage() {
         : [];
 
       const mappedPurchases: Purchase[] =
-        operations
-          .filter(
-            (operation: any) =>
-              operation.type === "sale"
-          )
-          .map((operation: any) => ({
+        operations.map((operation: any) => ({
             id: String(operation.id),
-            type: String(
-              operation.type || "sale"
-            ),
+            type: String(operation.type || ""),
             productName:
-              operation.reason ||
-              "Покупка",
+            operation.reason || "Покупка",
             amount: Number(
-              operation.points || 0
+            operation.points || 0
             ),
             operationDate:
-              operation.operationDate || null,
-          }));
-
-      setPurchases(mappedPurchases);
-    } catch (error) {
-      console.error(
-        "Ошибка загрузки покупок:",
-        error
-      );
+            operation.operationDate || null,
+        }));
+            setPurchases(mappedPurchases);
+            } catch (error) {
+            console.error(
+                "Ошибка загрузки покупок:",
+                error
+            );
 
       setError(
         "Не удалось загрузить историю покупок"
