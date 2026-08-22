@@ -1,6 +1,7 @@
 
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import PurchasesPage from "../pages/PurchasesPage";
 
 import WelcomePage from "../pages/WelcomePage";
 import HomePage from "../pages/HomePage";
@@ -86,6 +87,11 @@ function AppRouter() {
       <Route
         path="/history"
         element={<HistoryPage />}
+      />
+
+      <Route
+        path="/purchases"
+        element={<PurchasesPage />}
       />
 
       <Route

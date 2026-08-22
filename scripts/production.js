@@ -504,15 +504,19 @@ app.get(
 
       return res.json({
         success: true,
-        operations:
-          result.rows.map((row) => ({
-            id: row.id,
-            type: row.type,
-            points: Number(row.points || 0),
-            reason: row.reason || "",
-            operationDate:
-              row.operation_date,
-          })),
+        operations: result.rows.map((row) => ({
+          id: row.id,
+          type: row.type,
+
+          // В client_operations сейчас:
+          // reason = sale.goods
+          // points = sale.sum
+          productName: row.reason || "Покупка",
+          amount: Number(row.points || 0),
+
+          operationDate:
+            row.operation_date,
+        })),
       });
     } catch (error) {
       console.error(
@@ -523,7 +527,7 @@ app.get(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка загрузки истории клиента",
+          "Ошибка загрузки истории покупок",
       });
     }
   }
