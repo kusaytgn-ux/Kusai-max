@@ -1,6 +1,8 @@
 import { useParams } from "react-router-dom";
 import { Star } from "lucide-react";
 
+import BackButton from "../components/ui/BackButton";
+
 import Header from "../components/layout/Header";
 import BottomNavigation from "../components/navigation/BottomNavigation";
 import Button from "../components/ui/Button";
@@ -29,6 +31,7 @@ function ProductPage() {
       <Header />
 
       <main className="mx-auto max-w-md px-5 py-5">
+        <BackButton />
 
         <ProductGallery
           images={product.images}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import BackButton from "../components/ui/BackButton";
 
 import { useCart } from "../store/CartContext";
 
@@ -150,6 +151,7 @@ function TradeInProductPage() {
       <Header />
 
       <main className="mx-auto max-w-md px-5 py-5">
+        <BackButton />
         <ProductGallery
           images={product.images}
           title={product.title}

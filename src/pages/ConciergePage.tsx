@@ -4,6 +4,8 @@ import {
   useEffect,
 } from "react";
 
+import BackButton from "../components/ui/BackButton";
+
 import { useLocation } from "react-router-dom";
 import { Send } from "lucide-react";
 
@@ -108,6 +110,7 @@ function ConciergePage() {
       <Header />
 
       <main className="mx-auto flex max-w-md flex-col px-5 py-5">
+        <BackButton />
 
         <h1 className="mb-5 text-3xl font-black text-white">
           🎩 Concierge
@@ -201,7 +204,7 @@ function ConciergePage() {
               }
             }}
           />
-
+        
           <button
             type="button"
             onClick={handleSend}

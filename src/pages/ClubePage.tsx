@@ -6,6 +6,7 @@ import {
   ShieldCheck,
   Gem,
 } from "lucide-react";
+import BackButton from "../components/ui/BackButton";
 
 import Header from "../components/layout/Header";
 import BottomNavigation from "../components/navigation/BottomNavigation";
@@ -37,6 +38,7 @@ function ClubPage() {
       <Header />
 
       <main className="mx-auto max-w-md space-y-6 px-5 py-6">
+        <BackButton />
 
         {/* Статус */}
         <section className="rounded-3xl bg-gradient-to-br from-yellow-400 via-amber-400 to-orange-500 p-6">
