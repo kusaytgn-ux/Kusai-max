@@ -26,7 +26,7 @@ function PurchasesPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const userId = user?.id;
+  //const userId = user?.id;
 
   const [purchases, setPurchases] =
     useState<Purchase[]>([]);
