@@ -1,157 +1,213 @@
-import { Heart, Star } from "lucide-react";
-import { useFavorites } from "../../store/FavoritesContext";
-import { useCart } from "..//..//store/CartContext";
-import { useNavigate } from "react-router-dom";
-import type { Product } from "../../types/Product";
-import Badge from "../ui/Badge";
+import {
+  Heart,
+  Star,
+} from "lucide-react";
 
+import {
+  useFavorites,
+} from "../../store/FavoritesContext";
+
+import {
+  useCart,
+} from "../../store/CartContext";
+
+import {
+  useNavigate,
+} from "react-router-dom";
+
+import type {
+  Product,
+} from "../../types/Product";
+
+import Badge from "../ui/Badge";
 
 type Props = {
   product: Product;
 };
 
-function ProductCard({ product }: Props) {
-  const navigate = useNavigate();
-  const { isFavorite, toggleFavorite } = useFavorites();
-  const { addToCart, getQuantity } = useCart();
-  const quantity = getQuantity(product.id);
+function ProductCard({
+  product,
+}: Props) {
+  const navigate =
+    useNavigate();
+
+  const {
+    isFavorite,
+    toggleFavorite,
+  } = useFavorites();
+
+  const {
+    addToCart,
+    getQuantity,
+  } = useCart();
+
+  const quantity =
+    getQuantity(product.id);
+
+  const favorite =
+    isFavorite(product.id);
 
   return (
-    
+    <article
+      className="kusai-product-card"
+      onClick={() =>
+        navigate(
+          `/product/${product.id}`
+        )
+      }
+    >
 
-<div
-  onClick={() => navigate(`/product/${product.id}`)}
-  className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900 shadow-xl transition-all duration-300 hover:-translate-y-1 hover:border-yellow-400 cursor-pointer"
->
-      {/* Фото */}
-      <div className="relative">
+      {/* IMAGE */}
+
+      <div className="kusai-product-image">
+
         <img
-          src={product.images[0] || "placeholder.png"}
+          src={
+            product.images[0] ||
+            "placeholder.png"
+          }
           alt={product.title}
-          className="h-64 w-full object-cover"
         />
 
+        {/* BADGE */}
+
         {product.badge && (
-          <div className="absolute left-4 top-4">
-            <Badge text={product.badge} />
+          <div
+            style={{
+              position: "absolute",
+              left: 9,
+              top: 9,
+            }}
+          >
+            <Badge
+              text={product.badge}
+            />
           </div>
         )}
 
-        <button
-          onClick={(e) =>{
-            e.stopPropagation();
-            toggleFavorite(product.id);
-          }}
-          className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 backdrop-blur transition"
-        >
+        {/* FAVORITE */}
 
-        <Heart
-          size={20}
-          className={
-            isFavorite(product.id)
-              ? "fill-red-500 text-red-500"
-              : "text-white"
+        <button
+          type="button"
+          className="kusai-product-favorite"
+          onClick={(event) => {
+            event.stopPropagation();
+
+            toggleFavorite(
+              product.id
+            );
+          }}
+        >
+          <Heart
+            size={18}
+            fill={
+              favorite
+                ? "#ff008c"
+                : "none"
+            }
+            color={
+              favorite
+                ? "#ff008c"
+                : "#fff"
             }
           />
         </button>
+
       </div>
 
-      {/* Информация */}
-      <div className="p-5">
+      {/* INFO */}
 
-        <p className="text-sm text-zinc-400">
+      <div className="kusai-product-info">
+
+        <div className="kusai-product-category">
           {product.category}
-        </p>
+        </div>
 
-        <h2 className="mt-2 text-xl font-bold text-white">
+        <div className="kusai-product-name">
           {product.title}
-        </h2>
+        </div>
 
-        <div className="mt-3 flex items-center gap-2">
+        {/* RATING */}
+
+        <div className="kusai-product-rating">
 
           <Star
-            size={18}
-            className="fill-yellow-400 text-yellow-400"
+            size={13}
+            fill="#9cff00"
           />
 
-          <span className="font-semibold text-white">
+          <span
+            style={{
+              color: "#fff",
+              fontWeight: 800,
+            }}
+          >
             {product.rating}
           </span>
 
-          <span className="text-sm text-zinc-500">
-            ({product.reviews} отзывов)
+          <span>
+            ({product.reviews})
           </span>
 
         </div>
 
-        <p className="mt-4 text-3xl font-black text-yellow-400">
-          {product.price.toLocaleString("ru-RU")} ₽
-        </p>
+        {/* PRICE */}
 
-        <div className="mt-2">
-          {product.inStock ? (
-            <span className="rounded-full bg-green-500/20 px-3 py-1 text-xs font-semibold text-green-400">
-              ● В наличии
-            </span>
-          ) : (
-            <span className="rounded-full bg-red-500/20 px-3 py-1 text-xs font-semibold text-red-400">
-              ● Нет в наличии
-            </span>
-          )}
+        <div className="kusai-product-price">
+          {product.price.toLocaleString(
+            "ru-RU"
+          )} ₽
         </div>
 
-        <div className="mt-3 flex items-center justify-between">
+        {/* STOCK */}
 
-          <span
-            className={`text-sm ${
-              product.inStock
-                ? "text-green-400"
-                : "text-red-400"
-            }`}
-          >
-            {product.inStock
-              ? "● В наличии"
-              : "● Нет в наличии"}
-          </span>
-
-          <span className="text-sm text-zinc-400">
-            🚚 {product.delivery}
-          </span>
-
+        <div
+          className={`kusai-product-stock ${
+            product.inStock
+              ? "in-stock"
+              : "out-stock"
+          }`}
+        >
+          {product.inStock
+            ? "● В наличии"
+            : "● Нет в наличии"}
         </div>
 
-        <div className="mt-6 flex gap-3">
+        {/* CART */}
 
-      
+        <button
+          type="button"
+          disabled={
+            !product.inStock
+          }
+          className="kusai-product-cart"
+          onClick={(event) => {
+            event.stopPropagation();
 
-          <button
-            disabled={!product.inStock}
-            onClick={() =>
-              addToCart({
-                id: product.id,
-                type: "catalog",
-                title: product.title,
-                price: product.price,
-                image: product.images[0],
-              })
+            if (!product.inStock) {
+              return;
             }
-            className={`rounded-2xl px-5 font-bold transition ${
-              product.inStock
-                ? "bg-yellow-400 text-black hover:bg-yellow-300"
-                : "cursor-not-allowed bg-zinc-700 text-zinc-400"
-            }`}
-          >
-            {product.inStock
-              ? quantity > 0
-                ? `В корзине (${quantity})`
-                : "В корзину"
-              : "Нет в наличии"}
-          </button>
 
-        </div>
+            addToCart({
+              id: product.id,
+              type: "catalog",
+              title: product.title,
+              price: product.price,
+              image:
+                product.images[0],
+            });
+          }}
+        >
+          {!product.inStock
+            ? "Нет в наличии"
+            : quantity > 0
+            ? `В корзине · ${quantity}`
+            : "В корзину"}
+        </button>
 
       </div>
-    </div>
+
+    </article>
   );
 }
 

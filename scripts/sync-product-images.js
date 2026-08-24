@@ -4,18 +4,21 @@ import { query as pgQuery } from "../api/postgres.js";
 
 const SOURCE_ORIGIN = "https://stiltv.ru";
 
-const DEFAULT_LIMIT = 20;
-const MIN_CONFIDENCE = 85;
-const SAFE_MIN_SCORE = 100;
-const MIN_GAP = 10;
+const DEFAULT_LIMIT = 100;
+
+const SAFE_MIN_SCORE = 80;
 const REQUEST_DELAY_MS = 350;
+
+const MAX_CATEGORY_DEPTH = 2;
+const MAX_CATEGORY_PAGES = 40;
+const MAX_IMAGES = 6;
 
 const args = process.argv.slice(2);
 
 const SAFE_APPLY = args.includes("--apply-safe");
 const NORMAL_APPLY = args.includes("--apply");
-const DRY_RUN =
-  !SAFE_APPLY && !NORMAL_APPLY;
+
+const DRY_RUN = !SAFE_APPLY && !NORMAL_APPLY;
 
 function getArgValue(name, fallback) {
   const index = args.indexOf(name);
@@ -30,10 +33,8 @@ function getArgValue(name, fallback) {
 const LIMIT = Math.max(
   1,
   Math.min(
-    200,
-    Number(
-      getArgValue("--limit", DEFAULT_LIMIT)
-    )
+    2000,
+    Number(getArgValue("--limit", DEFAULT_LIMIT))
   )
 );
 
@@ -42,23 +43,23 @@ function log(message = "") {
 }
 
 function sleep(ms) {
-  return new Promise((resolve) =>
-    setTimeout(resolve, ms)
-  );
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/*
-|--------------------------------------------------------------------------
-| TEXT
-|--------------------------------------------------------------------------
-*/
+/* ============================================================
+   TEXT
+============================================================ */
 
 function normalizeText(value) {
   return String(value ?? "")
     .toLowerCase()
     .replace(/ё/g, "е")
     .replace(/[×х]/g, "x")
-    .replace(/&nbsp;/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#039;/gi, "'")
+    .replace(/&#x27;/gi, "'")
     .replace(/гб/gi, "gb")
     .replace(/тб/gi, "tb")
     .replace(/[^a-zа-я0-9+]+/gi, " ")
@@ -66,17 +67,9 @@ function normalizeText(value) {
     .trim();
 }
 
-function tokenize(value) {
-  return normalizeText(value)
-    .split(" ")
-    .filter(Boolean);
-}
-
-/*
-|--------------------------------------------------------------------------
-| MODEL
-|--------------------------------------------------------------------------
-*/
+/* ============================================================
+   MODEL
+============================================================ */
 
 function normalizeModelText(value) {
   let text = normalizeText(value);
@@ -87,40 +80,168 @@ function normalizeModelText(value) {
     .replace(/\s+/g, " ")
     .trim();
 
-  if (/^\d+(\s|$)/.test(text)) {
-    text = `iphone ${text}`;
-  }
-
-  return text
-    .replace(/\biphone\s+iphone\b/g, "iphone")
-    .replace(/\bpro\s+max\b/g, "pro max")
-    .replace(/\s+/g, " ")
-    .trim();
+  return text;
 }
 
 function extractModel(value) {
   const text = normalizeText(value);
 
-  const iphoneMatch = text.match(
-    /(?:^|\s)(?:apple\s+)?(?:iphone\s*)?(se|\d+)(?:\s+(pro\s+max|pro|plus|air))?(?=\s|$)/i
-  );
+  /* AirPods */
 
-  if (iphoneMatch) {
-    return normalizeModelText(
-      `iphone ${iphoneMatch[1]} ${
-        iphoneMatch[2] ?? ""
-      }`
-    );
+  if (/\bairpods\s+max\s+2\b/i.test(text)) {
+    return "airpods max 2";
   }
 
-  const patterns = [
-    /\bgalaxy\s+[a-z]\d+(?:\s+ultra|\s*\+|\s+edge|\s+fold|\s+flip)?\b/i,
+  if (/\bairpods\s+max\b/i.test(text)) {
+    return "airpods max";
+  }
+
+  if (
+    /\bairpods\s+4\b/i.test(text) &&
+    (
+      /\banc\b/i.test(text) ||
+      /active\s+noise\s+cancellation/i.test(text)
+    )
+  ) {
+    return "airpods 4 anc";
+  }
+
+  if (/\bairpods\s+4\b/i.test(text)) {
+    return "airpods 4";
+  }
+
+  if (/\bairpods\s+pro\s+3\b/i.test(text)) {
+    return "airpods pro 3";
+  }
+
+  if (/\bairpods\s+pro\b/i.test(text)) {
+    return "airpods pro";
+  }
+
+  if (/\bearpods\b/i.test(text)) {
+    return "earpods";
+  }
+
+  /* AirTag */
+
+  if (/\bairtag\b/i.test(text)) {
+    return "airtag";
+  }
+
+  /* iMac */
+
+  if (/\bimac\b/i.test(text) || /\baimac\b/i.test(text)) {
+    return "imac";
+  }
+
+  /* iPad Air */
+
+  if (/\bipad\s+air\s+13\b/i.test(text)) {
+    return "ipad air 13";
+  }
+
+  if (/\bipad\s+air\s+11\b/i.test(text)) {
+    return "ipad air 11";
+  }
+
+  if (/\bipad\s+air\b/i.test(text)) {
+    return "ipad air";
+  }
+
+  /* iPad Pro */
+
+  if (/\bipad\s+pro\s+13\b/i.test(text)) {
+    return "ipad pro 13";
+  }
+
+  if (/\bipad\s+pro\s+12\.9\b/i.test(text)) {
+    return "ipad pro 12.9";
+  }
+
+  if (/\bipad\s+pro\s+11\b/i.test(text)) {
+    return "ipad pro 11";
+  }
+
+  if (/\bipad\s+pro\b/i.test(text)) {
+    return "ipad pro";
+  }
+
+  /* iPad */
+
+  if (/\bipad\s+11\b/i.test(text)) {
+    return "ipad 11";
+  }
+
+  if (/\bipad\s+10\.9\b/i.test(text)) {
+    return "ipad 10.9";
+  }
+
+  if (/\bipad\s+10\.2\b/i.test(text)) {
+    return "ipad 10.2";
+  }
+
+  if (/\bipad\b/i.test(text)) {
+    return "ipad";
+  }
+
+  /* iPhone */
+
+  const iphonePatterns = [
+    /\biphone\s+17\s+pro\s+max\b/i,
+    /\biphone\s+17\s+pro\b/i,
+    /\biphone\s+17\s+air\b/i,
+    /\biphone\s+17\b/i,
+
+    /\biphone\s+16\s+pro\s+max\b/i,
+    /\biphone\s+16\s+pro\b/i,
+    /\biphone\s+16\s+plus\b/i,
+    /\biphone\s+16\b/i,
+
+    /\biphone\s+15\s+pro\s+max\b/i,
+    /\biphone\s+15\s+pro\b/i,
+    /\biphone\s+15\s+plus\b/i,
+    /\biphone\s+15\b/i,
+
+    /\biphone\s+14\s+pro\s+max\b/i,
+    /\biphone\s+14\s+pro\b/i,
+    /\biphone\s+14\s+plus\b/i,
+    /\biphone\s+14\b/i,
+
+    /\biphone\s+13\s+pro\s+max\b/i,
+    /\biphone\s+13\s+pro\b/i,
+    /\biphone\s+13\s+mini\b/i,
+    /\biphone\s+13\b/i,
+
+    /\biphone\s+12\s+pro\s+max\b/i,
+    /\biphone\s+12\s+pro\b/i,
+    /\biphone\s+12\s+mini\b/i,
+    /\biphone\s+12\b/i,
+
+    /\biphone\s+11\s+pro\s+max\b/i,
+    /\biphone\s+11\s+pro\b/i,
+    /\biphone\s+11\b/i,
+
+    /\biphone\s+se\b/i,
+  ];
+
+  for (const pattern of iphonePatterns) {
+    const match = text.match(pattern);
+
+    if (match) {
+      return normalizeModelText(match[0]);
+    }
+  }
+
+  /* Other brands */
+
+  const otherPatterns = [
+    /\bgalaxy\s+[a-z]\d+(?:\s+ultra|\s+\+|\s+edge|\s+fold|\s+flip)?\b/i,
     /\bxiaomi\s+[a-z0-9-]+(?:\s+[a-z0-9-]+){0,3}/i,
     /\bredmi\s+[a-z0-9-]+(?:\s+[a-z0-9-]+){0,3}/i,
     /\bdyson\s+[a-z0-9-]+(?:\s+[a-z0-9-]+){0,4}/i,
   ];
 
-  for (const pattern of patterns) {
+  for (const pattern of otherPatterns) {
     const match = text.match(pattern);
 
     if (match) {
@@ -131,11 +252,104 @@ function extractModel(value) {
   return "";
 }
 
-/*
-|--------------------------------------------------------------------------
-| MEMORY
-|--------------------------------------------------------------------------
-*/
+/* ============================================================
+   MODEL EQUALITY
+============================================================ */
+
+function modelsEqual(a, b) {
+  const left = normalizeModelText(a);
+  const right = normalizeModelText(b);
+
+  if (!left || !right) {
+    return false;
+  }
+
+  if (left === right) {
+    return true;
+  }
+
+  /*
+   * iPhone Air
+   */
+
+  if (
+    (left === "iphone air" && right === "iphone 17 air") ||
+    (left === "iphone 17 air" && right === "iphone air")
+  ) {
+    return true;
+  }
+
+  /*
+   * iMac
+   */
+
+  if (left === "imac" && right === "imac") {
+    return true;
+  }
+
+  /*
+   * Более общий iPad Air.
+   *
+   * Например:
+   * ipad air 11
+   * ipad air
+   *
+   * разрешаем как близкое совпадение,
+   * но потом память/цвет увеличат точность.
+   */
+
+  if (
+    (left === "ipad air 11" && right === "ipad air") ||
+    (left === "ipad air" && right === "ipad air 11")
+  ) {
+    return true;
+  }
+
+  if (
+    (left === "ipad pro 11" && right === "ipad pro") ||
+    (left === "ipad pro" && right === "ipad pro 11")
+  ) {
+    return true;
+  }
+
+  /*
+   * AirPods нельзя смешивать.
+   */
+
+  if (
+    left === "airpods 4 anc" &&
+    right === "airpods 4"
+  ) {
+    return false;
+  }
+
+  if (
+    left === "airpods 4" &&
+    right === "airpods 4 anc"
+  ) {
+    return false;
+  }
+
+  if (
+    left === "airpods max 2" &&
+    right === "airpods max"
+  ) {
+    return false;
+  }
+
+  if (
+    left === "airpods max" &&
+    right === "airpods max 2"
+  ) {
+    return false;
+  }
+
+  return false;
+}
+
+/* ============================================================
+   MEMORY
+============================================================ */
 
 function extractMemory(value) {
   const text = normalizeText(value);
@@ -145,7 +359,10 @@ function extractMemory(value) {
   );
 
   if (explicit) {
-    return `${explicit[1]}${explicit[2]}`;
+    const amount = explicit[1];
+    const unit = explicit[2].toLowerCase();
+
+    return `${amount}${unit}`;
   }
 
   const bare = text.match(
@@ -165,27 +382,38 @@ function extractMemory(value) {
   return `${amount}gb`;
 }
 
-/*
-|--------------------------------------------------------------------------
-| COLOR
-|--------------------------------------------------------------------------
-*/
+/* ============================================================
+   COLOR
+============================================================ */
 
 const COLOR_ALIASES = [
   ["space black", "space black"],
+  ["space gray", "space gray"],
+  ["space grey", "space gray"],
+  ["cosmic orange", "cosmic orange"],
   ["cloud white", "cloud white"],
   ["deep blue", "deep blue"],
   ["natural titanium", "natural titanium"],
   ["black titanium", "black titanium"],
   ["white titanium", "white titanium"],
   ["desert titanium", "desert titanium"],
-  ["cosmic orange", "cosmic orange"],
+
+  ["starlight", "starlight"],
+  ["midnight", "midnight"],
+  ["sage", "sage"],
+  ["light gold", "light gold"],
+  ["sky blue", "sky blue"],
+  ["mist blue", "mist blue"],
+  ["lavender", "lavender"],
 
   ["черный", "black"],
   ["чёрный", "black"],
+  ["черная", "black"],
+  ["чёрная", "black"],
   ["black", "black"],
 
   ["белый", "white"],
+  ["белая", "white"],
   ["white", "white"],
 
   ["синий", "blue"],
@@ -198,10 +426,6 @@ const COLOR_ALIASES = [
 
   ["розовый", "pink"],
   ["pink", "pink"],
-
-  ["желтый", "yellow"],
-  ["желтыи", "yellow"],
-  ["yellow", "yellow"],
 
   ["фиолетовый", "purple"],
   ["фиолетовыи", "purple"],
@@ -216,12 +440,8 @@ const COLOR_ALIASES = [
   ["золотои", "gold"],
   ["gold", "gold"],
 
-  ["лавандовый", "lavender"],
-  ["лавандовыи", "lavender"],
-  ["lavender", "lavender"],
-
-  ["midnight", "midnight"],
-  ["sage", "sage"],
+  ["оранжевый", "orange"],
+  ["оранжевый", "orange"],
   ["orange", "orange"],
 ];
 
@@ -232,12 +452,11 @@ function normalizeColor(value) {
     return null;
   }
 
-  for (
-    const [
-      source,
-      target,
-    ] of COLOR_ALIASES
-  ) {
+  const sorted = [...COLOR_ALIASES].sort(
+    (a, b) => b[0].length - a[0].length
+  );
+
+  for (const [source, target] of sorted) {
     if (text.includes(source)) {
       return target;
     }
@@ -264,9 +483,14 @@ function colorsEqual(a, b) {
 
   const aliases = [
     ["black", "space black"],
+    ["black", "midnight"],
     ["blue", "deep blue"],
+    ["blue", "sky blue"],
+    ["blue", "mist blue"],
     ["purple", "violet"],
     ["white", "cloud white"],
+    ["green", "sage"],
+    ["orange", "cosmic orange"],
   ];
 
   return aliases.some(
@@ -276,59 +500,43 @@ function colorsEqual(a, b) {
   );
 }
 
-/*
-|--------------------------------------------------------------------------
-| SIM / ESIM
-|--------------------------------------------------------------------------
-*/
+/* ============================================================
+   SIM
+============================================================ */
 
 function extractSimType(value) {
   const text = normalizeText(value);
 
-  const hasEsim =
-    /\besim\b/i.test(text);
+  const hasEsim = /\besim\b/i.test(text);
 
   const hasNanoSim =
     /\bnano\s*sim\b/i.test(text) ||
     /\bnanosim\b/i.test(text);
 
-  const hasSim =
-    /\bsim\b/i.test(text);
+  const hasSim = /\bsim\b/i.test(text);
 
   if (hasNanoSim && hasEsim) {
     return "nano+esim";
   }
 
-  if (
-    hasEsim &&
-    !hasNanoSim &&
-    !hasSim
-  ) {
+  if (hasEsim && !hasNanoSim && !hasSim) {
     return "esim";
   }
 
-  if (
-    hasNanoSim &&
-    !hasEsim
-  ) {
+  if (hasNanoSim && !hasEsim) {
     return "nano-sim";
   }
 
-  if (
-    hasSim &&
-    hasEsim
-  ) {
+  if (hasSim && hasEsim) {
     return "nano+esim";
   }
 
   return null;
 }
 
-/*
-|--------------------------------------------------------------------------
-| CATEGORY
-|--------------------------------------------------------------------------
-*/
+/* ============================================================
+   CATEGORY
+============================================================ */
 
 function getCategoryPath(product) {
   const model = extractModel(
@@ -364,7 +572,7 @@ function getCategoryPath(product) {
       return "/apple-iphone/apple-iphone-17";
 
     case "iphone 17 air":
-      return "/apple-iphone";
+      return "/apple-iphone/iphone-air";
 
     case "iphone 17 pro":
       return "/apple-iphone/iphone-17-pro";
@@ -372,25 +580,60 @@ function getCategoryPath(product) {
     case "iphone 17 pro max":
       return "/apple-iphone/iphone-17-pro-max";
 
+    case "imac":
+      return "/apple/kompyutery-apple/imac-24-2024";
+
+    case "airpods 4":
+    case "airpods 4 anc":
+      return "/apple/apple-airpods/apple-airpods-4-2024";
+
+    case "airpods max":
+    case "airpods max 2":
+      return "/apple/apple-airpods/apple-airpods-max";
+
+    case "airpods pro":
+    case "airpods pro 3":
+      return "/apple/apple-airpods/airpods-pro-3";
+
+    case "airtag":
+      return "/apple/apple-ipad";
+
+    case "ipad":
+    case "ipad 11":
+    case "ipad 10":
+    case "ipad 10.2":
+    case "ipad 10.9":
+    case "ipad air":
+    case "ipad air 11":
+    case "ipad air 13":
+    case "ipad pro":
+    case "ipad pro 11":
+    case "ipad pro 12.9":
+    case "ipad pro 13":
+      return "/apple/apple-ipad";
+
     default:
       return null;
   }
 }
 
-/*
-|--------------------------------------------------------------------------
-| FETCH
-|--------------------------------------------------------------------------
-*/
+/* ============================================================
+   FETCH
+============================================================ */
 
 async function fetchHtml(url) {
   const response = await fetch(url, {
     headers: {
       "User-Agent":
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/126 Safari/537.36",
+
       Accept:
-        "text/html,application/xhtml+xml",
+        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+
+      "Accept-Language":
+        "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
     },
+
     redirect: "follow",
   });
 
@@ -403,34 +646,26 @@ async function fetchHtml(url) {
   return response.text();
 }
 
-/*
-|--------------------------------------------------------------------------
-| HTML HELPERS
-|--------------------------------------------------------------------------
-*/
+/* ============================================================
+   HTML
+============================================================ */
 
 function decodeHtml(value) {
   return String(value ?? "")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#039;/g, "'")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#039;/gi, "'")
     .replace(/&#x27;/gi, "'")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">");
 }
 
 function stripHtml(value) {
   return decodeHtml(
     String(value ?? "")
-      .replace(
-        /<script[\s\S]*?<\/script>/gi,
-        " "
-      )
-      .replace(
-        /<style[\s\S]*?<\/style>/gi,
-        " "
-      )
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
       .replace(/<[^>]+>/g, " ")
   )
     .replace(/\s+/g, " ")
@@ -444,7 +679,7 @@ function absoluteUrl(value) {
 
   try {
     return new URL(
-      value,
+      decodeHtml(value),
       SOURCE_ORIGIN
     ).href;
   } catch {
@@ -452,129 +687,322 @@ function absoluteUrl(value) {
   }
 }
 
-function extractAttribute(
-  tag,
-  name
-) {
+function extractAttribute(tag, name) {
   const regex = new RegExp(
     `${name}\\s*=\\s*["']([^"']+)["']`,
     "i"
   );
 
-  return (
-    tag.match(regex)?.[1] ??
-    null
-  );
+  return tag.match(regex)?.[1] ?? null;
 }
 
-/*
-|--------------------------------------------------------------------------
-| CATEGORY PRODUCTS
-|--------------------------------------------------------------------------
-*/
+/* ============================================================
+   PRODUCT LINKS
+============================================================ */
+
+function isProductUrl(url) {
+  if (!url) {
+    return false;
+  }
+
+  const lower = url.toLowerCase();
+
+  if (!lower.startsWith(SOURCE_ORIGIN)) {
+    return false;
+  }
+
+  if (!lower.endsWith(".html")) {
+    return false;
+  }
+
+  return true;
+}
+
+/* ============================================================
+   CATEGORY PRODUCTS
+============================================================ */
 
 function parseCategoryProducts(html) {
   const products = [];
   const seen = new Set();
 
-  const regex =
-    /<a\b[^>]*data-hpm-href=["']1["'][^>]*href=["']([^"']+\.html[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  const linkRegex =
+    /<a\b[^>]*href=["']([^"']+\.html[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
 
   let match;
 
-  while (
-    (match = regex.exec(html))
-  ) {
-    const url = absoluteUrl(
-      decodeHtml(match[1])
-    );
+  while ((match = linkRegex.exec(html))) {
+    const url = absoluteUrl(match[1]);
 
-    if (
-      !url ||
-      seen.has(url)
-    ) {
+    if (!isProductUrl(url)) {
+      continue;
+    }
+
+    if (seen.has(url)) {
       continue;
     }
 
     const body = match[2];
 
     const imgTag =
-      body.match(
-        /<img\b[^>]*>/i
-      )?.[0] ?? "";
+      body.match(/<img\b[^>]*>/i)?.[0] ?? "";
 
     const alt = stripHtml(
-      extractAttribute(
-        imgTag,
-        "alt"
-      )
+      extractAttribute(imgTag, "alt")
     );
 
-    const bodyTitle =
-      stripHtml(body);
+    const bodyTitle = stripHtml(body);
 
-    const title =
-      alt || bodyTitle;
+    const title = alt || bodyTitle;
+
+    if (!title) {
+      continue;
+    }
+
+    if (title.length < 5 || title.length > 400) {
+      continue;
+    }
+
+    /*
+     * Не берём служебные ссылки.
+     */
+
+    const lowerTitle = title.toLowerCase();
 
     if (
-      !title ||
-      title.length < 8 ||
-      title.length > 200
+      lowerTitle.includes("купить") &&
+      lowerTitle.length < 15
     ) {
       continue;
     }
 
-    const thumbnail =
-      absoluteUrl(
-        extractAttribute(
-          imgTag,
-          "src"
-        ) ||
-          extractAttribute(
-            imgTag,
-            "data-src"
-          )
-      );
+    const thumbnail = absoluteUrl(
+      extractAttribute(imgTag, "src") ||
+      extractAttribute(imgTag, "data-src") ||
+      extractAttribute(imgTag, "data-original")
+    );
 
     seen.add(url);
 
     products.push({
       url,
       title,
+
       thumbnail,
-      memory:
-        extractMemory(title),
-      color:
-        normalizeColor(title),
-      simType:
-        extractSimType(title),
+
+      memory: extractMemory(title),
+
+      color: normalizeColor(title),
+
+      simType: extractSimType(title),
+
+      model: extractModel(title),
     });
   }
 
   return products;
 }
 
-/*
-|--------------------------------------------------------------------------
-| SCORE
-|--------------------------------------------------------------------------
-*/
+/* ============================================================
+   CATEGORY LINKS
+============================================================ */
+
+function parseCategoryLinks(html) {
+  const links = new Set();
+
+  const regex =
+    /<a\b[^>]*href=["']([^"']+)["'][^>]*>/gi;
+
+  let match;
+
+  while ((match = regex.exec(html))) {
+    const url = absoluteUrl(match[1]);
+
+    if (!url) {
+      continue;
+    }
+
+    if (!url.startsWith(SOURCE_ORIGIN)) {
+      continue;
+    }
+
+    if (!url.includes("/apple")) {
+      continue;
+    }
+
+    if (url.endsWith(".html")) {
+      continue;
+    }
+
+    if (
+      url.includes("#") ||
+      url.includes("?") ||
+      url.includes("javascript:")
+    ) {
+      continue;
+    }
+
+    links.add(url);
+  }
+
+  return [...links];
+}
+
+/* ============================================================
+   COLLECT PRODUCTS FROM CATEGORY TREE
+============================================================ */
+
+async function collectProductsFromCategory(
+  rootUrl
+) {
+  const allProducts = [];
+  const seenProducts = new Set();
+  const seenPages = new Set();
+
+  const queue = [
+    {
+      url: rootUrl,
+      depth: 0,
+    },
+  ];
+
+  while (
+    queue.length > 0 &&
+    seenPages.size < MAX_CATEGORY_PAGES
+  ) {
+    const current = queue.shift();
+
+    if (!current) {
+      break;
+    }
+
+    const {
+      url,
+      depth,
+    } = current;
+
+    if (seenPages.has(url)) {
+      continue;
+    }
+
+    seenPages.add(url);
+
+    log(
+      `    🔎 category depth=${depth}: ${url}`
+    );
+
+    let html;
+
+    try {
+      html = await fetchHtml(url);
+    } catch (error) {
+      log(
+        `    ⚠️ Не удалось открыть категорию: ${
+          error instanceof Error
+            ? error.message
+            : String(error)
+        }`
+      );
+
+      continue;
+    }
+
+    const products =
+      parseCategoryProducts(html);
+
+    for (const product of products) {
+      if (
+        !seenProducts.has(product.url)
+      ) {
+        seenProducts.add(product.url);
+        allProducts.push(product);
+      }
+    }
+
+    log(
+      `       товаров найдено: ${products.length}`
+    );
+
+    /*
+     * Если нашли товары — всё равно
+     * продолжаем один уровень вниз,
+     * потому что нужная модель может
+     * находиться в отдельной подкатегории.
+     */
+
+    if (depth < MAX_CATEGORY_DEPTH) {
+      const links =
+        parseCategoryLinks(html);
+
+      for (const link of links) {
+        if (seenPages.has(link)) {
+          continue;
+        }
+
+        queue.push({
+          url: link,
+          depth: depth + 1,
+        });
+      }
+    }
+
+    await sleep(REQUEST_DELAY_MS);
+  }
+
+  return allProducts;
+}
+
+/* ============================================================
+   TOKEN SIMILARITY
+============================================================ */
+
+function getTokens(value) {
+  return normalizeText(value)
+    .split(" ")
+    .filter(Boolean);
+}
+
+function tokenSimilarity(a, b) {
+  const left = new Set(getTokens(a));
+  const right = new Set(getTokens(b));
+
+  if (
+    left.size === 0 ||
+    right.size === 0
+  ) {
+    return 0;
+  }
+
+  let common = 0;
+
+  for (const token of left) {
+    if (right.has(token)) {
+      common++;
+    }
+  }
+
+  return (
+    common /
+    Math.max(left.size, right.size)
+  );
+}
+
+/* ============================================================
+   SCORE
+============================================================ */
 
 function scoreCandidate(
   product,
   candidate
 ) {
-  let score = 0;
+  const productText =
+    `${product.title} ${product.name ?? ""}`;
 
   const productModel =
-    extractModel(
-      `${product.title} ${product.name ?? ""}`
-    );
+    extractModel(productText);
 
   const candidateModel =
-    extractModel(
-      candidate.title
-    );
+    extractModel(candidate.title);
 
   if (
     !productModel ||
@@ -584,17 +1012,30 @@ function scoreCandidate(
   }
 
   if (
-    normalizeText(
-      productModel
-    ) ===
-    normalizeText(
+    !modelsEqual(
+      productModel,
       candidateModel
     )
   ) {
-    score += 55;
-  } else {
     return 0;
   }
+
+  let score = 60;
+
+  /*
+   * Model exact.
+   */
+
+  if (
+    normalizeModelText(productModel) ===
+    normalizeModelText(candidateModel)
+  ) {
+    score += 10;
+  }
+
+  /*
+   * Memory.
+   */
 
   const productMemory =
     extractMemory(
@@ -602,73 +1043,83 @@ function scoreCandidate(
     );
 
   const candidateMemory =
-    extractMemory(
-      candidate.title
-    );
+    candidate.memory;
 
-  if (productMemory) {
-    if (!candidateMemory) {
-      return 0;
-    }
-
+  if (
+    productMemory &&
+    candidateMemory
+  ) {
     if (
-      productMemory !==
+      productMemory ===
       candidateMemory
     ) {
+      score += 20;
+    } else {
+      /*
+       * Память есть, но другая —
+       * почти наверняка не тот товар.
+       */
+
       return 0;
     }
-
-    score += 25;
   }
+
+  /*
+   * Цвет.
+   */
 
   const productColor =
     normalizeColor(
-      `${product.title} ${
-        product.color ?? ""
-      }`
+      `${product.title} ${product.color ?? ""}`
     );
 
-  if (productColor) {
-    if (!candidate.color) {
-      return 0;
-    }
-
-    if (
-      !colorsEqual(
-        productColor,
-        candidate.color
-      )
-    ) {
-      return 0;
-    }
-
-    score += 20;
-  }
-
-  const productSim =
-    extractSimType(
-      product.title
-    );
-
-  const candidateSim =
-    candidate.simType;
+  const candidateColor =
+    candidate.color;
 
   if (
-    productSim &&
-    candidateSim &&
-    productSim === candidateSim
+    productColor &&
+    candidateColor
   ) {
-    score += 10;
+    if (
+      colorsEqual(
+        productColor,
+        candidateColor
+      )
+    ) {
+      score += 10;
+    } else {
+      /*
+       * Если оба цвета определены
+       * и они разные — не match.
+       */
+
+      return 0;
+    }
   }
 
-  return score;
+  /*
+   * Дополнительное сравнение названий.
+   */
+
+  const similarity =
+    tokenSimilarity(
+      productText,
+      candidate.title
+    );
+
+  if (similarity >= 0.7) {
+    score += 5;
+  }
+
+  return Math.min(
+    100,
+    score
+  );
 }
 
-/*
-|--------------------------------------------------------------------------
-| IMAGE FILTER
-|--------------------------------------------------------------------------
-*/
+/* ============================================================
+   IMAGE FILTER
+============================================================ */
 
 function isUsableImage(url) {
   if (!url) {
@@ -687,9 +1138,7 @@ function isUsableImage(url) {
   }
 
   if (
-    /\.(svg)(\?|$)/i.test(
-      lower
-    )
+    /\.svg(?:\?|$)/i.test(lower)
   ) {
     return false;
   }
@@ -702,23 +1151,21 @@ function isUsableImage(url) {
     return false;
   }
 
-  if (
-    lower.includes("pickup") ||
-    lower.includes("express") ||
-    lower.includes("delivery") ||
-    lower.includes("logo") ||
-    lower.includes("favicon") ||
-    lower.includes("sprite") ||
-    lower.includes("icon")
-  ) {
-    return false;
-  }
+  const forbidden = [
+    "pickup",
+    "express",
+    "delivery",
+    "logo",
+    "favicon",
+    "sprite",
+    "icon",
+    "yandex",
+  ];
 
   if (
-    lower.includes("/123/6000/") ||
-    lower.includes("yandex") ||
-    lower.includes(
-      "50144511b-1000x1000"
+    forbidden.some(
+      (word) =>
+        lower.includes(word)
     )
   ) {
     return false;
@@ -727,11 +1174,9 @@ function isUsableImage(url) {
   return true;
 }
 
-/*
-|--------------------------------------------------------------------------
-| PRODUCT PAGE IMAGES
-|--------------------------------------------------------------------------
-*/
+/* ============================================================
+   PRODUCT PAGE IMAGES
+============================================================ */
 
 function parseProductImages(
   html,
@@ -741,19 +1186,10 @@ function parseProductImages(
   const seen = new Set();
 
   const expectedModel =
-    extractModel(
-      expectedTitle
-    );
-
-  const expectedMemory =
-    extractMemory(
-      expectedTitle
-    );
+    extractModel(expectedTitle);
 
   const expectedColor =
-    normalizeColor(
-      expectedTitle
-    );
+    normalizeColor(expectedTitle);
 
   function add(url) {
     const absolute =
@@ -774,6 +1210,7 @@ function parseProductImages(
     }
 
     seen.add(absolute);
+
     images.push(absolute);
   }
 
@@ -783,11 +1220,9 @@ function parseProductImages(
   let match;
 
   while (
-    (match =
-      imgRegex.exec(html))
+    (match = imgRegex.exec(html))
   ) {
-    const tag =
-      match[0];
+    const tag = match[0];
 
     const alt =
       stripHtml(
@@ -797,47 +1232,23 @@ function parseProductImages(
         )
       );
 
-    /*
-     * Для самого товара фильтруем
-     * по alt, если alt присутствует.
-     */
     if (alt) {
       const altModel =
-        extractModel(
-          alt
-        );
+        extractModel(alt);
 
       if (
         expectedModel &&
         altModel &&
-        normalizeText(
+        !modelsEqual(
+          expectedModel,
           altModel
-        ) !==
-          normalizeText(
-            expectedModel
-          )
-      ) {
-        continue;
-      }
-
-      const altMemory =
-        extractMemory(
-          alt
-        );
-
-      if (
-        expectedMemory &&
-        altMemory &&
-        altMemory !==
-          expectedMemory
+        )
       ) {
         continue;
       }
 
       const altColor =
-        normalizeColor(
-          alt
-        );
+        normalizeColor(alt);
 
       if (
         expectedColor &&
@@ -861,6 +1272,20 @@ function parseProductImages(
     add(
       extractAttribute(
         tag,
+        "data-original"
+      )
+    );
+
+    add(
+      extractAttribute(
+        tag,
+        "data-lazy-src"
+      )
+    );
+
+    add(
+      extractAttribute(
+        tag,
         "src"
       )
     );
@@ -874,7 +1299,7 @@ function parseProductImages(
     if (srcset) {
       for (
         const item of
-          srcset.split(",")
+        srcset.split(",")
       ) {
         add(
           item
@@ -885,52 +1310,109 @@ function parseProductImages(
     }
   }
 
+  /*
+   * Прямые ссылки на изображения
+   * внутри HTML / JSON.
+   */
+
+  const imageUrlRegex =
+    /https?:\/\/stiltv\.ru\/image\/[^"'\\\s<>]+/gi;
+
+  const directUrls =
+    html.match(
+      imageUrlRegex
+    ) ?? [];
+
+  for (
+    const url of directUrls
+  ) {
+    add(
+      decodeHtml(url)
+    );
+  }
+
   return [
     ...new Set(images),
-  ].slice(0, 6);
+  ].slice(
+    0,
+    MAX_IMAGES
+  );
 }
 
-/*
-|--------------------------------------------------------------------------
-| FIND MATCH
-|--------------------------------------------------------------------------
-*/
+/* ============================================================
+   FIND MATCH
+============================================================ */
 
 async function findMatch(
   product
 ) {
-  const categoryPath =
-    getCategoryPath(
-      product
-    );
+  /*
+   * 1. Используем category из БД,
+   * если она есть.
+   */
 
-  if (!categoryPath) {
-    return {
-      status:
-        "unsupported_model",
-      candidates: [],
-    };
+  let categoryUrl = null;
+
+  if (product.category) {
+    const raw =
+      String(
+        product.category
+      ).trim();
+
+    if (
+      raw.startsWith("http")
+    ) {
+      categoryUrl = raw;
+    } else if (
+      raw.startsWith("/")
+    ) {
+      categoryUrl =
+        `${SOURCE_ORIGIN}${raw}`;
+    }
   }
 
-  const categoryUrl =
-    `${SOURCE_ORIGIN}${categoryPath}`;
+  /*
+   * 2. Иначе определяем категорию
+   * автоматически.
+   */
+
+  if (!categoryUrl) {
+    const path =
+      getCategoryPath(
+        product
+      );
+
+    if (!path) {
+      return {
+        status:
+          "unsupported_model",
+        candidates: [],
+      };
+    }
+
+    categoryUrl =
+      `${SOURCE_ORIGIN}${path}`;
+  }
 
   log(
     `    category: ${categoryUrl}`
   );
 
-  const categoryHtml =
-    await fetchHtml(
+  /*
+   * 3. Главное изменение:
+   *
+   * теперь не берём только 9 карточек.
+   *
+   * обходим дерево категорий.
+   */
+
+  const candidates =
+    await collectProductsFromCategory(
       categoryUrl
     );
 
-  const candidates =
-    parseCategoryProducts(
-      categoryHtml
-    );
-
   log(
-    `    cards: ${candidates.length}`
+    `    TOTAL CANDIDATES: ${candidates.length}`
   );
 
   if (
@@ -942,11 +1424,16 @@ async function findMatch(
     };
   }
 
+  /*
+   * 4. Считаем score.
+   */
+
   const scored =
     candidates
       .map(
         (candidate) => ({
           ...candidate,
+
           score:
             scoreCandidate(
               product,
@@ -954,58 +1441,71 @@ async function findMatch(
             ),
         })
       )
+      .filter(
+        (candidate) =>
+          candidate.score > 0
+      )
       .sort(
         (a, b) =>
-          b.score -
-          a.score
+          b.score - a.score
       );
 
-  const qualified =
-    scored.filter(
-      (candidate) =>
-        candidate.score >=
-        MIN_CONFIDENCE
-    );
-
   if (
-    qualified.length === 0
+    scored.length === 0
   ) {
     return {
       status: "not_found",
       candidates:
-        scored.slice(
-          0,
-          8
-        ),
+        candidates
+          .slice(0, 8)
+          .map(
+            (candidate) => ({
+              ...candidate,
+              score: 0,
+            })
+          ),
     };
   }
+
+  /*
+   * 5. Лучший кандидат.
+   */
 
   const best =
-    qualified[0];
+    scored[0];
 
-  const second =
-    qualified[1];
+  /*
+   * Защита от слабого совпадения.
+   */
 
   if (
-    second &&
-    best.score -
-      second.score <
-      MIN_GAP
+    best.score <
+    SAFE_MIN_SCORE
   ) {
     return {
-      status: "ambiguous",
+      status: "not_found",
       candidates:
-        qualified.slice(
-          0,
-          8
-        ),
+        scored.slice(0, 8),
     };
   }
+
+  log(
+    `    🎯 BEST MATCH: ${best.score}/100`
+  );
+
+  /*
+   * 6. Открываем страницу
+   * конкретного товара.
+   */
 
   const productHtml =
     await fetchHtml(
       best.url
     );
+
+  /*
+   * 7. Получаем картинки.
+   */
 
   const images =
     parseProductImages(
@@ -1017,11 +1517,12 @@ async function findMatch(
     images.length === 0
   ) {
     return {
-      status:
-        "no_images",
+      status: "no_images",
+
       candidate: best,
+
       candidates:
-        qualified.slice(
+        scored.slice(
           0,
           8
         ),
@@ -1030,23 +1531,23 @@ async function findMatch(
 
   return {
     status: "matched",
+
     candidate: {
       ...best,
       images,
     },
+
     candidates:
-      qualified.slice(
+      scored.slice(
         0,
         8
       ),
   };
 }
 
-/*
-|--------------------------------------------------------------------------
-| DATABASE
-|--------------------------------------------------------------------------
-*/
+/* ============================================================
+   DATABASE
+============================================================ */
 
 async function getProductsWithoutImages() {
   const result =
@@ -1068,7 +1569,9 @@ async function getProductsWithoutImages() {
       WHERE
         images IS NULL
         OR jsonb_array_length(images) = 0
-      ORDER BY title, id
+      ORDER BY
+        title,
+        id
       LIMIT $1
       `,
       [LIMIT]
@@ -1096,20 +1599,21 @@ async function updateProductImages(
   );
 }
 
-/*
-|--------------------------------------------------------------------------
-| MAIN
-|--------------------------------------------------------------------------
-*/
+/* ============================================================
+   MAIN
+============================================================ */
 
 async function main() {
   log("");
+
   log(
     "=============================================="
   );
+
   log(
-    "KUSAI MAX — SYNC PRODUCT IMAGES"
+    "KUSAI MAX — AUTO PRODUCT IMAGE SYNC"
   );
+
   log(
     "=============================================="
   );
@@ -1120,7 +1624,7 @@ async function main() {
     );
   } else if (SAFE_APPLY) {
     log(
-      "Mode: APPLY-SAFE — записываются только score >= 100 и однозначные совпадения"
+      "Mode: APPLY-SAFE — безопасная запись"
     );
   } else {
     log(
@@ -1128,10 +1632,14 @@ async function main() {
     );
   }
 
-  log(`Limit: ${LIMIT}`);
+  log(
+    `Limit: ${LIMIT}`
+  );
+
   log(
     `Source: ${SOURCE_ORIGIN}`
   );
+
   log("");
 
   const products =
@@ -1140,11 +1648,11 @@ async function main() {
   log(
     `Товаров без изображений: ${products.length}`
   );
+
   log("");
 
   let matched = 0;
   let safeApplied = 0;
-  let ambiguous = 0;
   let notFound = 0;
   let unsupported = 0;
   let noImages = 0;
@@ -1202,6 +1710,10 @@ async function main() {
           product
         );
 
+      /*
+       * MATCH
+       */
+
       if (
         result.status ===
         "matched"
@@ -1211,21 +1723,7 @@ async function main() {
         const candidate =
           result.candidate;
 
-        const second =
-          result.candidates?.[1];
-
-        const uniqueEnough =
-          !second ||
-          candidate.score -
-            second.score >=
-            MIN_GAP;
-
-        const safeEnough =
-          candidate.score >=
-            SAFE_MIN_SCORE &&
-          uniqueEnough &&
-          candidate.images.length >
-            0;
+        log("");
 
         log(
           `✅ MATCH ${candidate.score}/100`
@@ -1236,24 +1734,53 @@ async function main() {
         );
 
         log(
+          `   model: ${
+            candidate.model || "-"
+          }`
+        );
+
+        log(
+          `   memory: ${
+            candidate.memory ?? "-"
+          }`
+        );
+
+        log(
+          `   color: ${
+            candidate.color ?? "-"
+          }`
+        );
+
+        log(
           `   ${candidate.url}`
         );
 
         log(
-          `   images: ${candidate.images.length}`
+          `   images: ${
+            candidate.images.length
+          }`
         );
 
         for (
           const image of
-            candidate.images
+          candidate.images
         ) {
           log(
             `   ${image}`
           );
         }
 
+        /*
+         * SAFE APPLY
+         */
+
         if (SAFE_APPLY) {
-          if (safeEnough) {
+          if (
+            candidate.score >=
+              SAFE_MIN_SCORE &&
+            candidate.images.length >
+              0
+          ) {
             await updateProductImages(
               product.id,
               candidate.images
@@ -1268,10 +1795,16 @@ async function main() {
             skippedUnsafe++;
 
             log(
-              "   ⚠️ SAFE APPLY: пропущено — недостаточно уверенное совпадение"
+              "   ⚠️ SAFE APPLY: пропущено"
             );
           }
-        } else if (
+        }
+
+        /*
+         * NORMAL APPLY
+         */
+
+        else if (
           NORMAL_APPLY
         ) {
           await updateProductImages(
@@ -1282,7 +1815,13 @@ async function main() {
           log(
             "   💾 images записаны в PostgreSQL"
           );
-        } else {
+        }
+
+        /*
+         * DRY RUN
+         */
+
+        else {
           log(
             "   DRY RUN: PostgreSQL не изменён"
           );
@@ -1295,31 +1834,9 @@ async function main() {
         continue;
       }
 
-      if (
-        result.status ===
-        "ambiguous"
-      ) {
-        ambiguous++;
-
-        log(
-          "⚠️ AMBIGUOUS — пропущено"
-        );
-
-        for (
-          const candidate of
-            result.candidates
-        ) {
-          log(
-            `   [${candidate.score ?? "-"}] ${candidate.title}`
-          );
-
-          log(
-            `   ${candidate.url}`
-          );
-        }
-
-        continue;
-      }
+      /*
+       * UNSUPPORTED
+       */
 
       if (
         result.status ===
@@ -1334,6 +1851,10 @@ async function main() {
         continue;
       }
 
+      /*
+       * NO IMAGES
+       */
+
       if (
         result.status ===
         "no_images"
@@ -1341,32 +1862,29 @@ async function main() {
         noImages++;
 
         log(
-          "⚠️ Товар найден, но подходящих изображений нет"
+          "⚠️ Товар найден, но изображений нет"
         );
 
         log(
-          `   ${result.candidate?.title ?? "-"}`
+          `   ${
+            result.candidate?.title ??
+            "-"
+          }`
         );
 
         log(
-          `   ${result.candidate?.url ?? "-"}`
+          `   ${
+            result.candidate?.url ??
+            "-"
+          }`
         );
 
         continue;
       }
 
-      if (
-        result.status ===
-        "empty"
-      ) {
-        notFound++;
-
-        log(
-          "❌ Категория не содержит товарных карточек"
-        );
-
-        continue;
-      }
+      /*
+       * NOT FOUND
+       */
 
       notFound++;
 
@@ -1377,19 +1895,44 @@ async function main() {
       if (
         result.candidates?.length
       ) {
+        log(
+          "   Лучшие кандидаты:"
+        );
+
         for (
           const candidate of
-            result.candidates.slice(
-              0,
-              5
-            )
+          result.candidates.slice(
+            0,
+            8
+          )
         ) {
           log(
-            `   [${candidate.score ?? "-"}] ${candidate.title}`
+            `   [${candidate.score ?? 0}] ${candidate.title}`
           );
 
           log(
-            `   ${candidate.url}`
+            `       model: ${
+              candidate.model ||
+              "-"
+            }`
+          );
+
+          log(
+            `       memory: ${
+              candidate.memory ??
+              "-"
+            }`
+          );
+
+          log(
+            `       color: ${
+              candidate.color ??
+              "-"
+            }`
+          );
+
+          log(
+            `       ${candidate.url}`
           );
         }
       }
@@ -1410,45 +1953,50 @@ async function main() {
     );
   }
 
+  /*
+   * RESULT
+   */
+
   log("");
-  log(
-    "=============================================="
-  );
-  log("RESULT");
+
   log(
     "=============================================="
   );
 
   log(
-    `matched:       ${matched}`
+    "RESULT"
   );
 
   log(
-    `safe_applied:  ${safeApplied}`
+    "=============================================="
   );
 
   log(
-    `ambiguous:     ${ambiguous}`
+    `matched:        ${matched}`
   );
 
   log(
-    `not_found:     ${notFound}`
+    `safe_applied:   ${safeApplied}`
   );
 
   log(
-    `unsupported:   ${unsupported}`
+    `not_found:      ${notFound}`
   );
 
   log(
-    `no_images:     ${noImages}`
+    `unsupported:    ${unsupported}`
   );
 
   log(
-    `skipped_unsafe:${skippedUnsafe}`
+    `no_images:      ${noImages}`
   );
 
   log(
-    `errors:        ${errors}`
+    `skipped_unsafe: ${skippedUnsafe}`
+  );
+
+  log(
+    `errors:         ${errors}`
   );
 
   log("");
@@ -1459,7 +2007,7 @@ async function main() {
     );
 
     log(
-      "Безопасное применение: --apply-safe"
+      "Для записи используй: node scripts/sync-product-images.js --limit 100 --apply-safe"
     );
   } else if (SAFE_APPLY) {
     log(
@@ -1472,11 +2020,13 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(
-    "FATAL:",
-    error
-  );
+main().catch(
+  (error) => {
+    console.error(
+      "FATAL:",
+      error
+    );
 
-  process.exit(1);
-});
+    process.exit(1);
+  }
+);

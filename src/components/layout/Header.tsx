@@ -1,100 +1,124 @@
-import { Bell, MessageCircle, LogOut } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import {
+  Bell,
+  MessageCircle,
+  LogOut,
+} from "lucide-react";
+
+import {
+  useNavigate,
+} from "react-router-dom";
+
+import {
+  useState,
+} from "react";
 
 import { useAuth } from "../../auth/AuthContext";
-import { useConcierge } from "../../store/ConciergeContext";
+
+import {
+  useConcierge,
+} from "../../store/ConciergeContext";
 
 function Header() {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
 
-  const { messages } = useConcierge();
+  const {
+    user,
+    logout,
+  } = useAuth();
 
-  const [profileOpen, setProfileOpen] = useState(false);
+  const {
+    messages,
+  } = useConcierge();
 
-  /*
-   * Количество непрочитанных сообщений от администратора
-   * для текущего пользователя.
-   *
-   * Сообщение считается непрочитанным, если:
-   * author === "admin"
-   * и readByUser !== true
-   */
-  const unreadAdminMessages = messages.filter(
-    (message) =>
-      message.userLogin === user?.phone &&
-      message.author === "admin" &&
-      message.readByUser !== true
-  ).length;
+  const [
+    profileOpen,
+    setProfileOpen,
+  ] = useState(false);
+
+  const unreadAdminMessages =
+    messages.filter(
+      (message) =>
+        message.userLogin === user?.phone &&
+        message.author === "admin" &&
+        message.readByUser !== true
+    ).length;
 
   function handleLogout() {
     logout();
+
     setProfileOpen(false);
+
     navigate("/login");
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-zinc-800 bg-black/80 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-md items-center justify-between px-5 py-4">
+    <header className="kusai-header">
 
-        {/* Логотип */}
-        <div>
-          <h1 className="text-2xl font-black tracking-wide text-yellow-400">
-            KUSAI
-          </h1>
+      <div className="kusai-header-inner">
 
-          <p className="text-xs tracking-widest text-zinc-400">
-            MAX CLUB
-          </p>
-        </div>
+        {/* LOGO */}
 
-        {/* Правая часть */}
-        <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => navigate("/")}
+          style={{
+            border: 0,
+            padding: 0,
+            margin: 0,
+            background: "transparent",
+            color: "inherit",
+            textAlign: "left",
+          }}
+        >
+          <div className="kusai-logo">
 
-          {/* Уведомления */}
+            <div className="kusai-logo-main">
+              KUS<span>AI</span>
+            </div>
+
+            <div className="kusai-logo-sub">
+              MAX CLUB
+            </div>
+
+          </div>
+        </button>
+
+        {/* ACTIONS */}
+
+        <div className="kusai-header-actions">
+
+          {/* CONCIERGE */}
+
           <button
             type="button"
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-zinc-900 transition hover:bg-zinc-800"
-          >
-            <Bell
-              size={20}
-              className="text-white"
-            />
-          </button>
-
-          {/* Concierge */}
-          <button
-            type="button"
-            onClick={() => navigate("/concierge")}
-            className="relative flex h-11 w-11 items-center justify-center rounded-full bg-zinc-900 transition hover:bg-zinc-800"
+            className="kusai-icon-button"
+            onClick={() =>
+              navigate("/concierge")
+            }
           >
             <MessageCircle
-              size={20}
-              className="text-yellow-400"
+              size={19}
+              strokeWidth={2}
             />
 
-            {/* Счётчик непрочитанных */}
             {unreadAdminMessages > 0 && (
               <span
-                className="
-                  absolute
-                  -right-1
-                  -top-1
-                  flex
-                  min-h-5
-                  min-w-5
-                  items-center
-                  justify-center
-                  rounded-full
-                  bg-red-500
-                  px-1.5
-                  text-[11px]
-                  font-black
-                  leading-none
-                  text-white
-                  shadow-lg
-                "
+                style={{
+                  position: "absolute",
+                  marginTop: "-32px",
+                  marginLeft: "28px",
+                  minWidth: 17,
+                  height: 17,
+                  padding: "0 4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 999,
+                  background: "#ff008c",
+                  color: "#fff",
+                  fontSize: 8,
+                  fontWeight: 1000,
+                }}
               >
                 {unreadAdminMessages > 99
                   ? "99+"
@@ -103,47 +127,116 @@ function Header() {
             )}
           </button>
 
-          {/* Профиль */}
-          <div className="relative">
+          {/* NOTIFICATIONS */}
+
+          <button
+            type="button"
+            className="kusai-icon-button"
+          >
+            <Bell
+              size={19}
+              strokeWidth={2}
+            />
+          </button>
+
+          {/* PROFILE */}
+
+          <div
+            style={{
+              position: "relative",
+            }}
+          >
 
             <button
               type="button"
               onClick={() =>
-                setProfileOpen((prev) => !prev)
+                setProfileOpen(
+                  (prev) => !prev
+                )
               }
-              className="flex h-11 w-11 items-center justify-center rounded-full bg-yellow-400 text-lg font-bold text-black transition hover:scale-105"
+              className="kusai-icon-button"
+              style={{
+                background:
+                  "var(--kusai-pink)",
+                borderColor:
+                  "var(--kusai-pink)",
+                fontWeight: 1000,
+              }}
             >
-              {user?.name?.charAt(0).toUpperCase() || "U"}
+              {user?.name
+                ?.charAt(0)
+                .toUpperCase() || "U"}
             </button>
 
-            {/* Меню профиля */}
             {profileOpen && (
-              <div className="absolute right-0 top-14 z-50 w-56 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl">
+              <div
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: 50,
+                  width: 230,
+                  overflow: "hidden",
+                  borderRadius: 20,
+                  border:
+                    "1px solid #29292e",
+                  background: "#0d0d0f",
+                  boxShadow:
+                    "0 20px 60px rgba(0,0,0,.6)",
+                  zIndex: 1000,
+                }}
+              >
 
-                {/* Пользователь */}
-                <div className="border-b border-zinc-800 px-4 py-3">
-                  <p className="font-semibold text-white">
-                    {user?.name || "Пользователь"}
-                  </p>
+                <div
+                  style={{
+                    padding: 16,
+                    borderBottom:
+                      "1px solid #29292e",
+                  }}
+                >
+                  <div
+                    style={{
+                      color: "#fff",
+                      fontWeight: 900,
+                    }}
+                  >
+                    {user?.name ||
+                      "Пользователь"}
+                  </div>
 
                   {user?.phone && (
-                    <p className="mt-1 text-xs text-zinc-500">
+                    <div
+                      style={{
+                        marginTop: 5,
+                        color: "#777780",
+                        fontSize: 11,
+                      }}
+                    >
                       {user.phone}
-                    </p>
+                    </div>
                   )}
                 </div>
 
-                {/* Выход */}
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-red-400 transition hover:bg-zinc-800"
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: 16,
+                    border: 0,
+                    background:
+                      "transparent",
+                    color: "#ff5060",
+                    textAlign: "left",
+                    fontSize: 12,
+                    fontWeight: 800,
+                  }}
                 >
-                  <LogOut size={18} />
+                  <LogOut size={17} />
 
-                  <span>
-                    Выйти из профиля
-                  </span>
+                  Выйти из профиля
                 </button>
 
               </div>
@@ -154,6 +247,7 @@ function Header() {
         </div>
 
       </div>
+
     </header>
   );
 }

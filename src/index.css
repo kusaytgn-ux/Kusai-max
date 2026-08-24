@@ -1,55 +1,1250 @@
 @import "tailwindcss";
 
+:root {
+  --kusai-black: #050505;
+  --kusai-black-2: #09090b;
+  --kusai-card: #111114;
+  --kusai-card-2: #18181c;
+
+  --kusai-pink: #ff008c;
+  --kusai-pink-dark: #d90077;
+
+  --kusai-green: #9cff00;
+  --kusai-yellow: #ffe600;
+
+  --kusai-white: #f7f7f7;
+  --kusai-gray: #8b8b94;
+
+  --kusai-border: #29292e;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
 
 html,
 body,
 #root {
   width: 100%;
-  height: 100%;
+  min-height: 100%;
   margin: 0;
 }
 
-
-body {
-
-  overflow: hidden;
-
-  -webkit-overflow-scrolling: touch;
-
-  overscroll-behavior: none;
-
+html {
+  background: var(--kusai-black);
 }
 
+body {
+  margin: 0;
+
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      rgba(255, 0, 140, 0.1),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 0% 45%,
+      rgba(156, 255, 0, 0.04),
+      transparent 25%
+    ),
+    var(--kusai-black);
+
+  color: var(--kusai-white);
+
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+  -webkit-font-smoothing: antialiased;
+
+  overflow-x: hidden;
+
+  overscroll-behavior: none;
+}
 
 #root {
-
-  height: 100%;
-
-  overflow-y: auto;
+  min-height: 100vh;
 
   overflow-x: hidden;
 
   -webkit-overflow-scrolling: touch;
-
-  overscroll-behavior: contain;
-
 }
-
-
-
-/* Telegram Mini App */
-
-* {
-
-  -webkit-tap-highlight-color: transparent;
-
-}
-
-
 
 button,
 a {
-
   touch-action: manipulation;
+}
 
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: var(--kusai-pink);
+  color: white;
+}
+
+/* =========================================================
+   KUSAI APP
+========================================================= */
+
+.kusai-app {
+  min-height: 100vh;
+
+  background:
+    radial-gradient(
+      circle at 90% 0%,
+      rgba(255, 0, 140, 0.08),
+      transparent 30%
+    ),
+    #050505;
+}
+
+.kusai-page {
+  width: 100%;
+  max-width: 560px;
+
+  min-height: 100vh;
+
+  margin: 0 auto;
+
+  padding-bottom: 105px;
+
+  overflow-x: hidden;
+}
+
+/* =========================================================
+   HEADER
+========================================================= */
+
+.kusai-header {
+  position: sticky;
+
+  top: 0;
+
+  z-index: 100;
+
+  width: 100%;
+
+  background: rgba(5, 5, 5, 0.9);
+
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+}
+
+.kusai-header-inner {
+  width: 100%;
+  max-width: 560px;
+
+  height: 72px;
+
+  margin: 0 auto;
+
+  padding: 0 18px;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+}
+
+.kusai-logo {
+  display: flex;
+
+  flex-direction: column;
+
+  line-height: 0.9;
+}
+
+.kusai-logo-main {
+  color: white;
+
+  font-size: 28px;
+
+  font-weight: 1000;
+
+  letter-spacing: -1.7px;
+}
+
+.kusai-logo-main span {
+  color: var(--kusai-pink);
+}
+
+.kusai-logo-sub {
+  margin-top: 5px;
+
+  color: #77777f;
+
+  font-size: 8px;
+
+  font-weight: 900;
+
+  letter-spacing: 3px;
+}
+
+/* HEADER ACTIONS */
+
+.kusai-header-actions {
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+}
+
+.kusai-icon-button {
+  width: 42px;
+  height: 42px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid #29292e;
+
+  border-radius: 50%;
+
+  background: #111113;
+
+  color: white;
+
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.kusai-icon-button:hover {
+  border-color: var(--kusai-pink);
+
+  background: #18181b;
+}
+
+.kusai-icon-button:active {
+  transform: scale(0.92);
+}
+
+/* =========================================================
+   HERO
+========================================================= */
+
+.kusai-hero {
+  position: relative;
+
+  min-height: 330px;
+
+  margin: 16px;
+
+  padding: 30px 24px;
+
+  overflow: hidden;
+
+  border: 1px solid #29292e;
+
+  border-radius: 32px;
+
+  background:
+    linear-gradient(
+      145deg,
+      #1b1b1e 0%,
+      #111113 45%,
+      #080809 100%
+    );
+
+  box-shadow:
+    0 25px 80px rgba(0, 0, 0, 0.55);
+}
+
+.kusai-hero::before {
+  content: "";
+
+  position: absolute;
+
+  width: 300px;
+  height: 105px;
+
+  right: -95px;
+  top: 55px;
+
+  border-radius: 50%;
+
+  background: var(--kusai-pink);
+
+  transform: rotate(-14deg);
+
+  opacity: 0.85;
+
+  filter: blur(1px);
+}
+
+.kusai-hero::after {
+  content: "";
+
+  position: absolute;
+
+  width: 180px;
+  height: 65px;
+
+  right: -40px;
+  top: 115px;
+
+  border-radius: 50%;
+
+  background: var(--kusai-green);
+
+  transform: rotate(13deg);
+
+  opacity: 0.85;
+}
+
+.kusai-hero-content {
+  position: relative;
+
+  z-index: 2;
+}
+
+.kusai-eyebrow {
+  color: #888890;
+
+  font-size: 10px;
+
+  font-weight: 900;
+
+  letter-spacing: 2px;
+
+  text-transform: uppercase;
+}
+
+.kusai-hero-title {
+  max-width: 340px;
+
+  margin: 13px 0 0;
+
+  color: white;
+
+  font-size: 47px;
+
+  line-height: 0.87;
+
+  font-weight: 1000;
+
+  letter-spacing: -3px;
+}
+
+.kusai-hero-title .pink {
+  color: var(--kusai-pink);
+}
+
+.kusai-hero-title .green {
+  color: var(--kusai-green);
+}
+
+.kusai-hero-description {
+  max-width: 280px;
+
+  margin-top: 20px;
+
+  color: #9999a1;
+
+  font-size: 13px;
+
+  line-height: 1.5;
+}
+
+/* =========================================================
+   SECTIONS
+========================================================= */
+
+.kusai-section {
+  margin-top: 30px;
+
+  padding: 0 16px;
+}
+
+.kusai-section-header {
+  display: flex;
+
+  align-items: flex-end;
+
+  justify-content: space-between;
+
+  margin-bottom: 15px;
+}
+
+.kusai-section-title {
+  margin: 0;
+
+  color: white;
+
+  font-size: 25px;
+
+  line-height: 1;
+
+  font-weight: 1000;
+
+  letter-spacing: -1.2px;
+}
+
+.kusai-section-title span {
+  color: var(--kusai-pink);
+}
+
+.kusai-section-link {
+  color: var(--kusai-green);
+
+  font-size: 10px;
+
+  font-weight: 900;
+
+  text-transform: uppercase;
+}
+
+/* =========================================================
+   USER CARD
+========================================================= */
+
+.kusai-user-card {
+  position: relative;
+
+  overflow: hidden;
+
+  margin: 16px;
+
+  padding: 22px;
+
+  border: 1px solid #29292e;
+
+  border-radius: 28px;
+
+  background:
+    linear-gradient(
+      145deg,
+      #1a1a1d,
+      #0c0c0e
+    );
+
+  box-shadow:
+    0 22px 65px rgba(0, 0, 0, 0.45);
+}
+
+.kusai-user-card::before {
+  content: "";
+
+  position: absolute;
+
+  width: 230px;
+  height: 70px;
+
+  right: -90px;
+  top: 42px;
+
+  border-radius: 50%;
+
+  background: var(--kusai-pink);
+
+  transform: rotate(-14deg);
+
+  opacity: 0.72;
+}
+
+.kusai-user-card::after {
+  content: "";
+
+  position: absolute;
+
+  width: 120px;
+  height: 40px;
+
+  right: -20px;
+  top: 85px;
+
+  border-radius: 50%;
+
+  background: var(--kusai-green);
+
+  transform: rotate(12deg);
+
+  opacity: 0.7;
+}
+
+.kusai-user-card-top {
+  position: relative;
+
+  z-index: 2;
+
+  display: flex;
+
+  align-items: flex-start;
+
+  justify-content: space-between;
+}
+
+.kusai-user-name {
+  margin-top: 5px;
+
+  color: white;
+
+  font-size: 27px;
+
+  line-height: 1;
+
+  font-weight: 1000;
+
+  letter-spacing: -1px;
+}
+
+.kusai-user-status {
+  margin-top: 7px;
+
+  color: var(--kusai-green);
+
+  font-size: 10px;
+
+  font-weight: 900;
+
+  letter-spacing: 1.5px;
+}
+
+.kusai-score {
+  text-align: right;
+}
+
+.kusai-score-label {
+  color: #777780;
+
+  font-size: 8px;
+
+  font-weight: 900;
+
+  letter-spacing: 1px;
+}
+
+.kusai-score-value {
+  margin-top: 3px;
+
+  color: var(--kusai-pink);
+
+  font-size: 27px;
+
+  line-height: 1;
+
+  font-weight: 1000;
+}
+
+.kusai-stats {
+  position: relative;
+
+  z-index: 3;
+
+  display: grid;
+
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  gap: 9px;
+
+  margin-top: 22px;
+}
+
+.kusai-stat {
+  min-height: 75px;
+
+  padding: 14px;
+
+  border: 1px solid rgba(255, 255, 255, 0.06);
+
+  border-radius: 18px;
+
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.kusai-stat-label {
+  color: #777780;
+
+  font-size: 8px;
+
+  font-weight: 900;
+
+  letter-spacing: 0.8px;
+
+  text-transform: uppercase;
+}
+
+.kusai-stat-value {
+  margin-top: 6px;
+
+  color: white;
+
+  font-size: 20px;
+
+  font-weight: 1000;
+
+  letter-spacing: -0.5px;
+}
+
+.kusai-user-button {
+  position: relative;
+
+  z-index: 3;
+
+  width: 100%;
+
+  height: 52px;
+
+  margin-top: 13px;
+
+  border: 0;
+
+  border-radius: 17px;
+
+  background: var(--kusai-pink);
+
+  color: white;
+
+  font-size: 12px;
+
+  font-weight: 1000;
+
+  text-transform: uppercase;
+
+  box-shadow:
+    0 12px 35px rgba(255, 0, 140, 0.2);
+}
+
+/* =========================================================
+   PRODUCT GRID
+========================================================= */
+
+.kusai-product-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+
+  gap: 10px;
+}
+
+.kusai-product-card {
+  position: relative;
+
+  min-width: 0;
+
+  overflow: hidden;
+
+  border: 1px solid #29292e;
+
+  border-radius: 23px;
+
+  background:
+    linear-gradient(
+      145deg,
+      #18181b,
+      #0d0d0f
+    );
+
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.kusai-product-card:hover {
+  border-color: rgba(255, 0, 140, 0.45);
+}
+
+.kusai-product-card:active {
+  transform: scale(0.98);
+}
+
+.kusai-product-image {
+  position: relative;
+
+  width: 100%;
+
+  aspect-ratio: 1 / 1;
+
+  overflow: hidden;
+
+  background: #f3f3f3;
+}
+
+.kusai-product-image img {
+  width: 100%;
+  height: 100%;
+
+  display: block;
+
+  object-fit: contain;
+
+  transition: transform 0.25s ease;
+}
+
+.kusai-product-card:hover
+.kusai-product-image img {
+  transform: scale(1.04);
+}
+
+.kusai-product-badge {
+  position: absolute;
+
+  left: 9px;
+  top: 9px;
+
+  padding: 5px 8px;
+
+  border-radius: 8px;
+
+  background: var(--kusai-green);
+
+  color: #050505;
+
+  font-size: 8px;
+
+  font-weight: 1000;
+
+  text-transform: uppercase;
+}
+
+.kusai-product-favorite {
+  position: absolute;
+
+  right: 9px;
+  top: 9px;
+
+  width: 36px;
+  height: 36px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  border: 0;
+
+  border-radius: 50%;
+
+  background: rgba(0, 0, 0, 0.65);
+
+  color: white;
+
+  backdrop-filter: blur(10px);
+}
+
+.kusai-product-info {
+  padding: 12px;
+}
+
+.kusai-product-category {
+  color: #777780;
+
+  font-size: 9px;
+
+  font-weight: 700;
+
+  text-transform: uppercase;
+}
+
+.kusai-product-name {
+  min-height: 36px;
+
+  margin-top: 5px;
+
+  color: white;
+
+  font-size: 14px;
+
+  line-height: 1.25;
+
+  font-weight: 850;
+}
+
+.kusai-product-rating {
+  display: flex;
+
+  align-items: center;
+
+  gap: 5px;
+
+  margin-top: 8px;
+
+  color: #9999a1;
+
+  font-size: 10px;
+}
+
+.kusai-product-rating svg {
+  color: var(--kusai-green);
+}
+
+.kusai-product-price {
+  margin-top: 8px;
+
+  color: white;
+
+  font-size: 19px;
+
+  line-height: 1;
+
+  font-weight: 1000;
+
+  letter-spacing: -0.5px;
+}
+
+.kusai-product-stock {
+  display: inline-flex;
+
+  margin-top: 8px;
+
+  padding: 5px 8px;
+
+  border-radius: 8px;
+
+  font-size: 8px;
+
+  font-weight: 900;
+
+  text-transform: uppercase;
+}
+
+.kusai-product-stock.in-stock {
+  background: rgba(156, 255, 0, 0.12);
+
+  color: var(--kusai-green);
+}
+
+.kusai-product-stock.out-stock {
+  background: rgba(255, 50, 70, 0.1);
+
+  color: #ff5060;
+}
+
+.kusai-product-cart {
+  width: 100%;
+
+  height: 40px;
+
+  margin-top: 10px;
+
+  border: 0;
+
+  border-radius: 13px;
+
+  background: var(--kusai-pink);
+
+  color: white;
+
+  font-size: 10px;
+
+  font-weight: 1000;
+
+  text-transform: uppercase;
+}
+
+.kusai-product-cart:disabled {
+  background: #29292e;
+
+  color: #777780;
+}
+
+/* =========================================================
+   CATEGORY CHIPS
+========================================================= */
+
+.kusai-categories {
+  display: flex;
+
+  gap: 8px;
+
+  overflow-x: auto;
+
+  padding: 2px 16px 8px;
+
+  scrollbar-width: none;
+}
+
+.kusai-categories::-webkit-scrollbar {
+  display: none;
+}
+
+.kusai-category {
+  flex-shrink: 0;
+
+  padding: 11px 15px;
+
+  border: 1px solid #29292e;
+
+  border-radius: 13px;
+
+  background: #111113;
+
+  color: #888890;
+
+  font-size: 10px;
+
+  font-weight: 900;
+
+  text-transform: uppercase;
+}
+
+.kusai-category.active {
+  border-color: var(--kusai-pink);
+
+  background: var(--kusai-pink);
+
+  color: white;
+}
+
+/* =========================================================
+   TRADE IN
+========================================================= */
+
+.kusai-tradein {
+  position: relative;
+
+  overflow: hidden;
+
+  margin: 30px 16px 0;
+
+  padding: 25px;
+
+  border: 1px solid #29292e;
+
+  border-radius: 28px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #18181b,
+      #09090a
+    );
+}
+
+.kusai-tradein::before {
+  content: "TRADE";
+
+  position: absolute;
+
+  right: -25px;
+
+  top: 35px;
+
+  color: rgba(255, 0, 140, 0.08);
+
+  font-size: 85px;
+
+  line-height: 1;
+
+  font-weight: 1000;
+
+  transform: rotate(-8deg);
+}
+
+.kusai-tradein-label {
+  position: relative;
+
+  z-index: 2;
+
+  color: var(--kusai-green);
+
+  font-size: 9px;
+
+  font-weight: 1000;
+
+  letter-spacing: 2px;
+}
+
+.kusai-tradein-title {
+  position: relative;
+
+  z-index: 2;
+
+  margin-top: 8px;
+
+  color: white;
+
+  font-size: 34px;
+
+  line-height: 0.92;
+
+  font-weight: 1000;
+
+  letter-spacing: -2px;
+}
+
+.kusai-tradein-title span {
+  color: var(--kusai-pink);
+}
+
+.kusai-tradein-text {
+  position: relative;
+
+  z-index: 2;
+
+  max-width: 270px;
+
+  margin-top: 15px;
+
+  color: #85858f;
+
+  font-size: 12px;
+
+  line-height: 1.5;
+}
+
+/* =========================================================
+   BUTTONS
+========================================================= */
+
+.kusai-button {
+  width: 100%;
+
+  min-height: 54px;
+
+  border: 0;
+
+  border-radius: 17px;
+
+  background: var(--kusai-pink);
+
+  color: white;
+
+  font-size: 12px;
+
+  font-weight: 1000;
+
+  text-transform: uppercase;
+
+  box-shadow:
+    0 12px 35px rgba(255, 0, 140, 0.2);
+
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.kusai-button:active {
+  transform: scale(0.97);
+}
+
+.kusai-button-green {
+  background: var(--kusai-green);
+
+  color: #050505;
+
+  box-shadow:
+    0 12px 35px rgba(156, 255, 0, 0.16);
+}
+
+.kusai-button-outline {
+  background: transparent;
+
+  border: 1px solid #333338;
+
+  color: white;
+
+  box-shadow: none;
+}
+
+/* =========================================================
+   BOTTOM NAVIGATION
+========================================================= */
+
+.kusai-bottom-nav {
+  position: fixed;
+
+  left: 50%;
+
+  bottom: 0;
+
+  z-index: 999;
+
+  width: 100%;
+
+  max-width: 560px;
+
+  height: 82px;
+
+  padding:
+    8px
+    8px
+    calc(8px + env(safe-area-inset-bottom));
+
+  transform: translateX(-50%);
+
+  background: rgba(7, 7, 8, 0.95);
+
+  border-top: 1px solid #29292e;
+
+  backdrop-filter: blur(25px);
+
+  -webkit-backdrop-filter: blur(25px);
+}
+
+.kusai-bottom-nav-inner {
+  width: 100%;
+
+  height: 100%;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(5, 1fr);
+
+  align-items: center;
+}
+
+.kusai-nav-item {
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+
+  justify-content: center;
+
+  gap: 4px;
+
+  color: #66666e;
+
+  font-size: 8px;
+
+  font-weight: 900;
+
+  text-transform: uppercase;
+
+  transition:
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.kusai-nav-item svg {
+  width: 22px;
+  height: 22px;
+}
+
+.kusai-nav-item.active {
+  color: var(--kusai-pink);
+
+  transform: translateY(-1px);
+
+  text-shadow:
+    0 0 15px rgba(255, 0, 140, 0.4);
+}
+
+/* =========================================================
+   SEARCH
+========================================================= */
+
+.kusai-search {
+  width: 100%;
+
+  height: 52px;
+
+  padding: 0 17px;
+
+  border: 1px solid #29292e;
+
+  border-radius: 17px;
+
+  outline: none;
+
+  background: #111113;
+
+  color: white;
+
+  font-size: 13px;
+}
+
+.kusai-search::placeholder {
+  color: #606068;
+}
+
+.kusai-search:focus {
+  border-color: var(--kusai-pink);
+
+  box-shadow:
+    0 0 0 3px rgba(255, 0, 140, 0.08);
+}
+
+/* =========================================================
+   GENERIC DARK CARD
+========================================================= */
+
+.kusai-card {
+  border: 1px solid #29292e;
+
+  border-radius: 25px;
+
+  background:
+    linear-gradient(
+      145deg,
+      #18181b,
+      #0d0d0f
+    );
+}
+
+/* =========================================================
+   LOADING
+========================================================= */
+
+.kusai-loader {
+  width: 38px;
+  height: 38px;
+
+  margin: auto;
+
+  border: 3px solid #29292e;
+
+  border-top-color: var(--kusai-pink);
+
+  border-radius: 50%;
+
+  animation: kusai-spin 0.8s linear infinite;
+}
+
+@keyframes kusai-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* =========================================================
+   SMALL PHONES
+========================================================= */
+
+@media (max-width: 360px) {
+  .kusai-hero-title {
+    font-size: 40px;
+  }
+
+  .kusai-user-name {
+    font-size: 24px;
+  }
+
+  .kusai-product-name {
+    font-size: 13px;
+  }
+
+  .kusai-product-price {
+    font-size: 17px;
+  }
 }

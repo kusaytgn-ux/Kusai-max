@@ -3093,30 +3093,93 @@ app.get(
 const ONE_C_SYNC_INTERVAL = 24 * 60 * 60 * 1000;
 
 async function startOneCDailySync() {
-  console.log("1С daily sync запущен");
+  console.log("1С: ежедневная синхронизация клиентов запущена");
 
   const run = async () => {
     try {
+      console.log("");
       console.log("======================================");
       console.log("1С: НАЧАЛО СУТОЧНОЙ СИНХРОНИЗАЦИИ");
       console.log("======================================");
 
-      // здесь будет getAllCustomers
-      // здесь UPSERT клиентов
-      // здесь UPSERT продаж
+      const customers = await getAllOneCCustomers();
 
-      console.log("1С: СИНХРОНИЗАЦИЯ ЗАВЕРШЕНА");
+      console.log(
+        `1С: получено клиентов: ${customers.length}`
+      );
+
+      const BATCH_SIZE = 50;
+
+      let totalSynced = 0;
+      let totalCreated = 0;
+      let totalUpdated = 0;
+      let totalOperations = 0;
+
+      for (
+        let i = 0;
+        i < customers.length;
+        i += BATCH_SIZE
+      ) {
+        const batch = customers.slice(
+          i,
+          i + BATCH_SIZE
+        );
+
+        const batchNumber =
+          Math.floor(i / BATCH_SIZE) + 1;
+
+        const totalBatches =
+          Math.ceil(
+            customers.length / BATCH_SIZE
+          );
+
+        console.log(
+          `1С: обработка пачки ${batchNumber}/${totalBatches}`
+        );
+
+        const result =
+          await syncCustomersToPostgres(batch);
+
+        totalSynced += result.synced || 0;
+        totalCreated += result.created || 0;
+        totalUpdated += result.updated || 0;
+        totalOperations +=
+          result.operations || 0;
+
+        console.log(
+          `1С: пачка ${batchNumber}/${totalBatches} завершена`,
+          result
+        );
+      }
+
+      console.log("");
+      console.log("======================================");
+      console.log("1С: СУТОЧНАЯ СИНХРОНИЗАЦИЯ ЗАВЕРШЕНА");
+      console.log("======================================");
+
+      console.log({
+        synced: totalSynced,
+        created: totalCreated,
+        updated: totalUpdated,
+        operations: totalOperations,
+      });
+
     } catch (error) {
       console.error(
-        "1С: ОШИБКА СИНХРОНИЗАЦИИ:",
+        "1С: ОШИБКА СУТОЧНОЙ СИНХРОНИЗАЦИИ:",
         error?.message || error
       );
     }
   };
 
+  // Синхронизация сразу после запуска Render
   await run();
 
-  setInterval(run, ONE_C_SYNC_INTERVAL);
+  // Затем один раз в 24 часа
+  setInterval(
+    run,
+    ONE_C_SYNC_INTERVAL
+  );
 }
 
 const SYNC_INTERVAL =
