@@ -220,19 +220,43 @@ function UserCard() {
             </div>
           </div>
 
-          {/* Избранное — НЕ КЛИКАБЕЛЬНОЕ */}
+          {/* Избранное */}
 
-          <div className="kusai-stat p-4">
+          <button
+            type="button"
+            onClick={() => navigate("/favorites")}
+            className="
+              kusai-stat
+              w-full
+              p-4
+              text-left
+              transition
+              active:scale-[0.98]
+            "
+          >
             <p className="text-xs uppercase tracking-widest text-white/60">
               Избранное
             </p>
 
-            <div className="mt-2 flex items-center gap-2 text-white">
-              <Heart size={20} strokeWidth={2} />
+            <div className="mt-2 flex items-center justify-between text-white">
+              <div className="flex items-center gap-2">
+                <Heart
+                  size={20}
+                  strokeWidth={2}
+                />
 
-              <span>{favorites.length}</span>
+                <span>
+                  {favorites.length}
+                </span>
+              </div>
+
+              <ChevronRight
+                size={22}
+                color="white"
+                strokeWidth={2}
+              />
             </div>
-          </div>
+          </button>
 
           {/* Мои покупки */}
 
@@ -260,6 +284,11 @@ function UserCard() {
                 <br />
                 покупок
               </span>
+              <ChevronRight
+                size={22}
+                color="white"
+                strokeWidth={2}
+              />
             </div>
           </button>
         </div>

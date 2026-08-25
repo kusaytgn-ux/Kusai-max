@@ -1,4 +1,4 @@
-
+import FavoritesPage from "../pages/FavoritesPage";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import PurchasesPage from "../pages/PurchasesPage";
@@ -112,6 +112,11 @@ function AppRouter() {
       <Route
         path="/cart"
         element={<CartPage />}
+      />
+
+      <Route
+        path="/favorites"
+        element={<FavoritesPage />}
       />
 
 
