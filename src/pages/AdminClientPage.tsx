@@ -1,13 +1,17 @@
-import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
 import {
   ArrowLeft,
-  ShoppingBag,
-  Gift,
-  CirclePlus,
-  CircleMinus,
   CalendarDays,
+  ChevronRight,
+  CircleDollarSign,
+  Gift,
+  Package,
   Phone,
+  ShoppingBag,
+  TrendingDown,
+  TrendingUp,
+  UserRound,
 } from "lucide-react";
 
 type Client = {
@@ -29,29 +33,27 @@ type Operation = {
   reason?: string;
   operationDate?: string;
 
-  // Если API начнет возвращать эти поля,
-  // они автоматически будут отображаться.
+  // Данные покупки, если 1С их передает
   productName?: string;
+  productTitle?: string;
+  title?: string;
   price?: number;
+  sum?: number;
+  amount?: number;
+  purchaseDate?: string;
+  date?: string;
 };
 
 const API_URL = (
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:3001"
+  import.meta.env.VITE_API_URL || "http://localhost:3001"
 ).replace(/\/$/, "");
 
 function AdminClientPage() {
   const { id } = useParams();
-  const navigate = useNavigate();
 
-  const [client, setClient] =
-    useState<Client | null>(null);
-
-  const [operations, setOperations] =
-    useState<Operation[]>([]);
-
-  const [loading, setLoading] =
-    useState(true);
+  const [client, setClient] = useState<Client | null>(null);
+  const [operations, setOperations] = useState<Operation[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!id) {
@@ -59,29 +61,25 @@ function AdminClientPage() {
       return;
     }
 
-    const clientId: string = id;
+    const clientId = id;
 
     async function load() {
       try {
         setLoading(true);
 
         const clientUrl =
-          `${API_URL}/api/clients/${encodeURIComponent(
-            clientId
-          )}`;
+          `${API_URL}/api/clients/${encodeURIComponent(clientId)}`;
 
         const operationsUrl =
           `${API_URL}/api/clients/${encodeURIComponent(
             clientId
           )}/operations`;
 
-        const [
-          clientResponse,
-          operationsResponse,
-        ] = await Promise.all([
-          fetch(clientUrl),
-          fetch(operationsUrl),
-        ]);
+        const [clientResponse, operationsResponse] =
+          await Promise.all([
+            fetch(clientUrl),
+            fetch(operationsUrl),
+          ]);
 
         if (!clientResponse.ok) {
           throw new Error("Клиент не найден");
@@ -93,25 +91,20 @@ function AdminClientPage() {
           );
         }
 
-        const clientData =
-          await clientResponse.json();
-
+        const clientData = await clientResponse.json();
         const operationsData =
           await operationsResponse.json();
 
         if (!clientData.success) {
           throw new Error(
-            clientData.message ||
-              "Клиент не найден"
+            clientData.message || "Клиент не найден"
           );
         }
 
         setClient(clientData.client);
 
         setOperations(
-          Array.isArray(
-            operationsData.operations
-          )
+          Array.isArray(operationsData.operations)
             ? operationsData.operations
             : []
         );
@@ -131,13 +124,122 @@ function AdminClientPage() {
     void load();
   }, [id]);
 
+  const purchases = useMemo(() => {
+    return operations.filter((item) => {
+      const reason = item.reason?.toLowerCase() || "";
+
+      return (
+        item.type === "purchase" ||
+        item.type === "sale" ||
+        item.type === "buy" ||
+        item.productName ||
+        item.productTitle ||
+        item.title ||
+        item.price !== undefined ||
+        item.sum !== undefined ||
+        item.amount !== undefined ||
+        reason.includes("покуп") ||
+        reason.includes("iphone") ||
+        reason.includes("samsung") ||
+        reason.includes("sony") ||
+        reason.includes("playstation") ||
+        reason.includes("dyson")
+      );
+    });
+  }, [operations]);
+
+  const bonusOperations = useMemo(() => {
+    return operations.filter(
+      (item) => !purchases.includes(item)
+    );
+  }, [operations, purchases]);
+
+  function formatMoney(value?: number) {
+    if (value === undefined || value === null) {
+      return "—";
+    }
+
+    return `${Number(value).toLocaleString("ru-RU")} ₽`;
+  }
+
+  function formatPoints(value?: number) {
+    if (value === undefined || value === null) {
+      return "0";
+    }
+
+    return Number(value).toLocaleString("ru-RU");
+  }
+
+  function getPurchaseName(item: Operation) {
+    return (
+      item.productName ||
+      item.productTitle ||
+      item.title ||
+      item.reason ||
+      "Покупка"
+    );
+  }
+
+  function getPurchasePrice(item: Operation) {
+    return item.price ?? item.sum ?? item.amount;
+  }
+
+  function getPurchaseDate(item: Operation) {
+    return (
+      item.purchaseDate ||
+      item.date ||
+      item.operationDate
+    );
+  }
+
+  function formatDate(value?: string) {
+    if (!value) {
+      return "Дата не указана";
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+
+    return date.toLocaleDateString("ru-RU", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
+  }
+
+  function getStatusLabel(status?: string) {
+    if (!status) {
+      return "ACTIVE";
+    }
+
+    const normalized = status.toLowerCase();
+
+    const statuses: Record<string, string> = {
+      active: "ACTIVE",
+      inactive: "INACTIVE",
+      new: "NEW CLIENT",
+      "new client": "NEW CLIENT",
+      blocked: "BLOCKED",
+    };
+
+    return (
+      statuses[normalized] ||
+      status.toUpperCase()
+    );
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-black p-8 text-white">
-        <div className="rounded-3xl bg-zinc-900 p-8">
-          <p className="text-zinc-400">
-            Загрузка клиента...
-          </p>
+        <div className="mx-auto max-w-[1800px]">
+          <div className="rounded-[28px] border border-zinc-800 bg-zinc-900/80 p-8">
+            <p className="text-zinc-400">
+              Загрузка клиента...
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -146,518 +248,448 @@ function AdminClientPage() {
   if (!client) {
     return (
       <div className="min-h-screen bg-black p-8 text-white">
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="
-            mb-6
-            flex
-            items-center
-            gap-2
-            rounded-2xl
-            bg-zinc-900
-            px-5
-            py-3
-            font-semibold
-            text-white
-            transition
-            hover:bg-zinc-800
-          "
-        >
-          <ArrowLeft size={18} />
-          Назад
-        </button>
-
-        <div className="rounded-3xl bg-zinc-900 p-8">
-          <h1 className="text-2xl font-bold">
-            Клиент не найден
-          </h1>
+        <div className="mx-auto max-w-[1800px]">
+          <div className="rounded-[28px] border border-zinc-800 bg-zinc-900/80 p-8">
+            <h1 className="text-2xl font-bold">
+              Клиент не найден
+            </h1>
+          </div>
         </div>
       </div>
     );
   }
 
-  /*
-   * Операции, которые относятся к начислениям /
-   * списаниям бонусов.
-   */
-  const bonusOperations =
-    operations.filter(
-      (item) =>
-        item.type === "add" ||
-        item.type === "remove"
-    );
-
-  /*
-   * Пока API не отдает отдельный тип покупки,
-   * считаем покупками операции, где есть
-   * название товара.
-   *
-   * Как только backend начнет возвращать
-   * productName, они автоматически появятся
-   * здесь.
-   */
-  const purchases =
-    operations.filter(
-      (item) =>
-        Boolean(item.productName)
-    );
-
   return (
-    <div className="min-h-screen bg-black p-6 text-white md:p-8">
+    <div className="min-h-screen bg-black p-5 text-white md:p-8">
+      <div className="mx-auto max-w-[1800px]">
 
-      {/* ============================= */}
-      {/* HEADER */}
-      {/* ============================= */}
+        {/* HEADER */}
 
-      <div className="mb-8">
-
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="
-            mb-6
-            flex
-            items-center
-            gap-2
-            rounded-2xl
-            bg-zinc-900
-            px-5
-            py-3
-            font-semibold
-            text-zinc-300
-            transition
-            hover:bg-zinc-800
-            hover:text-white
-          "
-        >
-          <ArrowLeft size={18} />
-          Назад к пользователям
-        </button>
-
-        <div>
-          <h1 className="text-4xl font-black tracking-tight text-yellow-400 md:text-5xl">
-            {client.name}
-          </h1>
-
-          <div className="mt-3 flex items-center gap-2 text-zinc-400">
-            <Phone size={17} />
-            <span>{client.phone}</span>
-          </div>
-        </div>
-
-      </div>
-
-
-      {/* ============================= */}
-      {/* ОСНОВНЫЕ ПОКАЗАТЕЛИ */}
-      {/* ============================= */}
-
-      <div className="grid gap-5 md:grid-cols-3">
-
-        {/* Бонусы */}
-
-        <div
-          className="
-            rounded-3xl
-            bg-zinc-900
-            p-6
-          "
-        >
-          <div className="flex items-center gap-3">
-
-            <div
-              className="
-                flex
-                h-11
-                w-11
-                items-center
-                justify-center
-                rounded-2xl
-                bg-yellow-400/10
-                text-yellow-400
-              "
-            >
-              <Gift size={22} />
-            </div>
-
-            <p className="text-zinc-400">
-              Бонусы
-            </p>
-
-          </div>
-
-          <h2 className="mt-5 text-4xl font-black text-yellow-400">
-            {(client.points ?? 0).toLocaleString(
-              "ru-RU"
-            )}
-          </h2>
-        </div>
-
-
-        {/* Статус */}
-
-        <div
-          className="
-            rounded-3xl
-            bg-zinc-900
-            p-6
-          "
-        >
-          <p className="text-zinc-400">
-            Статус
-          </p>
-
-          <h2 className="mt-5 text-3xl font-black uppercase">
-            {client.status ??
-              "NEW CLIENT"}
-          </h2>
-        </div>
-
-
-        {/* Заказы */}
-
-        <div
-          className="
-            rounded-3xl
-            bg-zinc-900
-            p-6
-          "
-        >
-          <div className="flex items-center gap-3">
-
-            <div
-              className="
-                flex
-                h-11
-                w-11
-                items-center
-                justify-center
-                rounded-2xl
-                bg-zinc-800
-                text-zinc-300
-              "
-            >
-              <ShoppingBag size={22} />
-            </div>
-
-            <p className="text-zinc-400">
-              Заказы
-            </p>
-
-          </div>
-
-          <h2 className="mt-5 text-4xl font-black">
-            {client.orders ?? 0}
-          </h2>
-        </div>
-
-      </div>
-
-
-      {/* ============================= */}
-      {/* ПОКУПКИ */}
-      {/* ============================= */}
-
-      <div className="mt-8 rounded-3xl bg-zinc-900 p-6 md:p-8">
-
-        <div className="flex items-center justify-between">
-
-          <div>
-            <h2 className="text-2xl font-black">
-              Покупки
-            </h2>
-
-            <p className="mt-1 text-sm text-zinc-500">
-              История покупок клиента
-            </p>
-          </div>
-
-          <ShoppingBag
-            size={28}
-            className="text-zinc-600"
-          />
-
-        </div>
-
-
-        {purchases.length === 0 ? (
-
-          <div
+        <div className="mb-8">
+          <button
+            type="button"
+            onClick={() => window.history.back()}
             className="
-              mt-6
-              rounded-2xl
-              border
-              border-zinc-800
-              bg-black/30
-              p-6
+              mb-7
+              inline-flex
+              items-center
+              gap-2
+              rounded-xl
+              text-zinc-500
+              transition
+              hover:text-white
             "
           >
-            <p className="text-zinc-500">
-              Покупок пока нет
-            </p>
-          </div>
+            <ArrowLeft size={18} />
+            Назад
+          </button>
 
-        ) : (
-
-          <div className="mt-6 divide-y divide-zinc-800">
-
-            {purchases.map((purchase) => (
-
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
               <div
-                key={purchase.id}
                 className="
                   flex
-                  flex-col
-                  gap-4
-                  py-5
-                  md:flex-row
-                  md:items-center
-                  md:justify-between
+                  h-12
+                  w-12
+                  items-center
+                  justify-center
+                  rounded-2xl
+                  bg-yellow-400
+                  text-black
                 "
               >
-
-                <div className="flex items-center gap-4">
-
-                  <div
-                    className="
-                      flex
-                      h-12
-                      w-12
-                      shrink-0
-                      items-center
-                      justify-center
-                      rounded-2xl
-                      bg-zinc-800
-                      text-zinc-300
-                    "
-                  >
-                    <ShoppingBag size={21} />
-                  </div>
-
-                  <div>
-
-                    <p className="font-bold">
-                      {purchase.productName}
-                    </p>
-
-                    {purchase.operationDate && (
-                      <p className="mt-1 flex items-center gap-1 text-sm text-zinc-500">
-                        <CalendarDays size={14} />
-
-                        {new Date(
-                          purchase.operationDate
-                        ).toLocaleDateString(
-                          "ru-RU"
-                        )}
-                      </p>
-                    )}
-
-                  </div>
-
-                </div>
-
-
-                <div className="flex items-center gap-8 md:text-right">
-
-                  {typeof purchase.price ===
-                    "number" && (
-                    <div>
-                      <p className="text-xs text-zinc-500">
-                        Цена
-                      </p>
-
-                      <p className="font-bold">
-                        {purchase.price.toLocaleString(
-                          "ru-RU"
-                        )} ₽
-                      </p>
-                    </div>
-                  )}
-
-                  <div>
-                    <p className="text-xs text-zinc-500">
-                      Начислено
-                    </p>
-
-                    <p className="font-black text-yellow-400">
-                      +{purchase.points.toLocaleString(
-                        "ru-RU"
-                      )}
-                    </p>
-                  </div>
-
-                </div>
-
+                <UserRound size={23} />
               </div>
 
-            ))}
+              <div>
+                <h1 className="text-3xl font-black md:text-4xl">
+                  {client.name}
+                </h1>
 
+                <div className="mt-1 flex items-center gap-2 text-zinc-500">
+                  <Phone size={15} />
+                  {client.phone}
+                </div>
+              </div>
+            </div>
           </div>
+        </div>
 
-        )}
+        {/* STATS */}
 
-      </div>
-
-
-      {/* ============================= */}
-      {/* ИСТОРИЯ БОНУСОВ */}
-      {/* ============================= */}
-
-      <div className="mt-8 rounded-3xl bg-zinc-900 p-6 md:p-8">
-
-        <div className="flex items-center gap-3">
+        <div className="grid gap-4 md:grid-cols-3">
 
           <div
             className="
-              flex
-              h-11
-              w-11
-              items-center
-              justify-center
-              rounded-2xl
-              bg-zinc-800
-              text-zinc-300
+              rounded-[28px]
+              border
+              border-zinc-800
+              bg-[#19191c]
+              p-6
             "
           >
-            <Gift size={21} />
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-zinc-500">
+                Бонусы
+              </p>
+
+              <Gift
+                size={20}
+                className="text-yellow-400"
+              />
+            </div>
+
+            <p className="mt-4 text-4xl font-black text-yellow-400">
+              {formatPoints(
+                client.points ?? client.bonuses
+              )}
+            </p>
           </div>
 
-          <div>
-            <h2 className="text-2xl font-black">
-              История бонусов
-            </h2>
+          <div
+            className="
+              rounded-[28px]
+              border
+              border-zinc-800
+              bg-[#19191c]
+              p-6
+            "
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-zinc-500">
+                Статус
+              </p>
 
-            <p className="mt-1 text-sm text-zinc-500">
-              Все начисления и списания
+              <div className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
+            </div>
+
+            <p className="mt-4 text-2xl font-black">
+              {getStatusLabel(client.status)}
+            </p>
+          </div>
+
+          <div
+            className="
+              rounded-[28px]
+              border
+              border-zinc-800
+              bg-[#19191c]
+              p-6
+            "
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-zinc-500">
+                Заказы
+              </p>
+
+              <ShoppingBag
+                size={20}
+                className="text-zinc-500"
+              />
+            </div>
+
+            <p className="mt-4 text-4xl font-black">
+              {client.orders ?? purchases.length}
             </p>
           </div>
 
         </div>
 
+        {/* PURCHASES */}
 
-        {bonusOperations.length === 0 ? (
+        <section
+          className="
+            mt-5
+            rounded-[28px]
+            border
+            border-zinc-800
+            bg-[#19191c]
+            p-6
+            md:p-8
+          "
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-black">
+                Покупки
+              </h2>
 
-          <div
-            className="
-              mt-6
-              rounded-2xl
-              border
-              border-zinc-800
-              bg-black/30
-              p-6
-            "
-          >
-            <p className="text-zinc-500">
-              Операций пока нет
-            </p>
+              <p className="mt-1 text-sm text-zinc-500">
+                История покупок клиента
+              </p>
+            </div>
+
+            <Package
+              size={24}
+              className="text-zinc-600"
+            />
           </div>
 
-        ) : (
+          {purchases.length === 0 ? (
+            <div
+              className="
+                mt-6
+                rounded-2xl
+                border
+                border-zinc-800
+                bg-black/30
+                p-8
+                text-center
+              "
+            >
+              <ShoppingBag
+                size={36}
+                className="mx-auto text-zinc-700"
+              />
 
-          <div className="mt-6 divide-y divide-zinc-800">
+              <p className="mt-3 text-zinc-500">
+                Покупок пока нет
+              </p>
+            </div>
+          ) : (
+            <div className="mt-6 overflow-hidden rounded-2xl border border-zinc-800">
+              {purchases.map((item, index) => {
+                const price =
+                  getPurchasePrice(item);
 
-            {bonusOperations.map((item) => {
+                const purchaseDate =
+                  getPurchaseDate(item);
 
-              const isAdd =
-                item.type === "add";
-
-              return (
-                <div
-                  key={item.id}
-                  className="
-                    flex
-                    items-center
-                    justify-between
-                    gap-4
-                    py-5
-                  "
-                >
-
-                  <div className="flex min-w-0 items-center gap-4">
-
-                    <div
-                      className={`
-                        flex
-                        h-11
-                        w-11
-                        shrink-0
-                        items-center
-                        justify-center
-                        rounded-2xl
-                        ${
-                          isAdd
-                            ? "bg-green-500/10 text-green-400"
-                            : "bg-red-500/10 text-red-400"
-                        }
-                      `}
-                    >
-                      {isAdd ? (
-                        <CirclePlus size={22} />
-                      ) : (
-                        <CircleMinus size={22} />
-                      )}
-                    </div>
-
-                    <div className="min-w-0">
-
-                      <p className="font-bold">
-                        {isAdd
-                          ? "Начисление"
-                          : "Списание"}
-                      </p>
-
-                      {item.reason && (
-                        <p className="mt-1 truncate text-sm text-zinc-500">
-                          {item.reason}
-                        </p>
-                      )}
-
-                      {item.operationDate && (
-                        <p className="mt-1 text-xs text-zinc-600">
-                          {new Date(
-                            item.operationDate
-                          ).toLocaleDateString(
-                            "ru-RU"
-                          )}
-                        </p>
-                      )}
-
-                    </div>
-
-                  </div>
-
-
+                return (
                   <div
+                    key={item.id}
                     className={`
-                      shrink-0
-                      text-lg
-                      font-black
+                      flex
+                      flex-col
+                      gap-5
+                      px-5
+                      py-5
+                      transition
+                      hover:bg-white/[0.02]
+                      md:flex-row
+                      md:items-center
+                      md:justify-between
                       ${
-                        isAdd
-                          ? "text-green-400"
-                          : "text-red-400"
+                        index !==
+                        purchases.length - 1
+                          ? "border-b border-zinc-800"
+                          : ""
                       }
                     `}
                   >
-                    {isAdd ? "+" : "-"}
-                    {Math.abs(
-                      item.points
-                    ).toLocaleString(
-                      "ru-RU"
-                    )}
+                    <div className="flex min-w-0 items-center gap-4">
+                      <div
+                        className="
+                          flex
+                          h-11
+                          w-11
+                          shrink-0
+                          items-center
+                          justify-center
+                          rounded-xl
+                          bg-zinc-800
+                        "
+                      >
+                        <ShoppingBag
+                          size={19}
+                          className="text-zinc-400"
+                        />
+                      </div>
+
+                      <div className="min-w-0">
+                        <p className="truncate text-lg font-bold">
+                          {getPurchaseName(item)}
+                        </p>
+
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-zinc-500">
+                          <CalendarDays size={14} />
+
+                          {formatDate(
+                            purchaseDate
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-8 md:justify-end">
+                      <div className="text-left md:text-right">
+                        <p className="text-sm text-zinc-500">
+                          Сумма
+                        </p>
+
+                        <p className="mt-1 text-xl font-black">
+                          {formatMoney(price)}
+                        </p>
+                      </div>
+
+                      <div className="min-w-[120px] text-left md:text-right">
+                        <p className="text-sm text-zinc-500">
+                          Начислено
+                        </p>
+
+                        <p className="mt-1 text-lg font-bold text-yellow-400">
+                          +{formatPoints(item.points)}
+                        </p>
+                      </div>
+
+                      <ChevronRight
+                        size={18}
+                        className="hidden text-zinc-700 md:block"
+                      />
+                    </div>
                   </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
-                </div>
-              );
-            })}
+        {/* BONUS HISTORY */}
 
+        <section
+          className="
+            mt-5
+            rounded-[28px]
+            border
+            border-zinc-800
+            bg-[#19191c]
+            p-6
+            md:p-8
+          "
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-black">
+                История бонусов
+              </h2>
+
+              <p className="mt-1 text-sm text-zinc-500">
+                Все начисления и списания
+              </p>
+            </div>
+
+            <CircleDollarSign
+              size={24}
+              className="text-zinc-600"
+            />
           </div>
 
-        )}
+          {bonusOperations.length === 0 ? (
+            <div
+              className="
+                mt-6
+                rounded-2xl
+                border
+                border-zinc-800
+                bg-black/30
+                p-8
+                text-center
+              "
+            >
+              <p className="text-zinc-500">
+                Операций пока нет
+              </p>
+            </div>
+          ) : (
+            <div className="mt-6 overflow-hidden rounded-2xl border border-zinc-800">
+              {bonusOperations.map(
+                (item, index) => {
+                  const isAdd =
+                    item.type === "add" ||
+                    item.points > 0;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`
+                        flex
+                        items-center
+                        justify-between
+                        gap-4
+                        px-5
+                        py-5
+                        ${
+                          index !==
+                          bonusOperations.length - 1
+                            ? "border-b border-zinc-800"
+                            : ""
+                        }
+                      `}
+                    >
+                      <div className="flex min-w-0 items-center gap-4">
+                        <div
+                          className={`
+                            flex
+                            h-10
+                            w-10
+                            shrink-0
+                            items-center
+                            justify-center
+                            rounded-xl
+                            ${
+                              isAdd
+                                ? "bg-yellow-400/10"
+                                : "bg-red-500/10"
+                            }
+                          `}
+                        >
+                          {isAdd ? (
+                            <TrendingUp
+                              size={18}
+                              className="text-yellow-400"
+                            />
+                          ) : (
+                            <TrendingDown
+                              size={18}
+                              className="text-red-400"
+                            />
+                          )}
+                        </div>
+
+                        <div className="min-w-0">
+                          <p className="font-bold">
+                            {item.reason ||
+                              (isAdd
+                                ? "Начисление"
+                                : "Списание")}
+                          </p>
+
+                          {item.operationDate && (
+                            <p className="mt-1 text-sm text-zinc-500">
+                              {formatDate(
+                                item.operationDate
+                              )}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <p
+                        className={`
+                          shrink-0
+                          text-lg
+                          font-black
+                          ${
+                            isAdd
+                              ? "text-yellow-400"
+                              : "text-red-400"
+                          }
+                        `}
+                      >
+                        {isAdd ? "+" : "-"}
+                        {formatPoints(
+                          Math.abs(item.points)
+                        )}
+                      </p>
+                    </div>
+                  );
+                }
+              )}
+            </div>
+          )}
+        </section>
 
       </div>
-
     </div>
   );
 }
