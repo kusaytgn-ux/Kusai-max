@@ -5,8 +5,6 @@ import {
   useState,
 } from "react";
 
-
-
 import {
   MessageCircle,
   Send,
@@ -16,7 +14,6 @@ import {
 } from "lucide-react";
 
 import { useConcierge } from "../../store/ConciergeContext";
-
 
 function AdminConcierge() {
   const {
@@ -28,148 +25,94 @@ function AdminConcierge() {
     getTotalUnreadForAdmin,
   } = useConcierge();
 
-  const [selectedUser, setSelectedUser] =
-    useState("");
+  const [selectedUser, setSelectedUser] = useState("");
+  const [text, setText] = useState("");
+  const [newUser, setNewUser] = useState("");
+  const [showNewChat, setShowNewChat] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [userNames, setUserNames] = useState<Record<string, string>>({});
 
-  const [text, setText] =
-    useState("");
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  const [newUser, setNewUser] =
-    useState("");
+  useEffect(() => {
+    async function loadUsers() {
+      try {
+        const phones = Array.from(
+          new Set(
+            messages
+              .map((message) => message.userLogin)
+              .filter(Boolean)
+          )
+        );
 
-  const [showNewChat, setShowNewChat] =
-    useState(false);
+        const names: Record<string, string> = {};
 
-  const [deleteConfirm, setDeleteConfirm] =
-    useState(false);
-
-  const [userNames, setUserNames] =
-    useState<Record<string, string>>({});
-
-  const bottomRef =
-    useRef<HTMLDivElement>(null);
-
-  /*
-   * =========================
-   * ЗАГРУЗКА ИМЁН ПОЛЬЗОВАТЕЛЕЙ
-   * =========================
-   *
-   * Предполагается:
-   * users/{id}
-   *
-   * {
-   *   name: "Ярослав",
-   *   phone: "+79061234567"
-   * }
-   */
-
-useEffect(() => {
-  async function loadUsers() {
-    try {
-      const phones = Array.from(
-        new Set(
-          messages
-            .map(
-              (message) =>
-                message.userLogin
-            )
-            .filter(Boolean)
-        )
-      );
-
-      const names: Record<
-        string,
-        string
-      > = {};
-
-      await Promise.all(
-        phones.map(async (phone) => {
-          try {
-            const response =
-              await fetch(
+        await Promise.all(
+          phones.map(async (phone) => {
+            try {
+              const response = await fetch(
                 `${
                   (
-                    import.meta.env
-                      .VITE_API_URL ||
+                    import.meta.env.VITE_API_URL ||
                     "http://localhost:3001"
                   ).replace(/\/$/, "")
-                }/api/clients/phone/${encodeURIComponent(
-                  phone
-                )}`
+                }/api/clients/phone/${encodeURIComponent(phone)}`
               );
 
-            if (!response.ok) {
-              return;
+              if (!response.ok) {
+                return;
+              }
+
+              const data = await response.json();
+
+              if (data.success) {
+                names[phone] =
+                  data.client?.name || "Пользователь";
+              }
+            } catch (error) {
+              console.error(
+                "Ошибка получения клиента:",
+                error
+              );
             }
+          })
+        );
 
-            const data =
-              await response.json();
-
-            if (data.success) {
-              names[phone] =
-                data.client?.name ||
-                "Пользователь";
-            }
-          } catch (error) {
-            console.error(
-              "Ошибка получения клиента:",
-              error
-            );
-          }
-        })
-      );
-
-      setUserNames(names);
-    } catch (error) {
-      console.error(
-        "Ошибка загрузки пользователей:",
-        error
-      );
+        setUserNames(names);
+      } catch (error) {
+        console.error(
+          "Ошибка загрузки пользователей:",
+          error
+        );
+      }
     }
-  }
 
-  void loadUsers();
-}, [messages]);
-
-  /*
-   * =========================
-   * СПИСОК ПОЛЬЗОВАТЕЛЕЙ
-   * =========================
-   */
+    void loadUsers();
+  }, [messages]);
 
   const users = useMemo(() => {
     const list = [
       ...new Set(
         messages
-          .map(
-            (message) =>
-              message.userLogin
-          )
+          .map((message) => message.userLogin)
           .filter(Boolean)
       ),
     ];
 
-    /*
-     * Сначала пользователи,
-     * у которых самое новое сообщение.
-     */
-
     return list.sort((a, b) => {
-      const lastA =
-        [...messages]
-          .reverse()
-          .find(
-            (message) =>
-              message.userLogin === a
-          );
+      const lastA = [...messages]
+        .reverse()
+        .find(
+          (message) =>
+            message.userLogin === a
+        );
 
-      const lastB =
-        [...messages]
-          .reverse()
-          .find(
-            (message) =>
-              message.userLogin === b
-          );
+      const lastB = [...messages]
+        .reverse()
+        .find(
+          (message) =>
+            message.userLogin === b
+        );
 
       const timeA = lastA?.createdAt
         ? new Date(
@@ -187,26 +130,12 @@ useEffect(() => {
     });
   }, [messages]);
 
-  /*
-   * =========================
-   * ПОЛУЧИТЬ ИМЯ
-   * =========================
-   */
-
-  function getUserName(
-    phone: string
-  ) {
+  function getUserName(phone: string) {
     return (
       userNames[phone] ||
       "Пользователь"
     );
   }
-
-  /*
-   * =========================
-   * ЧАТ ВЫБРАННОГО ПОЛЬЗОВАТЕЛЯ
-   * =========================
-   */
 
   const chat = useMemo(
     () =>
@@ -218,52 +147,34 @@ useEffect(() => {
     [messages, selectedUser]
   );
 
-  /*
-   * =========================
-   * ОБЩЕЕ КОЛИЧЕСТВО НЕПРОЧИТАННЫХ
-   * =========================
-   */
-
   const totalUnread =
     getTotalUnreadForAdmin();
 
-  /*
-   * =========================
-   * ПРОКРУТКА ЧАТА ВНИЗ
-   * =========================
-   */
+  useEffect(() => {
+    if (!selectedUser) {
+      return;
+    }
 
- useEffect(() => {
-  if (!selectedUser) {
-    return;
-  }
+    const hasUnread = messages.some(
+      (message) =>
+        message.userLogin === selectedUser &&
+        message.author === "user" &&
+        message.readByAdmin !== true
+    );
 
-  const hasUnread = messages.some(
-    (message) =>
-      message.userLogin === selectedUser &&
-      message.author === "user" &&
-      message.readByAdmin !== true
-  );
+    if (!hasUnread) {
+      return;
+    }
 
-  if (!hasUnread) {
-    return;
-  }
-
-  void markMessagesAsRead(
+    void markMessagesAsRead(
+      selectedUser,
+      "user"
+    );
+  }, [
     selectedUser,
-    "user"
-  );
-}, [
-  selectedUser,
-  messages,
-  markMessagesAsRead,
-]);
-
-  /*
-   * =========================
-   * ПРОЧИТАТЬ СООБЩЕНИЯ
-   * =========================
-   */
+    messages,
+    markMessagesAsRead,
+  ]);
 
   useEffect(() => {
     if (!selectedUser) {
@@ -284,12 +195,6 @@ useEffect(() => {
     messages,
     markMessagesAsRead,
   ]);
-
-  /*
-   * =========================
-   * ОТПРАВКА СООБЩЕНИЯ
-   * =========================
-   */
 
   async function handleSend() {
     if (
@@ -314,31 +219,11 @@ useEffect(() => {
     }
   }
 
-  /*
-   * =========================
-   * НОВЫЙ ЧАТ
-   * =========================
-   *
-   * Пользователь вводит:
-   * 9061234567
-   *
-   * Мы отправляем:
-   * +79061234567
-   */
-
   function handleNewUserChange(
     value: string
   ) {
-    /*
-     * Оставляем только цифры.
-     */
-
     const digits =
       value.replace(/\D/g, "");
-
-    /*
-     * Максимум 10 цифр.
-     */
 
     const limited =
       digits.slice(0, 10);
@@ -347,10 +232,6 @@ useEffect(() => {
   }
 
   function handleStartNewChat() {
-    /*
-     * Должно быть ровно 10 цифр.
-     */
-
     if (newUser.length !== 10) {
       return;
     }
@@ -359,17 +240,9 @@ useEffect(() => {
       `+7${newUser}`;
 
     setSelectedUser(phone);
-
     setNewUser("");
-
     setShowNewChat(false);
   }
-
-  /*
-   * =========================
-   * УДАЛЕНИЕ ЧАТА
-   * =========================
-   */
 
   async function handleDeleteChat() {
     if (!selectedUser) {
@@ -393,44 +266,49 @@ useEffect(() => {
   }
 
   return (
-    <div className="flex h-[80vh] min-h-0 overflow-hidden rounded-3xl bg-zinc-900">
+    <div className="flex h-[80vh] min-h-0 overflow-hidden rounded-[28px] border border-zinc-800 bg-black shadow-2xl">
 
       {/* ========================= */}
       {/* ЛЕВАЯ КОЛОНКА */}
       {/* ========================= */}
 
-      <div className="flex w-80 min-h-0 shrink-0 flex-col border-r border-zinc-800">
+      <div className="flex w-80 min-h-0 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950">
 
         {/* Заголовок */}
 
         <div className="flex shrink-0 items-center justify-between border-b border-zinc-800 p-5">
 
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
 
-            <MessageCircle
-              size={32}
-              className="text-yellow-400"
-            />
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#A8FF00] text-black">
+              <MessageCircle size={22} strokeWidth={2.5} />
+            </div>
 
-            <div>
+            <div className="min-w-0">
 
-              <h2 className="text-2xl font-bold text-white">
-                Concierge
-              </h2>
+              <div className="flex items-center gap-2">
 
-              <p className="text-sm text-zinc-500">
+                <h2 className="truncate text-xl font-black text-white">
+                  Concierge
+                </h2>
+
+                {totalUnread > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#EC008C] px-1.5 text-[10px] font-black text-white">
+                    {totalUnread > 99
+                      ? "99+"
+                      : totalUnread}
+                  </span>
+                )}
+
+              </div>
+
+              <p className="mt-0.5 text-xs text-zinc-500">
                 {totalUnread > 0
                   ? `${totalUnread} новых сообщений`
                   : "Нет новых сообщений"}
               </p>
 
             </div>
-
-            {totalUnread > 0 && (
-              <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-red-500 px-2 text-sm font-bold text-white">
-                {totalUnread}
-              </span>
-            )}
 
           </div>
 
@@ -441,85 +319,161 @@ useEffect(() => {
             onClick={() =>
               setShowNewChat(true)
             }
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-yellow-400 text-black transition hover:scale-105"
+            className="
+              flex
+              h-11
+              w-11
+              shrink-0
+              items-center
+              justify-center
+              rounded-2xl
+              bg-[#A8FF00]
+              text-black
+              transition
+              hover:scale-105
+              hover:bg-[#baff32]
+              active:scale-95
+            "
             title="Новый чат"
           >
-            <Plus size={26} />
+            <Plus size={22} strokeWidth={2.5} />
           </button>
 
         </div>
 
         {/* Список пользователей */}
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
 
           {users.length === 0 ? (
 
-            <div className="p-6 text-center text-zinc-500">
-              Пока нет чатов
+            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+
+              <div className="flex h-16 w-16 items-center justify-center rounded-3xl border border-zinc-800 bg-zinc-900">
+
+                <MessageCircle
+                  size={28}
+                  className="text-zinc-600"
+                />
+
+              </div>
+
+              <p className="mt-4 text-sm font-semibold text-zinc-500">
+                Пока нет чатов
+              </p>
+
             </div>
 
           ) : (
 
-            users.map((phone) => {
+            <div className="space-y-2">
 
-              const unread =
-                getUnreadForAdmin(
-                  phone
+              {users.map((phone) => {
+
+                const unread =
+                  getUnreadForAdmin(phone);
+
+                const name =
+                  getUserName(phone);
+
+                const selected =
+                  selectedUser === phone;
+
+                return (
+
+                  <button
+                    key={phone}
+                    type="button"
+                    onClick={() => {
+                      setSelectedUser(phone);
+                    }}
+                    className={`
+                      relative
+                      flex
+                      w-full
+                      items-center
+                      gap-3
+                      rounded-2xl
+                      border
+                      p-3
+                      text-left
+                      transition
+                      ${
+                        selected
+                          ? "border-[#A8FF00]/40 bg-[#A8FF00]/10"
+                          : "border-zinc-800 bg-zinc-900 hover:border-zinc-700 hover:bg-zinc-800"
+                      }
+                    `}
+                  >
+
+                    {/* Аватар */}
+
+                    <div
+                      className={`
+                        flex
+                        h-12
+                        w-12
+                        shrink-0
+                        items-center
+                        justify-center
+                        rounded-2xl
+                        text-lg
+                        font-black
+                        ${
+                          selected
+                            ? "bg-[#A8FF00] text-black"
+                            : "bg-zinc-800 text-zinc-300"
+                        }
+                      `}
+                    >
+                      {name
+                        .charAt(0)
+                        .toUpperCase()}
+                    </div>
+
+                    {/* Имя */}
+
+                    <div className="min-w-0 flex-1">
+
+                      <p
+                        className={`
+                          truncate
+                          text-sm
+                          font-bold
+                          ${
+                            selected
+                              ? "text-white"
+                              : "text-zinc-200"
+                          }
+                        `}
+                      >
+                        {name}
+                      </p>
+
+                      <p className="mt-1 truncate text-xs text-zinc-500">
+                        {phone}
+                      </p>
+
+                    </div>
+
+                    {/* Непрочитанные */}
+
+                    {unread > 0 && (
+
+                      <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-[#EC008C] px-1.5 text-[10px] font-black text-white">
+                        {unread > 99
+                          ? "99+"
+                          : unread}
+                      </span>
+
+                    )}
+
+                  </button>
+
                 );
+              })}
 
-              const name =
-                getUserName(phone);
-
-              return (
-                <button
-                  key={phone}
-                  type="button"
-                  onClick={() => {
-                    setSelectedUser(
-                      phone
-                    );
-                  }}
-                  className={`relative flex w-full items-center gap-4 border-b border-zinc-800 px-5 py-4 text-left transition ${
-                    selectedUser === phone
-                      ? "bg-zinc-800"
-                      : "hover:bg-zinc-800/60"
-                  }`}
-                >
-
-                  {/* Аватар */}
-
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-yellow-400 text-xl font-bold text-black">
-                    {name
-                      .charAt(0)
-                      .toUpperCase()}
-                  </div>
-
-                  {/* Имя + телефон */}
-
-                  <div className="min-w-0 flex-1">
-
-                    <p className="truncate text-lg font-bold text-white">
-                      {name}
-                    </p>
-
-                    <p className="mt-1 truncate text-sm text-zinc-500">
-                      {phone}
-                    </p>
-
-                  </div>
-
-                  {/* Непрочитанные */}
-
-                  {unread > 0 && (
-                    <span className="flex h-7 min-w-7 shrink-0 items-center justify-center rounded-full bg-red-500 px-2 text-xs font-bold text-white">
-                      {unread}
-                    </span>
-                  )}
-
-                </button>
-              );
-            })
+            </div>
 
           )}
 
@@ -531,15 +485,15 @@ useEffect(() => {
       {/* ПРАВАЯ КОЛОНКА */}
       {/* ========================= */}
 
-      <div className="flex min-w-0 min-h-0 flex-1 flex-col">
+      <div className="flex min-w-0 min-h-0 flex-1 flex-col bg-black">
 
         {/* Заголовок чата */}
 
-        <div className="flex shrink-0 items-center justify-between border-b border-zinc-800 p-5">
+        <div className="flex shrink-0 items-center justify-between border-b border-zinc-800 bg-zinc-950 p-5">
 
-          <div>
+          <div className="min-w-0">
 
-            <h2 className="text-2xl font-bold text-white">
+            <h2 className="truncate text-xl font-black text-white">
 
               {selectedUser
                 ? getUserName(
@@ -550,11 +504,15 @@ useEffect(() => {
             </h2>
 
             {selectedUser && (
-              <p className="mt-1 text-sm text-zinc-500">
+
+              <p className="mt-1 text-xs text-zinc-500">
+
                 {selectedUser}
                 {" • "}
                 {chat.length} сообщений
+
               </p>
+
             )}
 
           </div>
@@ -562,29 +520,55 @@ useEffect(() => {
           {/* Удаление */}
 
           {selectedUser && (
+
             <button
               type="button"
               onClick={() =>
                 setDeleteConfirm(true)
               }
-              className="flex h-11 w-11 items-center justify-center rounded-2xl bg-zinc-800 text-red-400 transition hover:bg-red-500 hover:text-white"
+              className="
+                flex
+                h-10
+                w-10
+                items-center
+                justify-center
+                rounded-xl
+                border
+                border-zinc-800
+                bg-zinc-900
+                text-zinc-500
+                transition
+                hover:border-red-500/40
+                hover:bg-red-500/10
+                hover:text-red-400
+              "
               title="Удалить чат"
             >
-              <Trash2 size={20} />
+              <Trash2 size={18} />
             </button>
+
           )}
 
         </div>
 
         {/* Сообщения */}
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-black p-6">
 
           {!selectedUser ? (
 
-            <div className="flex h-full items-center justify-center">
+            <div className="flex h-full flex-col items-center justify-center">
 
-              <p className="text-xl text-zinc-600">
+              <div className="flex h-20 w-20 items-center justify-center rounded-[28px] border border-zinc-800 bg-zinc-950">
+
+                <MessageCircle
+                  size={34}
+                  className="text-zinc-700"
+                />
+
+              </div>
+
+              <p className="mt-5 text-sm font-semibold text-zinc-600">
                 Выберите пользователя
               </p>
 
@@ -592,56 +576,94 @@ useEffect(() => {
 
           ) : chat.length === 0 ? (
 
-            <div className="flex h-full items-center justify-center">
+            <div className="flex h-full flex-col items-center justify-center">
 
-              <p className="text-center text-zinc-500">
+              <div className="flex h-20 w-20 items-center justify-center rounded-[28px] border border-zinc-800 bg-zinc-950">
+
+                <MessageCircle
+                  size={34}
+                  className="text-zinc-700"
+                />
+
+              </div>
+
+              <p className="mt-5 text-center text-sm text-zinc-500">
+
                 Сообщений пока нет.
                 <br />
                 Напишите пользователю первым.
+
               </p>
 
             </div>
 
           ) : (
 
-            <div className="space-y-4">
+            <div className="mx-auto max-w-4xl space-y-4">
 
               {chat.map((message) => (
 
                 <div
                   key={message.id}
-                  className={`flex ${
-                    message.author ===
-                    "admin"
-                      ? "justify-end"
-                      : "justify-start"
-                  }`}
+                  className={`
+                    flex
+                    ${
+                      message.author ===
+                      "admin"
+                        ? "justify-end"
+                        : "justify-start"
+                    }
+                  `}
                 >
 
                   <div
-                    className={`max-w-[70%] rounded-3xl px-5 py-3 ${
-                      message.author ===
-                      "admin"
-                        ? "bg-yellow-400 text-black"
-                        : "bg-zinc-800 text-white"
-                    }`}
+                    className={`
+                      max-w-[70%]
+                      rounded-[22px]
+                      border
+                      px-5
+                      py-3.5
+                      shadow-lg
+                      ${
+                        message.author ===
+                        "admin"
+                          ? "border-[#A8FF00]/30 bg-[#A8FF00] text-black"
+                          : "border-zinc-800 bg-zinc-900 text-white"
+                      }
+                    `}
                   >
 
-                    <p>
+                    <p className="text-sm leading-relaxed">
                       {message.text}
                     </p>
 
-                    <span className="mt-2 block text-right text-xs opacity-60">
-
+                    <span
+                      className={`
+                        mt-2
+                        block
+                        text-right
+                        text-[10px]
+                        ${
+                          message.author ===
+                          "admin"
+                            ? "text-black/50"
+                            : "text-zinc-500"
+                        }
+                      `}
+                    >
                       {message.createdAt
                         ? new Date(
-                            String(message.createdAt)
-                          ).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                      : ""}
-
+                            String(
+                              message.createdAt
+                            )
+                          ).toLocaleTimeString(
+                            [],
+                            {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }
+                          )
+                        : ""}
                     </span>
 
                   </div>
@@ -650,9 +672,7 @@ useEffect(() => {
 
               ))}
 
-              <div
-                ref={bottomRef}
-              />
+              <div ref={bottomRef} />
 
             </div>
 
@@ -663,37 +683,66 @@ useEffect(() => {
         {/* Поле отправки */}
 
         {selectedUser && (
-          <div className="flex shrink-0 gap-3 border-t border-zinc-800 p-5">
 
-            <input
-              value={text}
-              onChange={(event) =>
-                setText(
-                  event.target.value
-                )
-              }
-              placeholder="Введите сообщение..."
-              className="min-w-0 flex-1 rounded-2xl bg-black px-5 py-3 text-white outline-none"
-              onKeyDown={(event) => {
-                if (
-                  event.key ===
-                  "Enter"
-                ) {
-                  handleSend();
+          <div className="flex shrink-0 gap-3 border-t border-zinc-800 bg-zinc-950 p-4">
+
+            <div className="flex min-w-0 flex-1 items-center rounded-2xl border border-zinc-800 bg-black px-4 transition focus-within:border-[#A8FF00]/50">
+
+              <input
+                value={text}
+                onChange={(event) =>
+                  setText(
+                    event.target.value
+                  )
                 }
-              }}
-            />
+                placeholder="Введите сообщение..."
+                className="
+                  min-w-0
+                  flex-1
+                  bg-transparent
+                  py-3
+                  text-sm
+                  text-white
+                  outline-none
+                  placeholder:text-zinc-600
+                "
+                onKeyDown={(event) => {
+                  if (
+                    event.key ===
+                    "Enter"
+                  ) {
+                    handleSend();
+                  }
+                }}
+              />
+
+            </div>
 
             <button
               type="button"
               onClick={handleSend}
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-yellow-400 text-black transition hover:scale-105"
+              className="
+                flex
+                h-12
+                w-12
+                shrink-0
+                items-center
+                justify-center
+                rounded-2xl
+                bg-[#A8FF00]
+                text-black
+                transition
+                hover:scale-105
+                hover:bg-[#baff32]
+                active:scale-95
+              "
               title="Отправить"
             >
-              <Send size={20} />
+              <Send size={19} strokeWidth={2.5} />
             </button>
 
           </div>
+
         )}
 
       </div>
@@ -703,24 +752,47 @@ useEffect(() => {
       {/* ========================= */}
 
       {showNewChat && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-5">
 
-          <div className="w-full max-w-md rounded-3xl bg-zinc-900 p-6 shadow-2xl">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-5 backdrop-blur-sm">
 
-            <div className="mb-5 flex items-center justify-between">
+          <div className="w-full max-w-md rounded-[28px] border border-zinc-800 bg-zinc-950 p-6 shadow-2xl">
 
-              <h3 className="text-2xl font-bold text-white">
-                Новый чат
-              </h3>
+            <div className="mb-6 flex items-center justify-between">
+
+              <div>
+
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#A8FF00]">
+                  Concierge
+                </p>
+
+                <h3 className="mt-1 text-2xl font-black text-white">
+                  Новый чат
+                </h3>
+
+              </div>
 
               <button
                 type="button"
                 onClick={() =>
                   setShowNewChat(false)
                 }
-                className="rounded-xl p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                className="
+                  flex
+                  h-10
+                  w-10
+                  items-center
+                  justify-center
+                  rounded-xl
+                  border
+                  border-zinc-800
+                  bg-zinc-900
+                  text-zinc-500
+                  transition
+                  hover:bg-zinc-800
+                  hover:text-white
+                "
               >
-                <X size={20} />
+                <X size={19} />
               </button>
 
             </div>
@@ -731,9 +803,9 @@ useEffect(() => {
 
             {/* Телефон */}
 
-            <div className="flex items-center overflow-hidden rounded-2xl bg-black">
+            <div className="flex items-center overflow-hidden rounded-2xl border border-zinc-800 bg-black focus-within:border-[#A8FF00]/50">
 
-              <span className="px-4 text-lg font-bold text-zinc-400">
+              <span className="px-4 text-lg font-black text-zinc-500">
                 +7
               </span>
 
@@ -748,7 +820,17 @@ useEffect(() => {
                 placeholder="9061234567"
                 inputMode="numeric"
                 maxLength={10}
-                className="min-w-0 flex-1 bg-transparent px-2 py-4 text-lg text-white outline-none"
+                className="
+                  min-w-0
+                  flex-1
+                  bg-transparent
+                  px-2
+                  py-4
+                  text-lg
+                  text-white
+                  outline-none
+                  placeholder:text-zinc-700
+                "
                 onKeyDown={(event) => {
                   if (
                     event.key ===
@@ -773,11 +855,20 @@ useEffect(() => {
               onClick={
                 handleStartNewChat
               }
-              className={`mt-4 w-full rounded-2xl py-4 font-bold transition ${
-                newUser.length === 10
-                  ? "bg-yellow-400 text-black hover:scale-[1.01]"
-                  : "cursor-not-allowed bg-zinc-800 text-zinc-600"
-              }`}
+              className={`
+                mt-5
+                w-full
+                rounded-2xl
+                py-4
+                text-sm
+                font-black
+                transition
+                ${
+                  newUser.length === 10
+                    ? "bg-[#A8FF00] text-black hover:scale-[1.01] hover:bg-[#baff32]"
+                    : "cursor-not-allowed bg-zinc-800 text-zinc-600"
+                }
+              `}
             >
               Открыть чат
             </button>
@@ -785,6 +876,7 @@ useEffect(() => {
           </div>
 
         </div>
+
       )}
 
       {/* ========================= */}
@@ -793,15 +885,20 @@ useEffect(() => {
 
       {deleteConfirm &&
         selectedUser && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-5">
 
-            <div className="w-full max-w-md rounded-3xl bg-zinc-900 p-6 shadow-2xl">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-5 backdrop-blur-sm">
 
-              <h3 className="text-2xl font-bold text-white">
+            <div className="w-full max-w-md rounded-[28px] border border-zinc-800 bg-zinc-950 p-6 shadow-2xl">
+
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-500/10 text-red-400">
+                <Trash2 size={22} />
+              </div>
+
+              <h3 className="mt-5 text-2xl font-black text-white">
                 Удалить чат?
               </h3>
 
-              <p className="mt-3 text-zinc-400">
+              <p className="mt-3 text-sm leading-relaxed text-zinc-500">
 
                 Все сообщения пользователя{" "}
 
@@ -828,7 +925,19 @@ useEffect(() => {
                   onClick={() =>
                     setDeleteConfirm(false)
                   }
-                  className="flex-1 rounded-2xl bg-zinc-800 py-3 font-bold text-white hover:bg-zinc-700"
+                  className="
+                    flex-1
+                    rounded-2xl
+                    border
+                    border-zinc-800
+                    bg-zinc-900
+                    py-3
+                    text-sm
+                    font-bold
+                    text-white
+                    transition
+                    hover:bg-zinc-800
+                  "
                 >
                   Отмена
                 </button>
@@ -838,7 +947,17 @@ useEffect(() => {
                   onClick={
                     handleDeleteChat
                   }
-                  className="flex-1 rounded-2xl bg-red-500 py-3 font-bold text-white hover:bg-red-600"
+                  className="
+                    flex-1
+                    rounded-2xl
+                    bg-red-500
+                    py-3
+                    text-sm
+                    font-bold
+                    text-white
+                    transition
+                    hover:bg-red-600
+                  "
                 >
                   Удалить
                 </button>
@@ -848,6 +967,7 @@ useEffect(() => {
             </div>
 
           </div>
+
         )}
 
     </div>
