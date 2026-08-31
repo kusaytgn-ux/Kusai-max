@@ -4138,7 +4138,54 @@ app.post("/api/auth/login", async (req, res) => {
 
     const phone = normalizePhone(rawPhone);
 
-    // 1. Сначала ищем в PostgreSQL.
+    console.log("");
+    console.log("======================================");
+    console.log("АВТОРИЗАЦИЯ КЛИЕНТА");
+    console.log("Телефон:", phone);
+    console.log("======================================");
+
+    // ==========================================
+    // 1. ПОЛУЧАЕМ АКТУАЛЬНЫЕ ДАННЫЕ ИЗ 1С
+    // ==========================================
+
+    let oneCCustomer = null;
+
+    try {
+      console.log("1С: получаем клиента...");
+
+      oneCCustomer = await getOneCCustomer(phone);
+
+      console.log(
+        "1С клиент получен:",
+        !!oneCCustomer
+      );
+
+      console.log(
+        "QR получен:",
+        !!oneCCustomer?.customerQR
+      );
+
+      if (oneCCustomer?.customerQR) {
+        console.log(
+          "QR начало:",
+          oneCCustomer.customerQR.substring(0, 50)
+        );
+      }
+
+    } catch (oneCError) {
+      console.error(
+        "Ошибка получения клиента из 1С:",
+        oneCError.message
+      );
+
+      // Не останавливаем вход,
+      // если 1С временно недоступна
+    }
+
+    // ==========================================
+    // 2. ИЩЕМ КЛИЕНТА В POSTGRESQL
+    // ==========================================
+
     const pgResult = await pgQuery(
       `
       SELECT
@@ -4161,24 +4208,70 @@ app.post("/api/auth/login", async (req, res) => {
     if (pgResult.rows.length > 0) {
       const client = pgResult.rows[0];
 
+      console.log("Клиент найден в PostgreSQL");
+
       return res.json({
         success: true,
         message: "Успешный вход",
+
         client: {
           id: client.id,
-          name: client.name || name,
-          login: client.login || client.name || name,
-          phone: client.phone || phone,
-          points: Number(client.points || 0),
-          bonuses: Number(client.bonuses || 0),
-          orders: Number(client.orders || 0),
-          status: client.status || "MAX START",
-          role: client.role || "user",
+
+          // Берём актуальные данные из 1С,
+          // если они доступны
+          name:
+            oneCCustomer?.name ||
+            client.name ||
+            name,
+
+          login:
+            client.login ||
+            oneCCustomer?.name ||
+            client.name ||
+            name,
+
+          phone:
+            oneCCustomer?.phone ||
+            client.phone ||
+            phone,
+
+          points: Number(
+            oneCCustomer?.bonusBalance ??
+            client.points ??
+            0
+          ),
+
+          bonuses: Number(
+            oneCCustomer?.bonusBalance ??
+            client.bonuses ??
+            client.points ??
+            0
+          ),
+
+          orders: Number(
+            client.orders || 0
+          ),
+
+          status:
+            client.status ||
+            "MAX START",
+
+          role:
+            client.role ||
+            "user",
+
+          // 🔥 QR-КОД ИЗ 1С
+          customerQR:
+            oneCCustomer?.customerQR ||
+            null,
         },
       });
     }
 
-    // 2. Fallback: старый Firebase.
+    // ==========================================
+    // 3. FALLBACK — FIREBASE
+    // ==========================================
+
     const firebaseSnapshot = await db
       .collection("clients")
       .where("phone", "==", phone)
@@ -4186,8 +4279,11 @@ app.post("/api/auth/login", async (req, res) => {
       .get();
 
     if (!firebaseSnapshot.empty) {
-      const firebaseDoc = firebaseSnapshot.docs[0];
-      const firebaseData = firebaseDoc.data();
+      const firebaseDoc =
+        firebaseSnapshot.docs[0];
+
+      const firebaseData =
+        firebaseDoc.data();
 
       await pgQuery(
         `
@@ -4228,51 +4324,108 @@ app.post("/api/auth/login", async (req, res) => {
         `,
         [
           firebaseDoc.id,
-          firebaseData.name || name,
-          firebaseData.phone || phone,
-          firebaseData.login ||
+          oneCCustomer?.name ||
             firebaseData.name ||
             name,
-          Number(firebaseData.points || 0),
-          Number(firebaseData.bonuses || firebaseData.points || 0),
+
+          firebaseData.phone || phone,
+
+          firebaseData.login ||
+            oneCCustomer?.name ||
+            firebaseData.name ||
+            name,
+
+          Number(
+            oneCCustomer?.bonusBalance ??
+            firebaseData.points ??
+            0
+          ),
+
+          Number(
+            oneCCustomer?.bonusBalance ??
+            firebaseData.bonuses ??
+            firebaseData.points ??
+            0
+          ),
+
           Number(firebaseData.orders || 0),
-          firebaseData.status || "NEW CLIENT",
+
+          firebaseData.status ||
+            "NEW CLIENT",
+
           firebaseData.role || "user",
+
           firebaseData.source || null,
+
           Boolean(firebaseData.welcomeBonus),
+
           firebaseData.address || null,
-          firebaseData.createdAt?.toDate?.() || null,
+
+          firebaseData.createdAt?.toDate?.() ||
+            null,
+
           firebaseData,
         ]
       );
 
-      const client = {
-        id: firebaseDoc.id,
-        name: firebaseData.name || name,
-        login:
-          firebaseData.login ||
-          firebaseData.name ||
-          name,
-        phone: firebaseData.phone || phone,
-        points: Number(firebaseData.points || 0),
-        bonuses: Number(
-          firebaseData.bonuses ||
-            firebaseData.points ||
-            0
-        ),
-        orders: Number(firebaseData.orders || 0),
-        status: firebaseData.status || "MAX START",
-        role: "user",
-      };
-
       return res.json({
         success: true,
         message: "Успешный вход",
-        client,
+
+        client: {
+          id: firebaseDoc.id,
+
+          name:
+            oneCCustomer?.name ||
+            firebaseData.name ||
+            name,
+
+          login:
+            firebaseData.login ||
+            oneCCustomer?.name ||
+            firebaseData.name ||
+            name,
+
+          phone:
+            oneCCustomer?.phone ||
+            firebaseData.phone ||
+            phone,
+
+          points: Number(
+            oneCCustomer?.bonusBalance ??
+            firebaseData.points ??
+            0
+          ),
+
+          bonuses: Number(
+            oneCCustomer?.bonusBalance ??
+            firebaseData.bonuses ??
+            firebaseData.points ??
+            0
+          ),
+
+          orders: Number(
+            firebaseData.orders || 0
+          ),
+
+          status:
+            firebaseData.status ||
+            "MAX START",
+
+          role: "user",
+
+          // 🔥 QR ИЗ 1С
+          customerQR:
+            oneCCustomer?.customerQR ||
+            null,
+        },
       });
     }
 
-    // 3. Совсем новый клиент.
+    // ==========================================
+    // 4. НОВЫЙ КЛИЕНТ
+    // ==========================================
+
     const firebaseRef = db
       .collection("clients")
       .doc();
@@ -4339,14 +4492,12 @@ app.post("/api/auth/login", async (req, res) => {
         "PostgreSQL client create failed:",
         postgresError
       );
-
-      // Firebase уже записан, поэтому пользователь не теряется.
-      // Следующий login выполнит backfill в PostgreSQL.
     }
 
     return res.json({
       success: true,
       message: "Успешный вход",
+
       client: {
         id: clientId,
         name,
@@ -4357,8 +4508,15 @@ app.post("/api/auth/login", async (req, res) => {
         orders: 0,
         status: "NEW CLIENT",
         role: "user",
+
+        // Если клиент уже появился в 1С —
+        // передадим QR
+        customerQR:
+          oneCCustomer?.customerQR ||
+          null,
       },
     });
+
   } catch (error) {
     console.error(
       "POST /api/auth/login failed:",
