@@ -1,3 +1,6 @@
+import {
+  getOneCCustomer,
+} from "./oneC.js";
 import "dotenv/config";
 import {
   findProductImages,
@@ -33,6 +36,71 @@ const ADMINS_COLLECTION = "admins";
 
 app.use(cors());
 app.use(express.json());
+
+app.get(
+  "/api/debug/1c/client",
+  async (req, res) => {
+    try {
+      const phone = req.query.phone;
+
+      if (!phone) {
+        return res.status(400).json({
+          success: false,
+          message: "Не указан телефон",
+        });
+      }
+
+      const customer =
+        await getOneCCustomer(phone);
+
+      if (!customer) {
+        return res.status(404).json({
+          success: false,
+          message: "Клиент не найден",
+        });
+      }
+
+      const qr = customer.customerQR;
+
+      console.log("QR TYPE:", typeof qr);
+      console.log("QR IS BUFFER:", Buffer.isBuffer(qr));
+      console.log(
+        "QR LENGTH:",
+        qr?.length
+      );
+
+      res.json({
+        success: true,
+
+        customer: {
+          ...customer,
+
+          customerQRInfo: {
+            exists: !!qr,
+            type: typeof qr,
+            isBuffer: Buffer.isBuffer(qr),
+            length: qr?.length || 0,
+            firstBytes: qr
+              ? String(qr).slice(0, 50)
+              : null,
+          },
+        },
+      });
+
+    } catch (error) {
+
+      console.error(
+        "Ошибка получения клиента из 1С:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+);
 
 /*
 |--------------------------------------------------------------------------

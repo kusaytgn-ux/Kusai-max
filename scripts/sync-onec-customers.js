@@ -55,6 +55,26 @@ async function main() {
 
   const text = await response.text();
 
+console.log(
+  "1С Content-Type:",
+  response.headers.get("content-type")
+);
+
+console.log(
+  "1С Content-Length:",
+  response.headers.get("content-length")
+);
+
+console.log(
+  "1С RAW TEXT LENGTH:",
+  text.length
+);
+
+console.log(
+  "1С RAW TEXT START:",
+  text.slice(0, 300)
+);
+
   if (!response.ok) {
     throw new Error(
       `1С вернула HTTP ${response.status}: ${text.slice(0, 1000)}`
