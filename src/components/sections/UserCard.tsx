@@ -1,10 +1,14 @@
+import { useState } from "react";
 import {
   Heart,
   Package,
   ShoppingBag,
   ShoppingCart,
   ChevronRight,
+  X,
+  QrCode,
 } from "lucide-react";
+
 
 import { useFavorites } from "../../store/FavoritesContext";
 import { useCart } from "../../store/CartContext";
@@ -80,6 +84,10 @@ function UserCard() {
 
   const navigate = useNavigate();
 
+  const [isQRModalOpen, setIsQRModalOpen] = useState(false);
+
+  const customerQR = user?.customerQR;
+
   const points = user?.points ?? 0;
 
   const kusaiLevel =
@@ -146,53 +154,77 @@ function UserCard() {
           {/* Статус */}
 
           <div className="kusai-stat p-4">
-            <p className="text-xs uppercase tracking-widest text-white/60">
-              Статус
-            </p>
+              <p className="text-xs uppercase tracking-widest text-white/60">
+                Статус
+              </p>
 
-            <div className="mt-2 flex items-center gap-2">
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="
-                    M12 2
-                    L14.9 8.1
-                    L21.5 8.8
-                    L16.6 13.3
-                    L17.9 19.8
-                    L12 16.4
-                    L6.1 19.8
-                    L7.4 13.3
-                    L2.5 8.8
-                    L9.1 8.1
-                    Z
-                  "
-                  fill="#FFE500"
-                />
-              </svg>
+              <div className="mt-2 flex items-center gap-2">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="
+                      M12 2
+                      L14.9 8.1
+                      L21.5 8.8
+                      L16.6 13.3
+                      L17.9 19.8
+                      L12 16.4
+                      L6.1 19.8
+                      L7.4 13.3
+                      L2.5 8.8
+                      L9.1 8.1
+                      Z
+                    "
+                    fill="#FFE500"
+                  />
+                </svg>
 
-              <h3 className="font-black text-[#FFE500]">
-                KUSAI {kusaiLevel}
-              </h3>
+                <h3 className="font-black text-[#FFE500]">
+                  KUSAI {kusaiLevel}
+                </h3>
+              </div>
             </div>
-          </div>
 
-          {/* Бонусы */}
+            {/* Бонусы */}
 
-          <div className="kusai-stat p-4">
-            <p className="text-xs uppercase tracking-widest text-white/60">
-              Бонусы
-            </p>
+            <button
+    type="button"
+    onClick={() => setIsQRModalOpen(true)}
+    className="
+      kusai-stat
+      w-full
+      p-4
+      text-left
+      transition
+      active:scale-[0.98]
+    "
+  >
+    <div className="flex items-start justify-between">
+      <div>
+        <p className="text-xs uppercase tracking-widest text-white/60">
+          Бонусы
+        </p>
 
-            <h3 className="mt-2 text-xl font-black text-[#EC008C]">
-              {points.toLocaleString("ru-RU")}
-            </h3>
-          </div>
+        <h3 className="mt-2 text-xl font-black text-[#EC008C]">
+          {points.toLocaleString("ru-RU")}
+        </h3>
+      </div>
+
+      <QrCode
+        size={22}
+        className="text-[#EC008C]"
+      />
+    </div>
+
+    <p className="mt-2 text-[10px] uppercase tracking-wider text-white/40">
+      Нажмите, чтобы показать QR-код
+    </p>
+  </button>
 
           {/* KUSAI SCORE */}
 
@@ -475,6 +507,155 @@ function UserCard() {
           </button>
         </div>
       </div>
+
+      {isQRModalOpen && (
+  <div
+    className="
+      fixed
+      inset-0
+      z-[9999]
+      flex
+      items-center
+      justify-center
+      bg-black/80
+      p-5
+      backdrop-blur-md
+    "
+  >
+    <div
+      className="
+        relative
+        w-full
+        max-w-[420px]
+        overflow-hidden
+        rounded-[32px]
+        border
+        border-white/10
+        bg-[#111111]
+        p-6
+        shadow-2xl
+      "
+    >
+      {/* Кнопка закрытия */}
+
+      <button
+        type="button"
+        onClick={() => setIsQRModalOpen(false)}
+        className="
+          absolute
+          right-5
+          top-5
+          flex
+          h-10
+          w-10
+          items-center
+          justify-center
+          rounded-full
+          bg-white/10
+          text-white
+          transition
+          active:scale-95
+        "
+      >
+        <X size={22} />
+      </button>
+
+      {/* Заголовок */}
+
+      <div className="pt-3 text-center">
+        <div
+          className="
+            text-xs
+            font-bold
+            uppercase
+            tracking-[0.25em]
+            text-[#EC008C]
+          "
+        >
+          KUSAI MAX
+        </div>
+
+        <h2 className="mt-3 text-3xl font-black text-white">
+          Ваш QR-код
+        </h2>
+
+        <p className="mx-auto mt-3 max-w-[280px] text-sm leading-relaxed text-zinc-400">
+          Покажите этот QR-код продавцу перед покупкой
+        </p>
+      </div>
+
+      {/* QR */}
+
+      <div
+        className="
+          mt-7
+          flex
+          min-h-[280px]
+          items-center
+          justify-center
+          rounded-[24px]
+          bg-white
+          p-5
+        "
+      >
+        {customerQR ? (
+          <img
+            src={customerQR}
+            alt="QR-код клиента"
+            className="
+              h-full
+              w-full
+              max-h-[280px]
+              max-w-[280px]
+              object-contain
+            "
+          />
+        ) : (
+          <div className="text-center">
+            <QrCode
+              size={64}
+              className="mx-auto text-zinc-300"
+            />
+
+            <p className="mt-4 text-sm font-medium text-zinc-500">
+              QR-код пока недоступен
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Информация */}
+
+      <div className="mt-6 text-center">
+        <p className="text-xs uppercase tracking-widest text-zinc-500">
+          Клиент
+        </p>
+
+        <p className="mt-2 text-lg font-bold text-white">
+          {user?.name || "KUSAI CLIENT"}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setIsQRModalOpen(false)}
+        className="
+          mt-6
+          w-full
+          rounded-2xl
+          bg-[#EC008C]
+          py-4
+          font-black
+          text-white
+          transition
+          active:scale-[0.98]
+        "
+      >
+        ГОТОВО
+      </button>
+    </div>
+  </div>
+)}
     </section>
   );
 }

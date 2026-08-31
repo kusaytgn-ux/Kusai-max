@@ -7,8 +7,6 @@ import {
   type ReactNode,
 } from "react";
 
-
-
 import {
   signInWithEmailAndPassword,
   signOut,
@@ -21,10 +19,15 @@ type User = {
   name: string;
   login?: string;
   phone: string;
+
   points: number;
   bonuses?: number;
   status?: string;
   orders?: number;
+
+  // QR-код клиента из 1С
+  customerQR?: string;
+
   role: "user" | "admin";
 };
 
@@ -64,7 +67,7 @@ const AuthContext =
   createContext<AuthContextType | null>(null);
 
 // =====================================================
-// EMAIL АДМИНИСТРАТОРА В FIREBASE AUTHENTICATION
+// EMAIL АДМИНИСТРАТОРА
 // =====================================================
 
 const ADMIN_EMAIL = "kusay.tgn@gmail.com";
@@ -109,90 +112,120 @@ export function AuthProvider({
   // ===================================================
 
   async function login(
-  name: string,
-  phone: string
-): Promise<Result> {
-  try {
-    const apiUrl = (
-      import.meta.env.VITE_API_URL ||
-      "http://localhost:3001"
-    ).replace(/\/$/, "");
+    name: string,
+    phone: string
+  ): Promise<Result> {
+    try {
+      const apiUrl = (
+        import.meta.env.VITE_API_URL ||
+        "http://localhost:3001"
+      ).replace(/\/$/, "");
 
-    const response = await fetch(
-      `${apiUrl}/api/auth/login`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name,
-          phone,
-        }),
+      const response = await fetch(
+        `${apiUrl}/api/auth/login`,
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify({
+            name,
+            phone,
+          }),
+        }
+      );
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
+        return {
+          success: false,
+
+          message:
+            data.message ||
+            "Ошибка входа",
+        };
       }
-    );
 
-    const data = await response.json();
+      const client = data.client;
 
-    if (!response.ok || !data.success) {
-      return {
-        success: false,
-        message:
-          data.message ||
-          "Ошибка входа",
-      };
-    }
+      const currentUser: User = {
+        id: client.id,
 
-    const client = data.client;
+        name:
+          client.name ??
+          name,
 
-    const currentUser: User = {
-      id: client.id,
-      name: client.name ?? name,
-      login:
-        client.login ??
-        client.name ??
-        name,
-      phone: client.phone ?? phone,
-      points: Number(
-        client.points ?? 0
-      ),
-      bonuses: Number(
-        client.bonuses ??
+        login:
+          client.login ??
+          client.name ??
+          name,
+
+        phone:
+          client.phone ??
+          phone,
+
+        points: Number(
+          client.points ?? 0
+        ),
+
+        bonuses: Number(
+          client.bonuses ??
           client.points ??
           0
-      ),
-      status:
-        client.status ??
-        "MAX START",
-      orders: Number(
-        client.orders ?? 0
-      ),
-      role: "user",
-    };
+        ),
 
-    localStorage.setItem(
-      "currentUser",
-      JSON.stringify(currentUser)
-    );
+        status:
+          client.status ??
+          "MAX START",
 
-    setUser(currentUser);
+        orders: Number(
+          client.orders ?? 0
+        ),
 
-    return {
-      success: true,
-      message: "Успешный вход",
-    };
-  } catch (error) {
-    console.error(
-      "Client login error:",
-      error
-    );
+        // =================================================
+        // QR-КОД ИЗ 1С
+        // =================================================
 
-    return {
-      success: false,
-      message: "Ошибка соединения с сервером",
-    };
+        customerQR:
+          client.customerQR ??
+          undefined,
+
+        role: "user",
+      };
+
+      localStorage.setItem(
+        "currentUser",
+        JSON.stringify(currentUser)
+      );
+
+      setUser(currentUser);
+
+      return {
+        success: true,
+        message: "Успешный вход",
+      };
+    } catch (error) {
+      console.error(
+        "Client login error:",
+        error
+      );
+
+      return {
+        success: false,
+
+        message:
+          "Ошибка соединения с сервером",
+      };
+    }
   }
-}
 
   // ===================================================
   // ВХОД АДМИНИСТРАТОРА
@@ -209,16 +242,13 @@ export function AuthProvider({
       const email =
         ADMIN_EMAIL.toLowerCase();
 
-      // Разрешаем:
-      // admin
-      // kusay.tgn@gmail.com
-
       if (
         enteredLogin !== "admin" &&
         enteredLogin !== email
       ) {
         return {
           success: false,
+
           message:
             "Неверный логин или пароль",
         };
@@ -232,15 +262,6 @@ export function AuthProvider({
         };
       }
 
-      console.log(
-        "Попытка входа администратора:",
-        email
-      );
-
-      // ===============================================
-      // FIREBASE AUTHENTICATION
-      // ===============================================
-
       const credential =
         await signInWithEmailAndPassword(
           auth,
@@ -250,15 +271,6 @@ export function AuthProvider({
 
       const firebaseUser =
         credential.user;
-
-      console.log(
-        "Firebase admin login success:",
-        firebaseUser.uid
-      );
-
-      // ===============================================
-      // СОЗДАЁМ ЛОКАЛЬНОГО АДМИНА
-      // ===============================================
 
       const adminUser: User = {
         id: firebaseUser.uid,
@@ -276,6 +288,8 @@ export function AuthProvider({
         status: "ADMIN",
 
         orders: 0,
+
+        customerQR: undefined,
 
         role: "admin",
       };
@@ -297,20 +311,9 @@ export function AuthProvider({
         error
       );
 
-      console.error(
-        "Firebase error code:",
-        error?.code
-      );
-
-      console.error(
-        "Firebase error message:",
-        error?.message
-      );
-
       const code =
         error?.code ?? "";
 
-      // Неверный email/пароль
       if (
         code ===
           "auth/invalid-credential" ||
@@ -323,42 +326,43 @@ export function AuthProvider({
       ) {
         return {
           success: false,
+
           message:
             "Неверный логин или пароль",
         };
       }
 
-      // Слишком много попыток
       if (
         code ===
         "auth/too-many-requests"
       ) {
         return {
           success: false,
+
           message:
             "Слишком много попыток. Попробуйте позже.",
         };
       }
 
-      // Firebase не доступен
       if (
         code ===
         "auth/network-request-failed"
       ) {
         return {
           success: false,
+
           message:
             "Ошибка соединения с Firebase",
         };
       }
 
-      // Email/Password выключен
       if (
         code ===
         "auth/operation-not-allowed"
       ) {
         return {
           success: false,
+
           message:
             "В Firebase не включён вход по Email/Password",
         };
@@ -366,10 +370,10 @@ export function AuthProvider({
 
       return {
         success: false,
-        message:
-          `Ошибка Firebase: ${
-            code || "unknown"
-          }`,
+
+        message: `Ошибка Firebase: ${
+          code || "unknown"
+        }`,
       };
     }
   }
@@ -392,6 +396,7 @@ export function AuthProvider({
 
     return {
       success: false,
+
       message:
         "Регистрация по логину и паролю отключена. Используйте вход по имени и телефону.",
     };
@@ -407,6 +412,7 @@ export function AuthProvider({
     if (!user) {
       return {
         success: false,
+
         message:
           "Пользователь не найден",
       };
@@ -425,37 +431,43 @@ export function AuthProvider({
 
       setUser(updatedUser);
 
-      // Администратора в clients
-      // не обновляем
+      // Администратора не обновляем
       if (
         user.role !== "admin"
       ) {
-        const response = await fetch(
-          `${(
-            import.meta.env.VITE_API_URL ||
-            "http://localhost:3001"
-          ).replace(/\/$/, "")}/api/clients/${encodeURIComponent(
-            user.id
-          )}`,
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              login: data.login,
-            }),
-          }
-        );
+        const apiUrl = (
+          import.meta.env.VITE_API_URL ||
+          "http://localhost:3001"
+        ).replace(/\/$/, "");
+
+        const response =
+          await fetch(
+            `${apiUrl}/api/clients/${encodeURIComponent(
+              user.id
+            )}`,
+            {
+              method: "PATCH",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
+              body: JSON.stringify({
+                login: data.login,
+              }),
+            }
+          );
 
         if (!response.ok) {
-          const result = await response.json().catch(
-            () => null
-          );
+          const result =
+            await response
+              .json()
+              .catch(() => null);
 
           throw new Error(
             result?.message ||
-              "Ошибка обновления профиля"
+            "Ошибка обновления профиля"
           );
         }
       }
@@ -473,6 +485,7 @@ export function AuthProvider({
 
       return {
         success: false,
+
         message:
           "Ошибка обновления профиля",
       };
@@ -484,7 +497,9 @@ export function AuthProvider({
   // ===================================================
 
   function logout() {
-    if (user?.role === "admin") {
+    if (
+      user?.role === "admin"
+    ) {
       signOut(auth).catch(
         (error) => {
           console.error(
@@ -506,26 +521,26 @@ export function AuthProvider({
   // CONTEXT
   // ===================================================
 
-  const value =
-    useMemo(
-      () => ({
-        user,
+  const value = useMemo(
+    () => ({
+      user,
 
-        isAuthenticated:
-          !!user,
+      isAuthenticated:
+        !!user,
 
-        login,
+      login,
 
-        adminLogin,
+      adminLogin,
 
-        logout,
+      logout,
 
-        register,
+      register,
 
-        updateProfile,
-      }),
-      [user]
-    );
+      updateProfile,
+    }),
+
+    [user]
+  );
 
   return (
     <AuthContext.Provider

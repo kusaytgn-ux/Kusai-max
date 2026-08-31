@@ -1,5 +1,11 @@
 import "dotenv/config";
+import {
+  findProductImages,
+} from "./imageParser.js";
 
+import {
+  query,
+} from "./postgres.js";
 import express from "express";
 import cors from "cors";
 import bcrypt from "bcryptjs";
@@ -40,19 +46,6 @@ function validatePhone(phone) {
   return /^\+7\d{10}$/.test(normalized);
 }
 
-function normalizePhone(phone) {
-  let normalized = String(phone || "").trim();
-
-  if (!normalized) {
-    return "";
-  }
-
-  if (!normalized.startsWith("+")) {
-    normalized = "+" + normalized;
-  }
-
-  return normalized;
-}
 
 function check1CAccess(req, res) {
   const apiKey = req.headers["x-api-key"];
@@ -140,7 +133,85 @@ function serializeFirestoreValue(value) {
 
   return value;
 }
+app.post(
+  "/api/images/find/:productId",
+  async (req, res) => {
+    try {
+      const {
+        productId,
+      } = req.params;
 
+      const result =
+        await query(
+          `
+          SELECT *
+          FROM products
+          WHERE id = $1
+          LIMIT 1
+          `,
+          [productId]
+        );
+
+      if (
+        result.rows.length === 0
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Товар не найден",
+        });
+      }
+
+      const product =
+        result.rows[0];
+
+      const imageResult =
+        await findProductImages(
+          product
+        );
+
+      /*
+       * Сохраняем найденные изображения
+       */
+
+      await query(
+        `
+        UPDATE products
+        SET
+          images = $1,
+          updated_at = NOW()
+        WHERE id = $2
+        `,
+        [
+          imageResult.images,
+          productId,
+        ]
+      );
+
+      res.json({
+        success: true,
+        productId,
+        images:
+          imageResult.images,
+        matches:
+          imageResult.matches,
+      });
+    } catch (error) {
+      console.error(
+        "IMAGE PARSER ERROR:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Ошибка поиска изображений",
+        error:
+          error.message,
+      });
+    }
+  }
+);
 /*
 |--------------------------------------------------------------------------
 | НОРМАЛИЗАЦИЯ ТОВАРА МойСклад → Firebase
