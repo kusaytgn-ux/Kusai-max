@@ -52,73 +52,115 @@ function Header() {
   }
 
   return (
-    <header className="kusai-header">
-
-      <div className="kusai-header-inner">
-
+    <header
+      className="
+        sticky
+        top-0
+        z-50
+        border-b
+        border-yellow-400/20
+        bg-black/95
+        backdrop-blur-xl
+      "
+    >
+      <div
+        className="
+          mx-auto
+          flex
+          h-[72px]
+          max-w-md
+          items-center
+          justify-between
+          px-5
+        "
+      >
         {/* LOGO */}
 
         <button
           type="button"
           onClick={() => navigate("/")}
-          style={{
-            border: 0,
-            padding: 0,
-            margin: 0,
-            background: "transparent",
-            color: "inherit",
-            textAlign: "left",
-          }}
+          className="text-left"
         >
-          <div className="kusai-logo">
-
-            <div className="kusai-logo-main">
-              KUS<span>AI</span>
+          <div>
+            <div
+              className="
+                text-[25px]
+                font-black
+                leading-none
+                tracking-tight
+                text-white
+              "
+            >
+              KUS
+              <span className="text-[#FFE500]">
+                AI
+              </span>
             </div>
 
-            <div className="kusai-logo-sub">
+            <div
+              className="
+                mt-1
+                text-[8px]
+                font-black
+                uppercase
+                tracking-[0.3em]
+                text-[#FFE500]
+              "
+            >
               MAX CLUB
             </div>
-
           </div>
         </button>
 
         {/* ACTIONS */}
 
-        <div className="kusai-header-actions">
+        <div className="flex items-center gap-2">
 
           {/* CONCIERGE */}
 
           <button
             type="button"
-            className="kusai-icon-button"
-            onClick={() =>
-              navigate("/concierge")
-            }
+            onClick={() => navigate("/concierge")}
+            className="
+              relative
+              flex
+              h-10
+              w-10
+              items-center
+              justify-center
+              rounded-full
+              border
+              border-yellow-400/20
+              bg-zinc-900
+              text-white
+              transition
+              hover:border-yellow-400
+              active:scale-95
+            "
           >
             <MessageCircle
               size={19}
-              strokeWidth={2}
+              strokeWidth={2.2}
             />
 
             {unreadAdminMessages > 0 && (
               <span
-                style={{
-                  position: "absolute",
-                  marginTop: "-32px",
-                  marginLeft: "28px",
-                  minWidth: 17,
-                  height: 17,
-                  padding: "0 4px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 999,
-                  background: "#ff008c",
-                  color: "#fff",
-                  fontSize: 8,
-                  fontWeight: 1000,
-                }}
+                className="
+                  absolute
+                  -right-1
+                  -top-1
+                  flex
+                  min-w-[18px]
+                  h-[18px]
+                  items-center
+                  justify-center
+                  rounded-full
+                  bg-[#FFE500]
+                  px-1
+                  text-[8px]
+                  font-black
+                  text-black
+                "
               >
                 {unreadAdminMessages > 99
                   ? "99+"
@@ -131,37 +173,51 @@ function Header() {
 
           <button
             type="button"
-            className="kusai-icon-button"
+            className="
+              flex
+              h-10
+              w-10
+              items-center
+              justify-center
+              rounded-full
+              border
+              border-yellow-400/20
+              bg-zinc-900
+              text-white
+              transition
+              hover:border-yellow-400
+              active:scale-95
+            "
           >
             <Bell
               size={19}
-              strokeWidth={2}
+              strokeWidth={2.2}
             />
           </button>
 
           {/* PROFILE */}
 
-          <div
-            style={{
-              position: "relative",
-            }}
-          >
+          <div className="relative">
 
             <button
               type="button"
               onClick={() =>
-                setProfileOpen(
-                  (prev) => !prev
-                )
+                setProfileOpen((prev) => !prev)
               }
-              className="kusai-icon-button"
-              style={{
-                background:
-                  "var(--kusai-pink)",
-                borderColor:
-                  "var(--kusai-pink)",
-                fontWeight: 1000,
-              }}
+              className="
+                flex
+                h-10
+                w-10
+                items-center
+                justify-center
+                rounded-full
+                bg-[#FFE500]
+                text-sm
+                font-black
+                text-black
+                transition
+                active:scale-95
+              "
             >
               {user?.name
                 ?.charAt(0)
@@ -170,71 +226,67 @@ function Header() {
 
             {profileOpen && (
               <div
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: 50,
-                  width: 230,
-                  overflow: "hidden",
-                  borderRadius: 20,
-                  border:
-                    "1px solid #29292e",
-                  background: "#0d0d0f",
-                  boxShadow:
-                    "0 20px 60px rgba(0,0,0,.6)",
-                  zIndex: 1000,
-                }}
+                className="
+                  absolute
+                  right-0
+                  top-14
+                  w-[240px]
+                  overflow-hidden
+                  rounded-[22px]
+                  border
+                  border-yellow-400/20
+                  bg-zinc-950
+                  shadow-2xl
+                "
               >
 
+                {/* USER INFO */}
+
                 <div
-                  style={{
-                    padding: 16,
-                    borderBottom:
-                      "1px solid #29292e",
-                  }}
+                  className="
+                    border-b
+                    border-white/10
+                    p-5
+                  "
                 >
-                  <div
-                    style={{
-                      color: "#fff",
-                      fontWeight: 900,
-                    }}
-                  >
+                  <div className="font-black text-white">
                     {user?.name ||
                       "Пользователь"}
                   </div>
 
                   {user?.phone && (
                     <div
-                      style={{
-                        marginTop: 5,
-                        color: "#777780",
-                        fontSize: 11,
-                      }}
+                      className="
+                        mt-2
+                        text-xs
+                        text-zinc-500
+                      "
                     >
                       {user.phone}
                     </div>
                   )}
                 </div>
 
+                {/* LOGOUT */}
+
                 <button
                   type="button"
                   onClick={handleLogout}
-                  style={{
-                    width: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: 16,
-                    border: 0,
-                    background:
-                      "transparent",
-                    color: "#ff5060",
-                    textAlign: "left",
-                    fontSize: 12,
-                    fontWeight: 800,
-                  }}
+                  className="
+                    flex
+                    w-full
+                    items-center
+                    gap-3
+                    p-5
+                    text-left
+                    text-sm
+                    font-bold
+                    text-[#FFE500]
+                    transition
+                    hover:bg-yellow-400/10
+                  "
                 >
-                  <LogOut size={17} />
+                  <LogOut size={18} />
 
                   Выйти из профиля
                 </button>
@@ -245,9 +297,7 @@ function Header() {
           </div>
 
         </div>
-
       </div>
-
     </header>
   );
 }
