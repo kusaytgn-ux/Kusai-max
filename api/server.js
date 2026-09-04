@@ -894,6 +894,134 @@ app.get("/api/1c/clients", async (req, res) => {
 });
 
 // =====================================================
+// PRODUCT GROUPS
+// =====================================================
+
+// GET ALL PRODUCT GROUPS
+app.get("/api/product-groups", async (req, res) => {
+  try {
+    const snapshot = await db
+      .collection("productGroups")
+      .orderBy("createdAt", "asc")
+      .get();
+
+    const groups = snapshot.docs.map((doc) => {
+      const data = doc.data();
+
+      return {
+        id: doc.id,
+        ...data,
+        createdAt:
+          data.createdAt?.toDate
+            ? data.createdAt.toDate().toISOString()
+            : data.createdAt ?? null,
+      };
+    });
+
+    return res.json({
+      success: true,
+      groups,
+    });
+  } catch (error) {
+    console.error("GET PRODUCT GROUPS ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка получения групп",
+    });
+  }
+});
+
+// CREATE PRODUCT GROUP
+app.post("/api/product-groups", async (req, res) => {
+  try {
+    const { name } = req.body;
+
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Введите название группы",
+      });
+    }
+
+    const normalizedName = String(name).trim();
+
+    const existingSnapshot = await db
+      .collection("productGroups")
+      .where("name", "==", normalizedName)
+      .limit(1)
+      .get();
+
+    if (!existingSnapshot.empty) {
+      return res.status(409).json({
+        success: false,
+        message: "Такая группа уже существует",
+      });
+    }
+
+    const group = {
+      name: normalizedName,
+      createdAt: new Date(),
+    };
+
+    const groupRef = await db
+      .collection("productGroups")
+      .add(group);
+
+    return res.status(201).json({
+      success: true,
+      message: "Группа создана",
+      group: {
+        id: groupRef.id,
+        name: group.name,
+        createdAt: group.createdAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error("CREATE PRODUCT GROUP ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка создания группы",
+    });
+  }
+});
+
+// DELETE PRODUCT GROUP
+app.delete("/api/product-groups/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const groupRef = db
+      .collection("productGroups")
+      .doc(id);
+
+    const groupDoc = await groupRef.get();
+
+    if (!groupDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: "Группа не найдена",
+      });
+    }
+
+    await groupRef.delete();
+
+    return res.json({
+      success: true,
+      message: "Группа удалена",
+    });
+  } catch (error) {
+    console.error("DELETE PRODUCT GROUP ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка удаления группы",
+    });
+  }
+});
+
+// =====================================================
 // UNKNOWN ROUTE
 // =====================================================
 
