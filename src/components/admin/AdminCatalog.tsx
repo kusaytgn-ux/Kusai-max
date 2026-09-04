@@ -155,7 +155,7 @@ function AdminCatalog() {
 
       const response =
         await fetch(
-          `${API_URL}/api/groups`
+          `${API_URL}/api/product-groups`
         );
 
 
@@ -215,7 +215,7 @@ function AdminCatalog() {
 
       const response =
         await fetch(
-          `${API_URL}/api/groups/${groupId}/subgroups`
+          `${API_URL}/api/product-groups/${groupId}/subgroups`
         );
 
 
@@ -300,7 +300,7 @@ function AdminCatalog() {
 
       const response =
         await fetch(
-          `${API_URL}/api/groups`,
+          `${API_URL}/api/product-groups`,
           {
             method: "POST",
 
@@ -381,7 +381,7 @@ function AdminCatalog() {
 
       const response =
         await fetch(
-          `${API_URL}/api/groups/${group.id}`,
+          `${API_URL}/api/product-groups/${group.id}`,
           {
             method: "DELETE",
           }
@@ -475,7 +475,7 @@ function AdminCatalog() {
 
       const response =
         await fetch(
-          `${API_URL}/api/groups/${selectedGroup}/subgroups`,
+          `${API_URL}/api/product-groups/${selectedGroup}/subgroups`,
           {
             method: "POST",
 
@@ -558,7 +558,7 @@ function AdminCatalog() {
 
       const response =
         await fetch(
-          `${API_URL}/api/subgroups/${subgroup.id}`,
+          `${API_URL}/api/product-subgroups/${subgroup.id}`,
           {
             method: "DELETE",
           }
