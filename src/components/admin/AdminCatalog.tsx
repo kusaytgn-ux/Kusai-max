@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -9,6 +10,9 @@ import {
   Plus,
   Package,
   RefreshCw,
+  FolderPlus,
+  Folder,
+  ChevronDown,
 } from "lucide-react";
 
 import ProductModal from "./ProductModal";
@@ -25,303 +29,22 @@ import {
 } from "../../store/ProductContext";
 
 
-type CatalogSection = {
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  "";
+
+
+type ProductGroup = {
+  id: string;
   name: string;
-  brands: string[];
 };
 
 
-type ParsedProduct = Product & {
-  brand: string;
-  subcategory: string;
-  section: string;
+type ProductSubgroup = {
+  id: string;
+  groupId: string;
+  name: string;
 };
-
-
-const TECH_CATEGORIES = [
-  "iphone",
-  "ipad",
-  "mac",
-  "macbook",
-  "imac",
-  "mac mini",
-  "mac studio",
-  "mac pro",
-  "apple watch",
-  "airpods",
-  "airpods max",
-  "airpods pro",
-
-  "galaxy s",
-  "galaxy a",
-  "galaxy z",
-  "galaxy note",
-  "galaxy watch",
-  "galaxy buds",
-
-  "smartphone",
-  "смартфон",
-  "планшет",
-  "ноутбук",
-  "компьютер",
-  "телевизор",
-  "tv",
-  "watch",
-];
-
-
-const KNOWN_BRANDS = [
-  "Apple",
-  "Samsung",
-  "Xiaomi",
-  "Huawei",
-  "Honor",
-  "Sony",
-  "JBL",
-  "Anker",
-  "Baseus",
-  "Belkin",
-  "Marshall",
-  "Google",
-  "Nothing",
-  "Dyson",
-];
-
-
-function detectBrand(
-  rawCategory: string,
-  title: string
-): string {
-
-  const categoryFirstPart =
-    rawCategory
-      .split("/")
-      .map((part) => part.trim())
-      .filter(Boolean)[0] || "";
-
-  const titleLower =
-    title.toLowerCase();
-
-  const categoryLower =
-    categoryFirstPart.toLowerCase();
-
-  const knownBrand =
-    KNOWN_BRANDS.find(
-      (brand) =>
-        categoryLower ===
-          brand.toLowerCase() ||
-        titleLower.startsWith(
-          brand.toLowerCase()
-        )
-    );
-
-  if (knownBrand) {
-    return knownBrand;
-  }
-
-  if (categoryFirstPart) {
-    return categoryFirstPart;
-  }
-
-  return "Другие";
-}
-
-
-function detectSubcategory(
-  rawCategory: string,
-  title: string
-): string {
-
-  const parts =
-    rawCategory
-      .split("/")
-      .map((part) => part.trim())
-      .filter(Boolean);
-
-  if (parts.length > 1) {
-    return parts
-      .slice(1)
-      .join(" / ");
-  }
-
-  const titleLower =
-    title.toLowerCase();
-
-  const knownSubcategories = [
-    "iPhone",
-    "iPad",
-    "MacBook",
-    "Mac",
-    "iMac",
-    "Mac mini",
-    "Mac Studio",
-
-    "Apple Watch",
-
-    "AirPods",
-    "AirPods Pro",
-    "AirPods Max",
-
-    "Galaxy S",
-    "Galaxy A",
-    "Galaxy Z",
-    "Galaxy Watch",
-    "Galaxy Buds",
-
-    "Наушники",
-    "Чехлы",
-    "Зарядные устройства",
-    "Кабели",
-    "Повербанки",
-    "Адаптеры",
-    "Стекла",
-    "Защитные пленки",
-  ];
-
-  const found =
-    knownSubcategories.find(
-      (subcategory) =>
-        titleLower.includes(
-          subcategory.toLowerCase()
-        )
-    );
-
-  return found || "Другое";
-}
-
-
-function detectSection(
-  rawCategory: string,
-  title: string,
-  subcategory: string
-): string {
-
-  const value =
-    `${rawCategory} ${title} ${subcategory}`
-      .toLowerCase();
-
-
-  const isAccessory = [
-
-    "чехол",
-    "case",
-
-    "кабель",
-    "cable",
-
-    "зарядк",
-    "charger",
-
-    "адаптер",
-    "adapter",
-
-    "стекло",
-
-    "пленк",
-
-    "защит",
-
-    "powerbank",
-    "power bank",
-    "повербанк",
-
-    "ремешок",
-    "strap",
-
-    "клавиатур",
-    "keyboard",
-
-    "мышь",
-    "mouse",
-
-    "держатель",
-    "holder",
-
-    "аксессуар",
-    "accessor",
-
-  ].some(
-    (word) => value.includes(word)
-  );
-
-
-  if (isAccessory) {
-    return "Аксессуары";
-  }
-
-
-  const isTechnology =
-    TECH_CATEGORIES.some(
-      (category) =>
-        value.includes(category)
-    );
-
-
-  if (isTechnology) {
-    return "Техника";
-  }
-
-
-  if (
-    KNOWN_BRANDS.some(
-      (brand) =>
-        value.includes(
-          brand.toLowerCase()
-        )
-    )
-  ) {
-    return "Техника";
-  }
-
-
-  return "Аксессуары";
-}
-
-
-function parseProduct(
-  product: Product
-): ParsedProduct {
-
-  const rawCategory =
-    String(
-      product.category || ""
-    ).trim();
-
-  const title =
-    String(
-      product.title || ""
-    ).trim();
-
-
-  const brand =
-    detectBrand(
-      rawCategory,
-      title
-    );
-
-
-  const subcategory =
-    detectSubcategory(
-      rawCategory,
-      title
-    );
-
-
-  const section =
-    detectSection(
-      rawCategory,
-      title,
-      subcategory
-    );
-
-
-  return {
-    ...product,
-    brand,
-    subcategory,
-    section,
-  };
-}
 
 
 function AdminCatalog() {
@@ -334,6 +57,10 @@ function AdminCatalog() {
     refreshProducts,
   } = useProducts();
 
+
+  /* =========================================
+     PRODUCT MODAL
+  ========================================= */
 
   const [
     modalOpen,
@@ -349,215 +76,597 @@ function AdminCatalog() {
   );
 
 
+  /* =========================================
+     GROUPS
+  ========================================= */
+
   const [
-    selectedSection,
-    setSelectedSection,
+    groups,
+    setGroups,
+  ] = useState<ProductGroup[]>([]);
+
+
+  const [
+    subgroups,
+    setSubgroups,
+  ] = useState<ProductSubgroup[]>([]);
+
+
+  const [
+    groupsLoading,
+    setGroupsLoading,
+  ] = useState(false);
+
+
+  const [
+    selectedGroup,
+    setSelectedGroup,
   ] = useState("");
 
 
   const [
-    selectedBrand,
-    setSelectedBrand,
+    selectedSubgroup,
+    setSelectedSubgroup,
+  ] = useState("");
+
+
+  /* =========================================
+     ADD GROUP
+  ========================================= */
+
+  const [
+    newGroupName,
+    setNewGroupName,
   ] = useState("");
 
 
   const [
-    selectedCategory,
-    setSelectedCategory,
+    addingGroup,
+    setAddingGroup,
+  ] = useState(false);
+
+
+  /* =========================================
+     ADD SUBGROUP
+  ========================================= */
+
+  const [
+    newSubgroupName,
+    setNewSubgroupName,
   ] = useState("");
 
 
-  const parsedProducts =
-    useMemo(
-      () =>
-        products.map(
-          parseProduct
-        ),
-      [products]
-    );
+  const [
+    addingSubgroup,
+    setAddingSubgroup,
+  ] = useState(false);
 
 
-  const sections =
-    useMemo<CatalogSection[]>(
-      () => [
+  /* =========================================
+     LOAD GROUPS
+  ========================================= */
 
-        {
-          name: "Техника",
+  async function loadGroups() {
 
-          brands: [
+    try {
 
-            "Apple",
-            "Samsung",
-            "Xiaomi",
-            "Huawei",
-            "Honor",
-            "Google",
-            "Nothing",
-            "Sony",
-            "Dyson",
-
-          ],
-        },
+      setGroupsLoading(true);
 
 
-        {
-          name: "Аксессуары",
-
-          brands: [
-
-            "Apple",
-            "Samsung",
-            "Anker",
-            "Baseus",
-            "Belkin",
-            "JBL",
-            "Marshall",
-            "Sony",
-            "Другие",
-
-          ],
-        },
-
-      ],
-      []
-    );
-
-
-  const visibleBrands =
-    useMemo(() => {
-
-      if (!selectedSection) {
-        return [];
-      }
-
-      const section =
-        sections.find(
-          (item) =>
-            item.name ===
-            selectedSection
-        );
-
-      return section?.brands || [];
-
-    }, [
-      selectedSection,
-      sections,
-    ]);
-
-
-  const visibleSubcategories =
-    useMemo(() => {
-
-      if (
-        !selectedSection ||
-        !selectedBrand
-      ) {
-        return [];
-      }
-
-
-      const source =
-        parsedProducts.filter(
-          (product) =>
-            product.section ===
-              selectedSection &&
-            product.brand ===
-              selectedBrand
+      const response =
+        await fetch(
+          `${API_URL}/api/groups`
         );
 
 
-      return Array.from(
-        new Set(
-          source
-            .map(
-              (product) =>
-                product.subcategory
-            )
-            .filter(Boolean)
-        )
-      ).sort(
-        (a, b) =>
-          a.localeCompare(
-            b,
-            "ru"
-          )
+      if (!response.ok) {
+
+        throw new Error(
+          "Не удалось загрузить группы"
+        );
+
+      }
+
+
+      const data =
+        await response.json();
+
+
+      setGroups(
+        Array.isArray(data)
+          ? data
+          : data.groups || []
       );
 
-    }, [
-      parsedProducts,
-      selectedSection,
-      selectedBrand,
-    ]);
+    } catch (error) {
 
+      console.error(
+        "Ошибка загрузки групп:",
+        error
+      );
+
+    } finally {
+
+      setGroupsLoading(false);
+
+    }
+
+  }
+
+
+  /* =========================================
+     LOAD SUBGROUPS
+  ========================================= */
+
+  async function loadSubgroups(
+    groupId: string
+  ) {
+
+    if (!groupId) {
+
+      setSubgroups([]);
+
+      return;
+
+    }
+
+
+    try {
+
+      const response =
+        await fetch(
+          `${API_URL}/api/groups/${groupId}/subgroups`
+        );
+
+
+      if (!response.ok) {
+
+        throw new Error(
+          "Не удалось загрузить подгруппы"
+        );
+
+      }
+
+
+      const data =
+        await response.json();
+
+
+      setSubgroups(
+        Array.isArray(data)
+          ? data
+          : data.subgroups || []
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Ошибка загрузки подгрупп:",
+        error
+      );
+
+      setSubgroups([]);
+
+    }
+
+  }
+
+
+  useEffect(() => {
+
+    void loadGroups();
+
+  }, []);
+
+
+  useEffect(() => {
+
+    setSelectedSubgroup("");
+
+    void loadSubgroups(
+      selectedGroup
+    );
+
+  }, [
+    selectedGroup,
+  ]);
+
+
+  /* =========================================
+     ADD GROUP
+  ========================================= */
+
+  async function handleAddGroup() {
+
+    const name =
+      newGroupName.trim();
+
+
+    if (!name) {
+
+      alert(
+        "Введите название группы"
+      );
+
+      return;
+
+    }
+
+
+    try {
+
+      setAddingGroup(true);
+
+
+      const response =
+        await fetch(
+          `${API_URL}/api/groups`,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              name,
+            }),
+          }
+        );
+
+
+      if (!response.ok) {
+
+        const error =
+          await response.json()
+            .catch(() => null);
+
+
+        throw new Error(
+          error?.message ||
+          "Не удалось создать группу"
+        );
+
+      }
+
+
+      setNewGroupName("");
+
+
+      await loadGroups();
+
+    } catch (error) {
+
+      console.error(
+        "Ошибка создания группы:",
+        error
+      );
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Не удалось создать группу"
+      );
+
+    } finally {
+
+      setAddingGroup(false);
+
+    }
+
+  }
+
+
+  /* =========================================
+     DELETE GROUP
+  ========================================= */
+
+  async function handleDeleteGroup(
+    group: ProductGroup
+  ) {
+
+    const confirmed =
+      window.confirm(
+        `Удалить группу "${group.name}"?\n\nПодгруппы этой группы также будут удалены.`
+      );
+
+
+    if (!confirmed) {
+      return;
+    }
+
+
+    try {
+
+      const response =
+        await fetch(
+          `${API_URL}/api/groups/${group.id}`,
+          {
+            method: "DELETE",
+          }
+        );
+
+
+      if (!response.ok) {
+
+        const error =
+          await response.json()
+            .catch(() => null);
+
+
+        throw new Error(
+          error?.message ||
+          "Не удалось удалить группу"
+        );
+
+      }
+
+
+      if (
+        selectedGroup === group.id
+      ) {
+
+        setSelectedGroup("");
+
+        setSelectedSubgroup("");
+
+        setSubgroups([]);
+
+      }
+
+
+      await loadGroups();
+
+    } catch (error) {
+
+      console.error(
+        "Ошибка удаления группы:",
+        error
+      );
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Не удалось удалить группу"
+      );
+
+    }
+
+  }
+
+
+  /* =========================================
+     ADD SUBGROUP
+  ========================================= */
+
+  async function handleAddSubgroup() {
+
+    if (!selectedGroup) {
+
+      alert(
+        "Сначала выберите группу"
+      );
+
+      return;
+
+    }
+
+
+    const name =
+      newSubgroupName.trim();
+
+
+    if (!name) {
+
+      alert(
+        "Введите название подгруппы"
+      );
+
+      return;
+
+    }
+
+
+    try {
+
+      setAddingSubgroup(true);
+
+
+      const response =
+        await fetch(
+          `${API_URL}/api/groups/${selectedGroup}/subgroups`,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              name,
+            }),
+          }
+        );
+
+
+      if (!response.ok) {
+
+        const error =
+          await response.json()
+            .catch(() => null);
+
+
+        throw new Error(
+          error?.message ||
+          "Не удалось создать подгруппу"
+        );
+
+      }
+
+
+      setNewSubgroupName("");
+
+
+      await loadSubgroups(
+        selectedGroup
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Ошибка создания подгруппы:",
+        error
+      );
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Не удалось создать подгруппу"
+      );
+
+    } finally {
+
+      setAddingSubgroup(false);
+
+    }
+
+  }
+
+
+  /* =========================================
+     DELETE SUBGROUP
+  ========================================= */
+
+  async function handleDeleteSubgroup(
+    subgroup: ProductSubgroup
+  ) {
+
+    const confirmed =
+      window.confirm(
+        `Удалить подгруппу "${subgroup.name}"?`
+      );
+
+
+    if (!confirmed) {
+      return;
+    }
+
+
+    try {
+
+      const response =
+        await fetch(
+          `${API_URL}/api/subgroups/${subgroup.id}`,
+          {
+            method: "DELETE",
+          }
+        );
+
+
+      if (!response.ok) {
+
+        const error =
+          await response.json()
+            .catch(() => null);
+
+
+        throw new Error(
+          error?.message ||
+          "Не удалось удалить подгруппу"
+        );
+
+      }
+
+
+      if (
+        selectedSubgroup === subgroup.id
+      ) {
+
+        setSelectedSubgroup("");
+
+      }
+
+
+      await loadSubgroups(
+        selectedGroup
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Ошибка удаления подгруппы:",
+        error
+      );
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Не удалось удалить подгруппу"
+      );
+
+    }
+
+  }
+
+
+  /* =========================================
+     PRODUCTS FILTER
+  ========================================= */
 
   const filteredProducts =
     useMemo(() => {
 
-      if (!selectedSection) {
-        return [];
-      }
-
-
-      return parsedProducts.filter(
+      return products.filter(
         (product) => {
 
-          const matchSection =
-            product.section ===
-            selectedSection;
+          const productGroupId =
+            String(
+              (product as Product & {
+                groupId?: string;
+              }).groupId || ""
+            );
 
 
-          const matchBrand =
-            !selectedBrand ||
-            product.brand ===
-              selectedBrand;
+          const productSubgroupId =
+            String(
+              (product as Product & {
+                subgroupId?: string;
+              }).subgroupId || ""
+            );
 
 
-          const matchCategory =
-            !selectedCategory ||
-            product.subcategory ===
-              selectedCategory;
+          const matchGroup =
+            !selectedGroup ||
+            productGroupId ===
+              selectedGroup;
+
+
+          const matchSubgroup =
+            !selectedSubgroup ||
+            productSubgroupId ===
+              selectedSubgroup;
 
 
           return (
-            matchSection &&
-            matchBrand &&
-            matchCategory
+            matchGroup &&
+            matchSubgroup
           );
 
         }
       );
 
     }, [
-      parsedProducts,
-      selectedSection,
-      selectedBrand,
-      selectedCategory,
+      products,
+      selectedGroup,
+      selectedSubgroup,
     ]);
 
 
-  function handleSectionChange(
-    section: string
-  ) {
-
-    setSelectedSection(section);
-
-    setSelectedBrand("");
-
-    setSelectedCategory("");
-
-  }
-
-
-  function handleBrandChange(
-    brand: string
-  ) {
-
-    setSelectedBrand(brand);
-
-    setSelectedCategory("");
-
-  }
-
+  /* =========================================
+     DELETE PRODUCT
+  ========================================= */
 
   async function handleDelete(
     id: string
@@ -567,6 +676,7 @@ function AdminCatalog() {
       window.confirm(
         "Удалить этот товар?"
       );
+
 
     if (!confirmed) {
       return;
@@ -594,6 +704,10 @@ function AdminCatalog() {
 
   }
 
+
+  /* =========================================
+     STOCK
+  ========================================= */
 
   async function handleStockChange(
     product: Product
@@ -627,6 +741,10 @@ function AdminCatalog() {
 
   }
 
+
+  /* =========================================
+     LOADING
+  ========================================= */
 
   if (loading) {
 
@@ -666,9 +784,7 @@ function AdminCatalog() {
 
     <>
 
-      {/* =========================================
-          PRODUCT MODAL
-      ========================================= */}
+      {/* PRODUCT MODAL */}
 
       <ProductModal
 
@@ -696,9 +812,7 @@ function AdminCatalog() {
       <div className="min-w-0">
 
 
-        {/* =========================================
-            HEADER
-        ========================================= */}
+        {/* HEADER */}
 
         <div
           className="
@@ -751,26 +865,13 @@ function AdminCatalog() {
                   Каталог товаров
                 </h2>
 
-
                 <p className="mt-1 text-sm text-white/40">
 
-                  Загружено{" "}
+                  Всего товаров:{" "}
 
                   <span className="font-bold text-white">
                     {products.length}
                   </span>
-
-                  {hasMore && (
-                    <>
-                      {" "}товаров...
-                    </>
-                  )}
-
-                  {!hasMore && (
-                    <>
-                      {" "}товаров всего
-                    </>
-                  )}
 
                 </p>
 
@@ -787,13 +888,22 @@ function AdminCatalog() {
               type="button"
 
               onClick={() => {
+
                 void refreshProducts();
+
+                void loadGroups();
+
+                if (selectedGroup) {
+                  void loadSubgroups(
+                    selectedGroup
+                  );
+                }
+
               }}
 
               className="
                 flex
                 items-center
-                justify-center
                 gap-2
                 rounded-xl
                 border
@@ -803,15 +913,14 @@ function AdminCatalog() {
                 py-3
                 font-bold
                 text-white
-                transition
-                hover:border-white/20
               "
             >
 
               <RefreshCw
                 size={18}
                 className={
-                  loadingMore
+                  loadingMore ||
+                  groupsLoading
                     ? "animate-spin"
                     : ""
                 }
@@ -836,7 +945,6 @@ function AdminCatalog() {
               className="
                 flex
                 items-center
-                justify-center
                 gap-2
                 rounded-xl
                 bg-[#A8FF00]
@@ -844,15 +952,10 @@ function AdminCatalog() {
                 py-3
                 font-black
                 text-black
-                transition
-                hover:brightness-110
               "
             >
 
-              <Plus
-                size={19}
-                strokeWidth={2.5}
-              />
+              <Plus size={19} />
 
               Добавить товар
 
@@ -863,68 +966,421 @@ function AdminCatalog() {
         </div>
 
 
-        {/* =========================================
-            LOADING ALL PRODUCTS
-        ========================================= */}
+        {/* =====================================
+            GROUP MANAGEMENT
+        ====================================== */}
 
-        {hasMore && (
+        <div
+          className="
+            mb-8
+            rounded-2xl
+            border
+            border-white/[0.08]
+            bg-[#0C0C0C]
+            p-6
+          "
+        >
 
-          <div
-            className="
-              mb-6
-              flex
-              items-center
-              justify-between
-              rounded-2xl
-              border
-              border-[#A8FF00]/15
-              bg-[#A8FF00]/[0.04]
-              px-5
-              py-4
-            "
-          >
+          <div className="mb-6 flex items-center gap-3">
+
+            <FolderPlus
+              size={22}
+              className="text-[#A8FF00]"
+            />
 
             <div>
 
-              <p className="font-bold text-white">
-                Каталог загружается
-              </p>
+              <h3 className="font-black text-white">
+                Группы и подгруппы
+              </h3>
 
               <p className="mt-1 text-sm text-white/40">
-
-                Уже получено{" "}
-
-                {products.length} товаров
-
+                Создавайте структуру каталога
               </p>
 
             </div>
 
+          </div>
 
-            {loadingMore && (
 
-              <div
+          {/* ADD GROUP */}
+
+          <div className="mb-6">
+
+            <p className="mb-3 text-sm font-bold text-white">
+              Новая группа
+            </p>
+
+            <div className="flex gap-3">
+
+              <input
+
+                value={newGroupName}
+
+                onChange={(event) =>
+                  setNewGroupName(
+                    event.target.value
+                  )
+                }
+
+                onKeyDown={(event) => {
+
+                  if (
+                    event.key === "Enter"
+                  ) {
+
+                    void handleAddGroup();
+
+                  }
+
+                }}
+
+                placeholder="Например: Apple"
+
                 className="
-                  h-6
-                  w-6
-                  animate-spin
-                  rounded-full
-                  border-2
-                  border-white/10
-                  border-t-[#A8FF00]
+                  min-w-0
+                  flex-1
+                  rounded-xl
+                  border
+                  border-white/[0.08]
+                  bg-[#080808]
+                  px-4
+                  py-3
+                  text-white
+                  outline-none
+                  placeholder:text-white/25
+                  focus:border-[#A8FF00]/50
                 "
               />
+
+
+              <button
+                type="button"
+
+                disabled={addingGroup}
+
+                onClick={() => {
+                  void handleAddGroup();
+                }}
+
+                className="
+                  rounded-xl
+                  bg-[#A8FF00]
+                  px-5
+                  py-3
+                  font-black
+                  text-black
+                  disabled:opacity-50
+                "
+              >
+
+                Добавить
+
+              </button>
+
+            </div>
+
+          </div>
+
+
+          {/* GROUP LIST */}
+
+          <div>
+
+            <p className="mb-3 text-sm font-bold text-white">
+              Созданные группы
+            </p>
+
+
+            {groups.length === 0 ? (
+
+              <p className="text-sm text-white/35">
+                Пока нет созданных групп
+              </p>
+
+            ) : (
+
+              <div className="flex flex-wrap gap-3">
+
+                {groups.map((group) => (
+
+                  <div
+                    key={group.id}
+
+                    className={`
+                      flex
+                      items-center
+                      gap-2
+                      rounded-xl
+                      border
+                      px-3
+                      py-2
+
+                      ${
+                        selectedGroup === group.id
+                          ? "border-[#A8FF00]/50 bg-[#A8FF00]/10"
+                          : "border-white/[0.08] bg-[#080808]"
+                      }
+                    `}
+                  >
+
+                    <button
+                      type="button"
+
+                      onClick={() =>
+                        setSelectedGroup(
+                          group.id
+                        )
+                      }
+
+                      className="
+                        flex
+                        items-center
+                        gap-2
+                        font-bold
+                        text-white
+                      "
+                    >
+
+                      <Folder
+                        size={16}
+                        className="text-[#A8FF00]"
+                      />
+
+                      {group.name}
+
+                    </button>
+
+
+                    <button
+                      type="button"
+
+                      onClick={() => {
+                        void handleDeleteGroup(
+                          group
+                        );
+                      }}
+
+                      className="
+                        ml-1
+                        text-white/35
+                        transition
+                        hover:text-[#EC008C]
+                      "
+                    >
+
+                      <Trash2 size={16} />
+
+                    </button>
+
+                  </div>
+
+                ))}
+
+              </div>
 
             )}
 
           </div>
 
-        )}
+
+          {/* SUBGROUPS */}
+
+          {selectedGroup && (
+
+            <div
+              className="
+                mt-8
+                border-t
+                border-white/[0.08]
+                pt-6
+              "
+            >
+
+              <div className="mb-4 flex items-center gap-2">
+
+                <ChevronDown
+                  size={18}
+                  className="text-[#A8FF00]"
+                />
+
+                <p className="font-bold text-white">
+                  Подгруппы
+                </p>
+
+              </div>
 
 
-        {/* =========================================
+              {/* ADD SUBGROUP */}
+
+              <div className="mb-5 flex gap-3">
+
+                <input
+
+                  value={newSubgroupName}
+
+                  onChange={(event) =>
+                    setNewSubgroupName(
+                      event.target.value
+                    )
+                  }
+
+                  onKeyDown={(event) => {
+
+                    if (
+                      event.key === "Enter"
+                    ) {
+
+                      void handleAddSubgroup();
+
+                    }
+
+                  }}
+
+                  placeholder="Например: iPhone"
+
+                  className="
+                    min-w-0
+                    flex-1
+                    rounded-xl
+                    border
+                    border-white/[0.08]
+                    bg-[#080808]
+                    px-4
+                    py-3
+                    text-white
+                    outline-none
+                    placeholder:text-white/25
+                    focus:border-[#A8FF00]/50
+                  "
+                />
+
+
+                <button
+                  type="button"
+
+                  disabled={addingSubgroup}
+
+                  onClick={() => {
+                    void handleAddSubgroup();
+                  }}
+
+                  className="
+                    rounded-xl
+                    border
+                    border-[#A8FF00]/30
+                    bg-[#A8FF00]/10
+                    px-5
+                    py-3
+                    font-black
+                    text-[#A8FF00]
+                    disabled:opacity-50
+                  "
+                >
+
+                  Добавить
+
+                </button>
+
+              </div>
+
+
+              {/* SUBGROUP LIST */}
+
+              {subgroups.length === 0 ? (
+
+                <p className="text-sm text-white/35">
+                  В этой группе пока нет подгрупп
+                </p>
+
+              ) : (
+
+                <div className="flex flex-wrap gap-3">
+
+                  {subgroups.map(
+                    (subgroup) => (
+
+                      <div
+                        key={subgroup.id}
+
+                        className={`
+                          flex
+                          items-center
+                          gap-2
+                          rounded-xl
+                          border
+                          px-3
+                          py-2
+
+                          ${
+                            selectedSubgroup ===
+                            subgroup.id
+                              ? "border-[#A8FF00]/50 bg-[#A8FF00]/10"
+                              : "border-white/[0.08] bg-[#080808]"
+                          }
+                        `}
+                      >
+
+                        <button
+                          type="button"
+
+                          onClick={() =>
+                            setSelectedSubgroup(
+                              subgroup.id
+                            )
+                          }
+
+                          className="
+                            text-sm
+                            font-bold
+                            text-white
+                          "
+                        >
+
+                          {subgroup.name}
+
+                        </button>
+
+
+                        <button
+                          type="button"
+
+                          onClick={() => {
+                            void handleDeleteSubgroup(
+                              subgroup
+                            );
+                          }}
+
+                          className="
+                            text-white/35
+                            transition
+                            hover:text-[#EC008C]
+                          "
+                        >
+
+                          <Trash2 size={15} />
+
+                        </button>
+
+                      </div>
+
+                    )
+                  )}
+
+                </div>
+
+              )}
+
+            </div>
+
+          )}
+
+        </div>
+
+
+        {/* =====================================
             STATS
-        ========================================= */}
+        ====================================== */}
 
         <div
           className="
@@ -937,494 +1393,182 @@ function AdminCatalog() {
           "
         >
 
-          <div
-            className="
-              rounded-2xl
-              border
-              border-white/[0.08]
-              bg-[#0C0C0C]
-              p-5
-            "
-          >
+          <div className="rounded-2xl border border-white/[0.08] bg-[#0C0C0C] p-5">
 
-            <p
-              className="
-                text-xs
-                font-bold
-                uppercase
-                tracking-[0.18em]
-                text-white/35
-              "
-            >
-              Загружено товаров
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/35">
+              Всего товаров
             </p>
 
-
-            <div className="mt-3">
-
-              <span className="text-3xl font-black text-white">
-                {products.length}
-              </span>
-
-            </div>
+            <span className="mt-3 block text-3xl font-black text-white">
+              {products.length}
+            </span>
 
           </div>
 
 
-          <div
-            className="
-              rounded-2xl
-              border
-              border-white/[0.08]
-              bg-[#0C0C0C]
-              p-5
-            "
-          >
+          <div className="rounded-2xl border border-white/[0.08] bg-[#0C0C0C] p-5">
 
-            <p
-              className="
-                text-xs
-                font-bold
-                uppercase
-                tracking-[0.18em]
-                text-white/35
-              "
-            >
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/35">
               В наличии
             </p>
 
+            <span className="mt-3 block text-3xl font-black text-[#A8FF00]">
 
-            <div className="mt-3">
+              {
+                products.filter(
+                  (product) =>
+                    product.inStock
+                ).length
+              }
 
-              <span className="text-3xl font-black text-[#A8FF00]">
-
-                {
-                  products.filter(
-                    (product) =>
-                      product.inStock
-                  ).length
-                }
-
-              </span>
-
-            </div>
+            </span>
 
           </div>
 
 
-          <div
-            className="
-              rounded-2xl
-              border
-              border-white/[0.08]
-              bg-[#0C0C0C]
-              p-5
-            "
-          >
+          <div className="rounded-2xl border border-white/[0.08] bg-[#0C0C0C] p-5">
 
-            <p
-              className="
-                text-xs
-                font-bold
-                uppercase
-                tracking-[0.18em]
-                text-white/35
-              "
-            >
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/35">
               Нет в наличии
             </p>
 
+            <span className="mt-3 block text-3xl font-black text-[#EC008C]">
 
-            <div className="mt-3">
+              {
+                products.filter(
+                  (product) =>
+                    !product.inStock
+                ).length
+              }
 
-              <span className="text-3xl font-black text-[#EC008C]">
-
-                {
-                  products.filter(
-                    (product) =>
-                      !product.inStock
-                  ).length
-                }
-
-              </span>
-
-            </div>
+            </span>
 
           </div>
 
 
-          <div
-            className="
-              rounded-2xl
-              border
-              border-white/[0.08]
-              bg-[#0C0C0C]
-              p-5
-            "
-          >
+          <div className="rounded-2xl border border-white/[0.08] bg-[#0C0C0C] p-5">
 
-            <p
-              className="
-                text-xs
-                font-bold
-                uppercase
-                tracking-[0.18em]
-                text-white/35
-              "
-            >
-              Категории
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/35">
+              Группы
             </p>
 
-
-            <div className="mt-3">
-
-              <span className="text-3xl font-black text-white">
-
-                {
-                  new Set(
-                    parsedProducts.map(
-                      (product) =>
-                        product.subcategory
-                    )
-                  ).size
-                }
-
-              </span>
-
-            </div>
+            <span className="mt-3 block text-3xl font-black text-white">
+              {groups.length}
+            </span>
 
           </div>
 
         </div>
 
 
-        {/* =========================================
-            SECTIONS
-        ========================================= */}
+        {/* =====================================
+            PRODUCTS
+        ====================================== */}
 
-        <div className="mb-6">
+        <div
+          className="
+            overflow-hidden
+            rounded-2xl
+            border
+            border-white/[0.08]
+            bg-[#0C0C0C]
+          "
+        >
 
-          <p
+          <div
             className="
-              mb-3
-              text-xs
+              hidden
+              grid-cols-12
+              border-b
+              border-white/[0.08]
+              bg-[#080808]
+              px-6
+              py-4
+              text-[11px]
               font-black
               uppercase
               tracking-[0.16em]
               text-white/35
+              md:grid
             "
           >
-            Раздел
-          </p>
 
+            <div className="col-span-2">
+              Фото
+            </div>
 
-          <div className="flex flex-wrap gap-3">
+            <div className="col-span-3">
+              Название
+            </div>
 
-            {sections.map((section) => (
+            <div className="col-span-2">
+              Группа
+            </div>
 
-              <button
-                key={section.name}
+            <div className="col-span-2">
+              Цена
+            </div>
 
-                type="button"
+            <div className="col-span-1">
+              Статус
+            </div>
 
-                onClick={() =>
-                  handleSectionChange(
-                    section.name
-                  )
-                }
-
-                className={`
-                  rounded-xl
-                  px-5
-                  py-3
-                  text-sm
-                  font-black
-                  transition
-
-                  ${
-                    selectedSection ===
-                    section.name
-
-                      ? "bg-[#A8FF00] text-black"
-
-                      : "border border-white/[0.08] bg-[#0C0C0C] text-white/60 hover:border-white/20"
-                  }
-                `}
-              >
-
-                {section.name}
-
-              </button>
-
-            ))}
-
-          </div>
-
-        </div>
-
-
-        {/* =========================================
-            BRANDS
-        ========================================= */}
-
-        {selectedSection && (
-
-          <div className="mb-6">
-
-            <p
-              className="
-                mb-3
-                text-xs
-                font-black
-                uppercase
-                tracking-[0.16em]
-                text-white/35
-              "
-            >
-
-              Бренды · {selectedSection}
-
-            </p>
-
-
-            <div className="flex flex-wrap gap-2">
-
-              {visibleBrands.map((brand) => (
-
-                <button
-                  key={brand}
-
-                  type="button"
-
-                  onClick={() =>
-                    handleBrandChange(
-                      brand
-                    )
-                  }
-
-                  className={`
-                    rounded-xl
-                    px-4
-                    py-2.5
-                    text-sm
-                    font-bold
-                    transition
-
-                    ${
-                      selectedBrand ===
-                      brand
-
-                        ? "bg-[#A8FF00] text-black"
-
-                        : "border border-white/[0.08] bg-[#0C0C0C] text-white/60 hover:border-white/20"
-                    }
-                  `}
-                >
-
-                  {brand}
-
-                </button>
-
-              ))}
-
+            <div className="col-span-2 text-right">
+              Действия
             </div>
 
           </div>
 
-        )}
 
+          {filteredProducts.length === 0 ? (
 
-        {/* =========================================
-            SUBCATEGORIES
-        ========================================= */}
+            <div className="p-12 text-center">
 
-        {selectedBrand &&
-          visibleSubcategories.length > 0 && (
+              <Package
+                size={32}
+                className="mx-auto text-white/20"
+              />
 
-            <div className="mb-6">
-
-              <p
-                className="
-                  mb-3
-                  text-xs
-                  font-black
-                  uppercase
-                  tracking-[0.16em]
-                  text-white/35
-                "
-              >
-                Категория
+              <p className="mt-4 text-white/40">
+                Товары не найдены
               </p>
 
-
-              <div className="flex flex-wrap gap-2">
-
-                {visibleSubcategories.map(
-                  (category) => (
-
-                    <button
-                      key={category}
-
-                      type="button"
-
-                      onClick={() =>
-                        setSelectedCategory(
-                          category
-                        )
-                      }
-
-                      className={`
-                        rounded-xl
-                        px-4
-                        py-2.5
-                        text-sm
-                        font-bold
-                        transition
-
-                        ${
-                          selectedCategory ===
-                          category
-
-                            ? "bg-[#A8FF00] text-black"
-
-                            : "border border-white/[0.08] bg-[#0C0C0C] text-white/60 hover:border-white/20"
-                        }
-                      `}
-                    >
-
-                      {category}
-
-                    </button>
-
-                  )
-                )}
-
-              </div>
-
             </div>
 
-          )}
+          ) : (
+
+            filteredProducts.map(
+              (product, index) => {
+
+                const productGroupId =
+                  (product as Product & {
+                    groupId?: string;
+                  }).groupId;
 
 
-        {/* =========================================
-            PRODUCTS
-        ========================================= */}
-
-        {!selectedSection ? (
-
-          <div
-            className="
-              flex
-              min-h-[300px]
-              flex-col
-              items-center
-              justify-center
-              rounded-2xl
-              border
-              border-white/[0.08]
-              bg-[#0C0C0C]
-              text-center
-            "
-          >
-
-            <Package
-              size={35}
-              className="text-white/20"
-            />
+                const productSubgroupId =
+                  (product as Product & {
+                    subgroupId?: string;
+                  }).subgroupId;
 
 
-            <h3 className="mt-4 text-lg font-bold text-white">
-              Выберите раздел
-            </h3>
+                const group =
+                  groups.find(
+                    (item) =>
+                      item.id ===
+                      productGroupId
+                  );
 
 
-            <p className="mt-2 text-sm text-white/35">
-              Сначала выберите Технику или Аксессуары
-            </p>
-
-          </div>
-
-        ) : (
-
-          <div
-            className="
-              overflow-hidden
-              rounded-2xl
-              border
-              border-white/[0.08]
-              bg-[#0C0C0C]
-            "
-          >
+                const subgroup =
+                  subgroups.find(
+                    (item) =>
+                      item.id ===
+                      productSubgroupId
+                  );
 
 
-            {/* HEADER */}
-
-            <div
-              className="
-                hidden
-                grid-cols-12
-                border-b
-                border-white/[0.08]
-                bg-[#080808]
-                px-6
-                py-4
-                text-[11px]
-                font-black
-                uppercase
-                tracking-[0.16em]
-                text-white/35
-                md:grid
-              "
-            >
-
-              <div className="col-span-2">
-                Фото
-              </div>
-
-              <div className="col-span-3">
-                Название
-              </div>
-
-              <div className="col-span-2">
-                Категория
-              </div>
-
-              <div className="col-span-2">
-                Цена
-              </div>
-
-              <div className="col-span-1">
-                Статус
-              </div>
-
-              <div className="col-span-2 text-right">
-                Действия
-              </div>
-
-            </div>
-
-
-            {/* PRODUCTS */}
-
-            {filteredProducts.length === 0 ? (
-
-              <div className="p-12 text-center">
-
-                <Package
-                  size={30}
-                  className="mx-auto text-white/20"
-                />
-
-                <p className="mt-4 text-white/40">
-                  В этой категории пока нет товаров
-                </p>
-
-              </div>
-
-            ) : (
-
-              filteredProducts.map(
-                (product, index) => (
+                return (
 
                   <div
                     key={product.id}
@@ -1446,14 +1590,11 @@ function AdminCatalog() {
                       ${
                         index !==
                         filteredProducts.length - 1
-
                           ? "border-b border-white/[0.06]"
-
                           : ""
                       }
                     `}
                   >
-
 
                     {/* PHOTO */}
 
@@ -1483,9 +1624,6 @@ function AdminCatalog() {
                             h-full
                             w-full
                             object-cover
-                            transition
-                            duration-300
-                            group-hover:scale-105
                           "
                         />
 
@@ -1498,45 +1636,40 @@ function AdminCatalog() {
 
                     <div className="md:col-span-3">
 
-                      <h3 className="font-bold leading-tight text-white">
+                      <h3 className="font-bold text-white">
                         {product.title}
                       </h3>
 
-
                       <p className="mt-1 text-xs text-white/35">
 
-                        {product.brand}
-
-                        {" · "}
-
-                        {product.subcategory}
+                        {subgroup?.name ||
+                          "Без подгруппы"}
 
                       </p>
 
                     </div>
 
 
-                    {/* CATEGORY */}
+                    {/* GROUP */}
 
                     <div className="md:col-span-2">
 
-                      <span
-                        className="
-                          inline-flex
-                          rounded-lg
-                          border
-                          border-white/[0.07]
-                          bg-white/[0.025]
-                          px-3
-                          py-1.5
-                          text-sm
-                          text-white/55
-                        "
-                      >
+                      <div>
 
-                        {product.subcategory}
+                        <p className="font-bold text-white/70">
+                          {group?.name ||
+                            "Не указана"}
+                        </p>
 
-                      </span>
+                        {subgroup && (
+
+                          <p className="mt-1 text-xs text-white/35">
+                            {subgroup.name}
+                          </p>
+
+                        )}
+
+                      </div>
 
                     </div>
 
@@ -1572,42 +1705,20 @@ function AdminCatalog() {
                         }}
 
                         className={`
-                          inline-flex
-                          items-center
-                          gap-2
                           rounded-lg
                           border
                           px-3
                           py-2
                           text-xs
                           font-black
-                          transition
 
                           ${
                             product.inStock
-
                               ? "border-[#A8FF00]/25 bg-[#A8FF00]/10 text-[#A8FF00]"
-
                               : "border-[#EC008C]/25 bg-[#EC008C]/10 text-[#EC008C]"
                           }
                         `}
                       >
-
-                        <span
-                          className={`
-                            h-1.5
-                            w-1.5
-                            rounded-full
-
-                            ${
-                              product.inStock
-
-                                ? "bg-[#A8FF00]"
-
-                                : "bg-[#EC008C]"
-                            }
-                          `}
-                        />
 
                         {product.inStock
                           ? "В наличии"
@@ -1623,7 +1734,6 @@ function AdminCatalog() {
                     <div
                       className="
                         flex
-                        items-center
                         gap-2
                         md:col-span-2
                         md:justify-end
@@ -1654,9 +1764,6 @@ function AdminCatalog() {
                           border-white/[0.08]
                           bg-[#080808]
                           text-white/55
-                          transition
-                          hover:border-[#A8FF00]/30
-                          hover:bg-[#A8FF00]/10
                           hover:text-[#A8FF00]
                         "
                       >
@@ -1686,9 +1793,6 @@ function AdminCatalog() {
                           border-white/[0.08]
                           bg-[#080808]
                           text-white/55
-                          transition
-                          hover:border-[#EC008C]/30
-                          hover:bg-[#EC008C]/10
                           hover:text-[#EC008C]
                         "
                       >
@@ -1701,14 +1805,14 @@ function AdminCatalog() {
 
                   </div>
 
-                )
-              )
+                );
 
-            )}
+              }
+            )
 
-          </div>
+          )}
 
-        )}
+        </div>
 
       </div>
 
