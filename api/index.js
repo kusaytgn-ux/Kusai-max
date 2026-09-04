@@ -914,6 +914,192 @@ app.get(
 );
 
 // =====================================================
+// PRODUCT GROUPS
+// =====================================================
+
+// Получить все группы
+app.get("/api/product-groups", async (req, res) => {
+  try {
+    const snapshot = await db
+      .collection("productGroups")
+      .orderBy("createdAt", "desc")
+      .get();
+
+    const groups = snapshot.docs.map((doc) => {
+      const data = doc.data();
+
+      return {
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate
+          ? data.createdAt.toDate().toISOString()
+          : data.createdAt ?? null,
+      };
+    });
+
+    return res.json({
+      success: true,
+      groups,
+    });
+  } catch (error) {
+    console.error("GET PRODUCT GROUPS ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Не удалось загрузить группы",
+    });
+  }
+});
+
+
+// Создать группу
+app.post("/api/product-groups", async (req, res) => {
+  try {
+    const { name, parentId } = req.body;
+
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Введите название группы",
+      });
+    }
+
+    const group = {
+      name: String(name).trim(),
+      parentId: parentId || null,
+      createdAt: new Date(),
+    };
+
+    const groupRef = await db
+      .collection("productGroups")
+      .add(group);
+
+    return res.status(201).json({
+      success: true,
+      message: "Группа создана",
+      group: {
+        id: groupRef.id,
+        ...group,
+        createdAt: group.createdAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error("CREATE PRODUCT GROUP ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Не удалось создать группу",
+    });
+  }
+});
+
+
+// Обновить группу
+app.patch("/api/product-groups/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, parentId } = req.body;
+
+    const groupRef = db
+      .collection("productGroups")
+      .doc(id);
+
+    const groupDoc = await groupRef.get();
+
+    if (!groupDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: "Группа не найдена",
+      });
+    }
+
+    const updates = {};
+
+    if (name !== undefined) {
+      updates.name = String(name).trim();
+    }
+
+    if (parentId !== undefined) {
+      updates.parentId = parentId || null;
+    }
+
+    await groupRef.update(updates);
+
+    const updatedDoc = await groupRef.get();
+
+    return res.json({
+      success: true,
+      group: {
+        id: updatedDoc.id,
+        ...updatedDoc.data(),
+      },
+    });
+  } catch (error) {
+    console.error("UPDATE PRODUCT GROUP ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Не удалось обновить группу",
+    });
+  }
+});
+
+
+// Удалить группу
+app.delete("/api/product-groups/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await db
+      .collection("productGroups")
+      .doc(id)
+      .delete();
+
+    return res.json({
+      success: true,
+      message: "Группа удалена",
+    });
+  } catch (error) {
+    console.error("DELETE PRODUCT GROUP ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Не удалось удалить группу",
+    });
+  }
+});
+
+
+// =====================================================
+// CATEGORIES (совместимость)
+// =====================================================
+
+app.get("/api/categories", async (req, res) => {
+  try {
+    const snapshot = await db
+      .collection("productGroups")
+      .get();
+
+    const categories = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    return res.json({
+      success: true,
+      categories,
+    });
+  } catch (error) {
+    console.error("GET CATEGORIES ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Не удалось загрузить категории",
+    });
+  }
+});
+
+// =====================================================
 // UNKNOWN ROUTE
 // =====================================================
 
