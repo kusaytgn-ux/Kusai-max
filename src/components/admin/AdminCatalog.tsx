@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-
+import { useEffect, useRef, useState } from "react";
 import {
   Pencil,
   Trash2,
   Plus,
   Package,
-  Search,
-  X,
+  Loader2,
 } from "lucide-react";
 
 import ProductModal from "./ProductModal";
@@ -15,6 +13,7 @@ import type { Product } from "../../types/Product";
 
 import {
   getProducts,
+  getNextProducts,
   deleteProduct,
   updateProduct,
 } from "../../services/productService";
@@ -27,115 +26,162 @@ function AdminCatalog() {
   const [editingProduct, setEditingProduct] =
     useState<Product | null>(null);
 
-  const [selectedCategory, setSelectedCategory] =
-    useState("Все товары");
+  const [lastCursor, setLastCursor] =
+    useState<string | null>(null);
 
-  const [searchQuery, setSearchQuery] =
-    useState("");
-
-  const [loading, setLoading] =
+  const [hasMore, setHasMore] =
     useState(true);
 
-  useEffect(() => {
-    loadProducts();
-  }, []);
+  const [loading, setLoading] =
+    useState(false);
 
-  // =====================================================
-  // ЗАГРУЗКА ТОВАРОВ
-  // =====================================================
+  const [loadingMore, setLoadingMore] =
+    useState(false);
+
+  const loadMoreRef =
+    useRef<HTMLDivElement | null>(null);
+
+  const PAGE_SIZE = 50;
+
+  /* =========================================
+     ПЕРВАЯ ЗАГРУЗКА
+  ========================================= */
+
+  useEffect(() => {
+    void loadProducts();
+  }, []);
 
   async function loadProducts() {
     try {
       setLoading(true);
 
-      const data = await getProducts();
+      const data =
+        await getProducts(PAGE_SIZE);
 
-      setProducts(data.products || []);
+      setProducts(data.products);
+
+      setLastCursor(data.lastDoc);
+
+      setHasMore(data.hasMore);
     } catch (error) {
       console.error(
-        "Ошибка загрузки каталога:",
+        "Ошибка загрузки товаров:",
         error
       );
-
-      setProducts([]);
     } finally {
       setLoading(false);
     }
   }
 
-  // =====================================================
-  // КАТЕГОРИИ
-  // =====================================================
+  /* =========================================
+     ЗАГРУЗКА СЛЕДУЮЩЕЙ СТРАНИЦЫ
+  ========================================= */
 
-  const categories = useMemo(() => {
-    const uniqueCategories = Array.from(
-      new Set(
-        products
-          .map((product) =>
-            String(
-              product.category || ""
-            ).trim()
-          )
-          .filter(Boolean)
-      )
-    );
+  async function loadMoreProducts() {
+    if (
+      loadingMore ||
+      !hasMore ||
+      !lastCursor
+    ) {
+      return;
+    }
 
-    return [
-      "Все товары",
-      ...uniqueCategories,
-    ];
-  }, [products]);
+    try {
+      setLoadingMore(true);
 
-  // =====================================================
-  // ОТФИЛЬТРОВАННЫЕ ТОВАРЫ
-  // =====================================================
+      const data =
+        await getNextProducts(
+          lastCursor,
+          PAGE_SIZE
+        );
 
-  const filteredProducts = useMemo(() => {
-    return products.filter((product) => {
-      const categoryMatch =
-        selectedCategory === "Все товары" ||
-        product.category === selectedCategory;
+      setProducts((previous) => {
+        const existingIds =
+          new Set(
+            previous.map(
+              (product) => product.id
+            )
+          );
 
-      const search = searchQuery
-        .trim()
-        .toLowerCase();
+        const newProducts =
+          data.products.filter(
+            (product) =>
+              !existingIds.has(product.id)
+          );
 
-      if (!search) {
-        return categoryMatch;
-      }
+        return [
+          ...previous,
+          ...newProducts,
+        ];
+      });
 
-      const searchableText = [
-        product.title,
-        product.category,
-        product.description,
-        product.color,
-        product.memory,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+      setLastCursor(data.lastDoc);
 
-      return (
-        categoryMatch &&
-        searchableText.includes(search)
+      setHasMore(data.hasMore);
+    } catch (error) {
+      console.error(
+        "Ошибка загрузки следующих товаров:",
+        error
       );
-    });
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  /* =========================================
+     INFINITE SCROLL
+  ========================================= */
+
+  useEffect(() => {
+    const element =
+      loadMoreRef.current;
+
+    if (!element) {
+      return;
+    }
+
+    const observer =
+      new IntersectionObserver(
+        (entries) => {
+          const entry = entries[0];
+
+          if (
+            entry.isIntersecting &&
+            hasMore &&
+            !loadingMore &&
+            !loading
+          ) {
+            void loadMoreProducts();
+          }
+        },
+        {
+          rootMargin: "400px",
+        }
+      );
+
+    observer.observe(element);
+
+    return () => {
+      observer.disconnect();
+    };
   }, [
-    products,
-    selectedCategory,
-    searchQuery,
+    hasMore,
+    loadingMore,
+    loading,
+    lastCursor,
   ]);
 
-  // =====================================================
-  // УДАЛЕНИЕ
-  // =====================================================
+  /* =========================================
+     УДАЛЕНИЕ
+  ========================================= */
 
   async function handleDelete(
     product: Product
   ) {
-    const confirmed = window.confirm(
-      `Удалить товар "${product.title}"?`
-    );
+    const confirmed =
+      window.confirm(
+        `Удалить товар "${product.title}"?`
+      );
 
     if (!confirmed) {
       return;
@@ -144,7 +190,12 @@ function AdminCatalog() {
     try {
       await deleteProduct(product.id);
 
-      await loadProducts();
+      setProducts((previous) =>
+        previous.filter(
+          (item) =>
+            item.id !== product.id
+        )
+      );
     } catch (error) {
       console.error(
         "Ошибка удаления товара:",
@@ -157,57 +208,70 @@ function AdminCatalog() {
     }
   }
 
-  // =====================================================
-  // НАЛИЧИЕ
-  // =====================================================
+  /* =========================================
+     ИЗМЕНЕНИЕ НАЛИЧИЯ
+  ========================================= */
 
-  async function toggleStock(
+  async function handleStockToggle(
     product: Product
   ) {
     try {
-      await updateProduct(product.id, {
-        inStock: !product.inStock,
-      });
+      const newValue =
+        !product.inStock;
 
-      await loadProducts();
-    } catch (error) {
-      console.error(
-        "Ошибка изменения статуса:",
-        error
+      await updateProduct(
+        product.id,
+        {
+          inStock: newValue,
+        }
       );
 
-      alert(
-        "Не удалось изменить статус товара"
+      setProducts((previous) =>
+        previous.map((item) =>
+          item.id === product.id
+            ? {
+                ...item,
+                inStock: newValue,
+              }
+            : item
+        )
+      );
+    } catch (error) {
+      console.error(
+        "Ошибка изменения наличия:",
+        error
       );
     }
   }
 
-  // =====================================================
-  // ОТКРЫТЬ СОЗДАНИЕ
-  // =====================================================
+  /* =========================================
+     СОХРАНЕНИЕ ИЗ MODAL
+  ========================================= */
 
-  function handleCreate() {
+  async function handleSaved() {
+    setModalOpen(false);
+
     setEditingProduct(null);
-    setModalOpen(true);
+
+    await loadProducts();
   }
 
-  // =====================================================
-  // ОТКРЫТЬ РЕДАКТИРОВАНИЕ
-  // =====================================================
+  /* =========================================
+     КАТЕГОРИИ ЗАГРУЖЕННЫХ ТОВАРОВ
+  ========================================= */
 
-  function handleEdit(
-    product: Product
-  ) {
-    setEditingProduct(product);
-    setModalOpen(true);
-  }
+  const categoriesCount =
+    new Set(
+      products
+        .map(
+          (product) =>
+            product.category
+        )
+        .filter(Boolean)
+    ).size;
 
   return (
     <>
-      {/* =====================================================
-          MODAL
-      ===================================================== */}
-
       <ProductModal
         open={modalOpen}
         product={editingProduct}
@@ -215,24 +279,18 @@ function AdminCatalog() {
           setModalOpen(false);
           setEditingProduct(null);
         }}
-        onSaved={async () => {
-          await loadProducts();
-
-          setModalOpen(false);
-          setEditingProduct(null);
-        }}
+        onSaved={handleSaved}
       />
 
       <div className="min-w-0">
 
-        {/* =====================================================
+        {/* =========================================
             HEADER
-        ===================================================== */}
+        ========================================= */}
 
         <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
 
           <div>
-
             <div className="flex items-center gap-3">
 
               <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/[0.08] bg-[#0C0C0C]">
@@ -257,12 +315,14 @@ function AdminCatalog() {
               </div>
 
             </div>
-
           </div>
 
           <button
             type="button"
-            onClick={handleCreate}
+            onClick={() => {
+              setEditingProduct(null);
+              setModalOpen(true);
+            }}
             className="
               flex
               items-center
@@ -291,18 +351,16 @@ function AdminCatalog() {
 
         </div>
 
-        {/* =====================================================
-            STATISTICS
-        ===================================================== */}
+        {/* =========================================
+            STAT
+        ========================================= */}
 
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-
-          {/* ВСЕГО */}
 
           <div className="rounded-2xl border border-white/[0.08] bg-[#0C0C0C] p-5">
 
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/35">
-              Всего товаров
+              Загружено товаров
             </p>
 
             <div className="mt-3 flex items-end justify-between">
@@ -319,8 +377,6 @@ function AdminCatalog() {
             </div>
 
           </div>
-
-          {/* В НАЛИЧИИ */}
 
           <div className="rounded-2xl border border-white/[0.08] bg-[#0C0C0C] p-5">
 
@@ -347,8 +403,6 @@ function AdminCatalog() {
 
           </div>
 
-          {/* НЕТ В НАЛИЧИИ */}
-
           <div className="rounded-2xl border border-white/[0.08] bg-[#0C0C0C] p-5">
 
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/35">
@@ -374,8 +428,6 @@ function AdminCatalog() {
 
           </div>
 
-          {/* КАТЕГОРИИ */}
-
           <div className="rounded-2xl border border-white/[0.08] bg-[#0C0C0C] p-5">
 
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/35">
@@ -385,7 +437,7 @@ function AdminCatalog() {
             <div className="mt-3">
 
               <span className="text-3xl font-black text-white">
-                {categories.length - 1}
+                {categoriesCount}
               </span>
 
             </div>
@@ -394,176 +446,9 @@ function AdminCatalog() {
 
         </div>
 
-        {/* =====================================================
-            SEARCH
-        ===================================================== */}
-
-        <div className="mb-5 flex flex-col gap-4 lg:flex-row">
-
-          <div className="relative flex-1">
-
-            <Search
-              size={19}
-              className="
-                pointer-events-none
-                absolute
-                left-4
-                top-1/2
-                -translate-y-1/2
-                text-white/30
-              "
-            />
-
-            <input
-              value={searchQuery}
-              onChange={(event) =>
-                setSearchQuery(
-                  event.target.value
-                )
-              }
-              placeholder="Поиск товара..."
-              className="
-                w-full
-                rounded-xl
-                border
-                border-white/[0.08]
-                bg-[#0C0C0C]
-                py-3.5
-                pl-12
-                pr-12
-                text-sm
-                text-white
-                outline-none
-                transition
-                placeholder:text-white/25
-                focus:border-[#A8FF00]/40
-              "
-            />
-
-            {searchQuery && (
-
-              <button
-                type="button"
-                onClick={() =>
-                  setSearchQuery("")
-                }
-                className="
-                  absolute
-                  right-4
-                  top-1/2
-                  -translate-y-1/2
-                  text-white/35
-                  transition
-                  hover:text-white
-                "
-              >
-
-                <X size={18} />
-
-              </button>
-
-            )}
-
-          </div>
-
-        </div>
-
-        {/* =====================================================
-            CATEGORIES
-        ===================================================== */}
-
-        <div className="mb-6 overflow-x-auto">
-
-          <div className="flex min-w-max gap-2 pb-1">
-
-            {categories.map((category) => {
-
-              const count =
-                category === "Все товары"
-                  ? products.length
-                  : products.filter(
-                      (product) =>
-                        product.category === category
-                    ).length;
-
-              const isActive =
-                selectedCategory === category;
-
-              return (
-
-                <button
-                  key={category}
-                  type="button"
-                  onClick={() =>
-                    setSelectedCategory(category)
-                  }
-                  className={`
-                    flex
-                    items-center
-                    gap-2
-                    rounded-xl
-                    border
-                    px-4
-                    py-3
-                    text-sm
-                    font-bold
-                    whitespace-nowrap
-                    transition
-                    active:scale-[0.98]
-                    ${
-                      isActive
-                        ? `
-                          border-[#A8FF00]
-                          bg-[#A8FF00]
-                          text-black
-                        `
-                        : `
-                          border-white/[0.08]
-                          bg-[#0C0C0C]
-                          text-white/50
-                          hover:border-white/[0.16]
-                          hover:text-white
-                        `
-                    }
-                  `}
-                >
-
-                  <span>
-                    {category}
-                  </span>
-
-                  <span
-                    className={`
-                      flex
-                      min-w-[24px]
-                      items-center
-                      justify-center
-                      rounded-md
-                      px-1.5
-                      py-0.5
-                      text-[11px]
-                      ${
-                        isActive
-                          ? "bg-black/15 text-black"
-                          : "bg-white/[0.06] text-white/35"
-                      }
-                    `}
-                  >
-                    {count}
-                  </span>
-
-                </button>
-
-              );
-            })}
-
-          </div>
-
-        </div>
-
-        {/* =====================================================
+        {/* =========================================
             TABLE
-        ===================================================== */}
+        ========================================= */}
 
         <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0C0C0C]">
 
@@ -599,17 +484,24 @@ function AdminCatalog() {
 
           {/* LOADING */}
 
-          {loading ? (
+          {loading && products.length === 0 ? (
 
             <div className="flex min-h-[300px] items-center justify-center">
 
-              <div className="text-sm font-bold text-white/35">
-                Загрузка каталога...
+              <div className="flex items-center gap-3 text-white/50">
+
+                <Loader2
+                  size={24}
+                  className="animate-spin"
+                />
+
+                Загрузка товаров...
+
               </div>
 
             </div>
 
-          ) : filteredProducts.length === 0 ? (
+          ) : products.length === 0 ? (
 
             <div className="flex min-h-[300px] flex-col items-center justify-center px-6 text-center">
 
@@ -623,19 +515,11 @@ function AdminCatalog() {
               </div>
 
               <h3 className="mt-4 text-lg font-bold text-white">
-
-                {products.length === 0
-                  ? "Товаров пока нет"
-                  : "Ничего не найдено"}
-
+                Товаров пока нет
               </h3>
 
               <p className="mt-1 text-sm text-white/35">
-
-                {products.length === 0
-                  ? "Добавьте первый товар в каталог"
-                  : "Попробуйте изменить поиск или категорию"}
-
+                Добавьте первый товар в каталог
               </p>
 
             </div>
@@ -644,7 +528,7 @@ function AdminCatalog() {
 
             <div>
 
-              {filteredProducts.map(
+              {products.map(
                 (product, index) => (
 
                   <div
@@ -663,7 +547,7 @@ function AdminCatalog() {
                       md:px-6
                       ${
                         index !==
-                        filteredProducts.length - 1
+                        products.length - 1
                           ? "border-b border-white/[0.06]"
                           : ""
                       }
@@ -682,18 +566,7 @@ function AdminCatalog() {
                             "https://placehold.co/600x600?text=No+Image"
                           }
                           alt={product.title}
-                          className="
-                            h-full
-                            w-full
-                            object-cover
-                            transition
-                            duration-300
-                            group-hover:scale-105
-                          "
-                          onError={(event) => {
-                            event.currentTarget.src =
-                              "https://placehold.co/600x600?text=No+Image";
-                          }}
+                          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                         />
 
                       </div>
@@ -712,20 +585,12 @@ function AdminCatalog() {
                         {product.title}
                       </h3>
 
-                      {(product.memory ||
-                        product.color) && (
-
+                      {product.memory && (
                         <p className="mt-1 text-xs text-white/35">
-
-                          {[
-                            product.memory,
-                            product.color,
-                          ]
-                            .filter(Boolean)
-                            .join(" • ")}
-
+                          {product.memory}
+                          {product.color &&
+                            ` • ${product.color}`}
                         </p>
-
                       )}
 
                     </div>
@@ -738,17 +603,7 @@ function AdminCatalog() {
                         Категория
                       </p>
 
-                      <span className="
-                        inline-flex
-                        rounded-lg
-                        border
-                        border-white/[0.07]
-                        bg-white/[0.025]
-                        px-3
-                        py-1.5
-                        text-sm
-                        text-white/55
-                      ">
+                      <span className="inline-flex rounded-lg border border-white/[0.07] bg-white/[0.025] px-3 py-1.5 text-sm text-white/55">
                         {product.category || "Без категории"}
                       </span>
 
@@ -765,8 +620,10 @@ function AdminCatalog() {
                       <span className="text-lg font-black text-[#EC008C]">
 
                         {Number(
-                          product.price || 0
-                        ).toLocaleString("ru-RU")} ₽
+                          product.price
+                        ).toLocaleString(
+                          "ru-RU"
+                        )} ₽
 
                       </span>
 
@@ -776,14 +633,12 @@ function AdminCatalog() {
 
                     <div className="md:col-span-1">
 
-                      <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.15em] text-white/30 md:hidden">
-                        Статус
-                      </p>
-
                       <button
                         type="button"
                         onClick={() =>
-                          toggleStock(product)
+                          void handleStockToggle(
+                            product
+                          )
                         }
                         className={`
                           inline-flex
@@ -799,18 +654,8 @@ function AdminCatalog() {
                           active:scale-[0.97]
                           ${
                             product.inStock
-                              ? `
-                                border-[#A8FF00]/25
-                                bg-[#A8FF00]/10
-                                text-[#A8FF00]
-                                hover:bg-[#A8FF00]/15
-                              `
-                              : `
-                                border-[#EC008C]/25
-                                bg-[#EC008C]/10
-                                text-[#EC008C]
-                                hover:bg-[#EC008C]/15
-                              `
+                              ? "border-[#A8FF00]/25 bg-[#A8FF00]/10 text-[#A8FF00]"
+                              : "border-[#EC008C]/25 bg-[#EC008C]/10 text-[#EC008C]"
                           }
                         `}
                       >
@@ -838,22 +683,17 @@ function AdminCatalog() {
 
                     {/* ACTIONS */}
 
-                    <div className="
-                      flex
-                      items-center
-                      justify-start
-                      gap-2
-                      md:col-span-2
-                      md:justify-end
-                    ">
-
-                      {/* EDIT */}
+                    <div className="flex items-center justify-start gap-2 md:col-span-2 md:justify-end">
 
                       <button
                         type="button"
-                        onClick={() =>
-                          handleEdit(product)
-                        }
+                        onClick={() => {
+                          setEditingProduct(
+                            product
+                          );
+
+                          setModalOpen(true);
+                        }}
                         className="
                           flex
                           h-10
@@ -869,7 +709,6 @@ function AdminCatalog() {
                           hover:border-[#A8FF00]/30
                           hover:bg-[#A8FF00]/10
                           hover:text-[#A8FF00]
-                          active:scale-[0.96]
                         "
                         title="Редактировать"
                       >
@@ -878,12 +717,12 @@ function AdminCatalog() {
 
                       </button>
 
-                      {/* DELETE */}
-
                       <button
                         type="button"
                         onClick={() =>
-                          handleDelete(product)
+                          void handleDelete(
+                            product
+                          )
                         }
                         className="
                           flex
@@ -900,7 +739,6 @@ function AdminCatalog() {
                           hover:border-[#EC008C]/30
                           hover:bg-[#EC008C]/10
                           hover:text-[#EC008C]
-                          active:scale-[0.96]
                         "
                         title="Удалить"
                       >
@@ -915,6 +753,41 @@ function AdminCatalog() {
 
                 )
               )}
+
+              {/* =========================================
+                  ТРИГГЕР INFINITE SCROLL
+              ========================================= */}
+
+              <div
+                ref={loadMoreRef}
+                className="flex min-h-[100px] items-center justify-center"
+              >
+
+                {loadingMore && (
+
+                  <div className="flex items-center gap-3 text-sm font-bold text-white/45">
+
+                    <Loader2
+                      size={20}
+                      className="animate-spin"
+                    />
+
+                    Загружаем ещё товары...
+
+                  </div>
+
+                )}
+
+                {!hasMore &&
+                  products.length > 0 && (
+
+                    <p className="text-sm text-white/30">
+                      Все товары загружены
+                    </p>
+
+                  )}
+
+              </div>
 
             </div>
 
