@@ -53,7 +53,7 @@ function AdminCatalog() {
     products,
     loading,
     loadingMore,
-    hasMore,
+    
     refreshProducts,
   } = useProducts();
 
