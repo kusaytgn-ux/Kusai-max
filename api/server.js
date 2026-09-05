@@ -1949,6 +1949,179 @@ app.get("/api/debug/products-columns", async (req, res) => {
   }
 });
 // =====================================================
+// PRODUCTS
+// POSTGRESQL
+// =====================================================
+
+// =====================================================
+// GET ALL PRODUCTS
+// =====================================================
+
+app.get("/api/products", async (req, res) => {
+  try {
+    const result = await pgQuery(`
+      SELECT
+        id,
+        title,
+        name,
+        price,
+        images,
+        category,
+        category_group,
+        category_path,
+        category_leaf,
+        badge,
+        rating,
+        reviews,
+        delivery,
+        in_stock,
+        stock,
+        reserve,
+        in_transit,
+        quantity,
+        description,
+        memory,
+        color,
+        warranty,
+        type,
+        product,
+        characteristics,
+        variants_count,
+        weight,
+        volume,
+        article,
+        code,
+        external_code,
+        barcode,
+        archived,
+        updated_at,
+        hidden,
+        buy_price,
+        synced_at
+      FROM products
+      WHERE archived IS NOT TRUE
+      AND hidden IS NOT TRUE
+      ORDER BY updated_at DESC NULLS LAST
+    `);
+
+    const products = result.rows.map((item) => ({
+      id: item.id,
+
+      // Основное название
+      title: item.title || item.name || "",
+
+      name: item.name || item.title || "",
+
+      price: Number(item.price || 0),
+
+      // Фото
+      images: Array.isArray(item.images)
+        ? item.images
+        : [],
+
+      // Категории
+      category: item.category || "",
+      categoryGroup: item.category_group || "",
+      categoryPath: item.category_path || [],
+      categoryLeaf: item.category_leaf || "",
+
+      // Дополнительно
+      badge: item.badge || "",
+
+      rating: Number(item.rating || 0),
+
+      reviews: Number(item.reviews || 0),
+
+      delivery: item.delivery || "",
+
+      // Наличие
+      inStock: Boolean(item.in_stock),
+
+      stock: Number(item.stock || 0),
+
+      reserve: Number(item.reserve || 0),
+
+      inTransit: Number(item.in_transit || 0),
+
+      quantity: Number(item.quantity || 0),
+
+      // Описание
+      description: item.description || "",
+
+      // Характеристики
+      memory: item.memory || "",
+
+      color: item.color || "",
+
+      warranty: item.warranty || "",
+
+      type: item.type || "",
+
+      product: item.product || "",
+
+      characteristics:
+        item.characteristics || {},
+
+      variantsCount:
+        Number(item.variants_count || 0),
+
+      weight: item.weight
+        ? Number(item.weight)
+        : null,
+
+      volume: item.volume
+        ? Number(item.volume)
+        : null,
+
+      // Артикулы
+      article: item.article || "",
+
+      code: item.code || "",
+
+      externalCode:
+        item.external_code || "",
+
+      barcode: item.barcode || "",
+
+      archived: Boolean(item.archived),
+
+      hidden: Boolean(item.hidden),
+
+      buyPrice: item.buy_price
+        ? Number(item.buy_price)
+        : null,
+
+      updatedAt: item.updated_at,
+
+      syncedAt: item.synced_at,
+    }));
+
+    return res.json({
+      success: true,
+
+      count: products.length,
+
+      products,
+    });
+
+  } catch (error) {
+    console.error(
+      "GET PRODUCTS ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+
+      message:
+        "Ошибка загрузки товаров",
+
+      error: error.message,
+    });
+  }
+});
+
+// =====================================================
 // UNKNOWN ROUTE
 // =====================================================
 
