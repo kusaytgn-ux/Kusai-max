@@ -1,9 +1,11 @@
 import express from "express";
 import cors from "cors";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 
 import { db } from "./firebaseAdmin.js";
 import { calculateBonusDiscount } from "./bonus.js";
+import { query as pgQuery } from "./postgres.js";
 
 const app = express();
 
@@ -19,6 +21,47 @@ app.use(
 );
 
 app.use(express.json());
+
+// =====================================================
+// HELPERS
+// =====================================================
+
+const ONE_C_API_KEY =
+  process.env.ONE_C_API_KEY ||
+  "KUSAI-MAX-1C-KEY-2026";
+
+function check1CAccess(req, res) {
+  const apiKey = req.headers["x-api-key"];
+
+  if (apiKey !== ONE_C_API_KEY) {
+    res.status(403).json({
+      success: false,
+      message: "Нет доступа",
+    });
+
+    return false;
+  }
+
+  return true;
+}
+
+function normalizePhone(phone) {
+  let value = String(phone || "").replace(/\D/g, "");
+
+  if (value.startsWith("8") && value.length === 11) {
+    value = "7" + value.slice(1);
+  }
+
+  if (value.length === 10) {
+    value = "7" + value;
+  }
+
+  if (value.startsWith("7")) {
+    return "+" + value;
+  }
+
+  return "+" + value;
+}
 
 // =====================================================
 // HEALTH
@@ -118,28 +161,41 @@ app.post("/api/admin/login", async (req, res) => {
 });
 
 // =====================================================
-// PRODUCT GROUPS
+// PRODUCT GROUPS — POSTGRESQL
 // =====================================================
 
-// GET ALL GROUPS
+
+// =====================================================
+// GET ALL PRODUCT GROUPS
+// =====================================================
 
 app.get("/api/product-groups", async (req, res) => {
   try {
-    const snapshot = await db
-      .collection("productGroups")
-      .get();
+    const result = await pgQuery(`
+      SELECT
+        id,
+        name,
+        slug,
+        parent_id,
+        sort_order,
+        created_at,
+        updated_at
+      FROM product_groups
+      ORDER BY
+        parent_id NULLS FIRST,
+        sort_order ASC,
+        created_at ASC
+    `);
 
-    const groups = snapshot.docs.map((doc) => {
-      const data = doc.data();
-
-      return {
-        id: doc.id,
-        ...data,
-        createdAt: data.createdAt?.toDate
-          ? data.createdAt.toDate().toISOString()
-          : data.createdAt ?? null,
-      };
-    });
+    const groups = result.rows.map((group) => ({
+      id: group.id,
+      name: group.name,
+      slug: group.slug,
+      parentId: group.parent_id,
+      sortOrder: group.sort_order,
+      createdAt: group.created_at,
+      updatedAt: group.updated_at,
+    }));
 
     return res.json({
       success: true,
@@ -151,15 +207,82 @@ app.get("/api/product-groups", async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Ошибка загрузки групп",
+      error: error.message,
     });
   }
 });
 
-// CREATE GROUP
+
+// =====================================================
+// GET ONE PRODUCT GROUP
+// =====================================================
+
+app.get("/api/product-groups/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pgQuery(
+      `
+      SELECT
+        id,
+        name,
+        slug,
+        parent_id,
+        sort_order,
+        created_at,
+        updated_at
+      FROM product_groups
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Группа не найдена",
+      });
+    }
+
+    const group = result.rows[0];
+
+    return res.json({
+      success: true,
+      group: {
+        id: group.id,
+        name: group.name,
+        slug: group.slug,
+        parentId: group.parent_id,
+        sortOrder: group.sort_order,
+        createdAt: group.created_at,
+        updatedAt: group.updated_at,
+      },
+    });
+  } catch (error) {
+    console.error("GET PRODUCT GROUP ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка получения группы",
+      error: error.message,
+    });
+  }
+});
+
+
+// =====================================================
+// CREATE PRODUCT GROUP / SUBGROUP
+// =====================================================
 
 app.post("/api/product-groups", async (req, res) => {
   try {
-    const { name } = req.body || {};
+    const {
+      name,
+      slug,
+      parentId,
+      sortOrder,
+    } = req.body || {};
 
     if (!name || !String(name).trim()) {
       return res.status(400).json({
@@ -170,35 +293,93 @@ app.post("/api/product-groups", async (req, res) => {
 
     const groupName = String(name).trim();
 
-    const existingSnapshot = await db
-      .collection("productGroups")
-      .where("name", "==", groupName)
-      .limit(1)
-      .get();
+    // Проверяем родительскую группу
+    if (parentId) {
+      const parentResult = await pgQuery(
+        `
+        SELECT id
+        FROM product_groups
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [parentId]
+      );
 
-    if (!existingSnapshot.empty) {
+      if (parentResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Родительская группа не найдена",
+        });
+      }
+    }
+
+    // Проверяем дубликат
+    const existingResult = await pgQuery(
+      `
+      SELECT id
+      FROM product_groups
+      WHERE name = $1
+      AND parent_id IS NOT DISTINCT FROM $2
+      LIMIT 1
+      `,
+      [
+        groupName,
+        parentId || null,
+      ]
+    );
+
+    if (existingResult.rows.length > 0) {
       return res.status(409).json({
         success: false,
         message: "Такая группа уже существует",
       });
     }
 
-    const group = {
-      name: groupName,
-      createdAt: new Date(),
-    };
+    const id = crypto.randomUUID();
 
-    const groupRef = await db
-      .collection("productGroups")
-      .add(group);
+    const result = await pgQuery(
+      `
+      INSERT INTO product_groups (
+        id,
+        name,
+        slug,
+        parent_id,
+        sort_order
+      )
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5
+      )
+      RETURNING *
+      `,
+      [
+        id,
+        groupName,
+        slug ? String(slug).trim() : null,
+        parentId || null,
+        Number(sortOrder) || 0,
+      ]
+    );
+
+    const group = result.rows[0];
 
     return res.status(201).json({
       success: true,
-      message: "Группа создана",
+      message: parentId
+        ? "Подгруппа создана"
+        : "Группа создана",
+
       group: {
-        id: groupRef.id,
-        ...group,
-        createdAt: group.createdAt.toISOString(),
+        id: group.id,
+        name: group.name,
+        slug: group.slug,
+        parentId: group.parent_id,
+        sortOrder: group.sort_order,
+        createdAt: group.created_at,
+        updatedAt: group.updated_at,
       },
     });
   } catch (error) {
@@ -207,49 +388,170 @@ app.post("/api/product-groups", async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Ошибка создания группы",
+      error: error.message,
     });
   }
 });
 
-// UPDATE GROUP
+
+// =====================================================
+// UPDATE PRODUCT GROUP
+// =====================================================
 
 app.patch("/api/product-groups/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name } = req.body || {};
 
-    if (!name || !String(name).trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Введите название группы",
-      });
-    }
+    const {
+      name,
+      slug,
+      parentId,
+      sortOrder,
+    } = req.body || {};
 
-    const groupRef = db
-      .collection("productGroups")
-      .doc(id);
+    const existingResult = await pgQuery(
+      `
+      SELECT *
+      FROM product_groups
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [id]
+    );
 
-    const groupDoc = await groupRef.get();
-
-    if (!groupDoc.exists) {
+    if (existingResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Группа не найдена",
       });
     }
 
-    await groupRef.update({
-      name: String(name).trim(),
-    });
+    const existingGroup = existingResult.rows[0];
 
-    const updatedDoc = await groupRef.get();
+    // Нельзя сделать группу родителем самой себя
+    if (parentId === id) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Группа не может быть своей собственной родительской группой",
+      });
+    }
+
+    // Если меняется родитель
+    if (
+      parentId !== undefined &&
+      parentId !== null &&
+      parentId !== ""
+    ) {
+      const parentResult = await pgQuery(
+        `
+        SELECT id
+        FROM product_groups
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [parentId]
+      );
+
+      if (parentResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Родительская группа не найдена",
+        });
+      }
+    }
+
+    const newName =
+      name !== undefined
+        ? String(name).trim()
+        : existingGroup.name;
+
+    const newSlug =
+      slug !== undefined
+        ? String(slug).trim()
+        : existingGroup.slug;
+
+    let newParentId = existingGroup.parent_id;
+
+    if (parentId !== undefined) {
+      newParentId =
+        parentId === null ||
+        parentId === ""
+          ? null
+          : parentId;
+    }
+
+    const newSortOrder =
+      sortOrder !== undefined
+        ? Number(sortOrder) || 0
+        : existingGroup.sort_order;
+
+    if (!newName) {
+      return res.status(400).json({
+        success: false,
+        message: "Введите название группы",
+      });
+    }
+
+    const duplicateResult = await pgQuery(
+      `
+      SELECT id
+      FROM product_groups
+      WHERE name = $1
+      AND parent_id IS NOT DISTINCT FROM $2
+      AND id != $3
+      LIMIT 1
+      `,
+      [
+        newName,
+        newParentId,
+        id,
+      ]
+    );
+
+    if (duplicateResult.rows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "Такая группа уже существует",
+      });
+    }
+
+    const result = await pgQuery(
+      `
+      UPDATE product_groups
+      SET
+        name = $2,
+        slug = $3,
+        parent_id = $4,
+        sort_order = $5,
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING *
+      `,
+      [
+        id,
+        newName,
+        newSlug,
+        newParentId,
+        newSortOrder,
+      ]
+    );
+
+    const group = result.rows[0];
 
     return res.json({
       success: true,
       message: "Группа обновлена",
+
       group: {
-        id: updatedDoc.id,
-        ...updatedDoc.data(),
+        id: group.id,
+        name: group.name,
+        slug: group.slug,
+        parentId: group.parent_id,
+        sortOrder: group.sort_order,
+        createdAt: group.created_at,
+        updatedAt: group.updated_at,
       },
     });
   } catch (error) {
@@ -258,30 +560,35 @@ app.patch("/api/product-groups/:id", async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Ошибка обновления группы",
+      error: error.message,
     });
   }
 });
 
-// DELETE GROUP
+
+// =====================================================
+// DELETE PRODUCT GROUP
+// =====================================================
 
 app.delete("/api/product-groups/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    const groupRef = db
-      .collection("productGroups")
-      .doc(id);
+    const result = await pgQuery(
+      `
+      DELETE FROM product_groups
+      WHERE id = $1
+      RETURNING id
+      `,
+      [id]
+    );
 
-    const groupDoc = await groupRef.get();
-
-    if (!groupDoc.exists) {
+    if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Группа не найдена",
       });
     }
-
-    await groupRef.delete();
 
     return res.json({
       success: true,
@@ -293,24 +600,39 @@ app.delete("/api/product-groups/:id", async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Ошибка удаления группы",
+      error: error.message,
     });
   }
 });
 
+
 // =====================================================
 // CATEGORIES
-// Временная совместимость со старым фронтендом
+// Совместимость со старым фронтендом
 // =====================================================
 
 app.get("/api/categories", async (req, res) => {
   try {
-    const snapshot = await db
-      .collection("productGroups")
-      .get();
+    const result = await pgQuery(`
+      SELECT
+        id,
+        name,
+        slug,
+        parent_id,
+        sort_order
+      FROM product_groups
+      ORDER BY
+        parent_id NULLS FIRST,
+        sort_order ASC,
+        name ASC
+    `);
 
-    const categories = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
+    const categories = result.rows.map((group) => ({
+      id: group.id,
+      name: group.name,
+      slug: group.slug,
+      parentId: group.parent_id,
+      sortOrder: group.sort_order,
     }));
 
     return res.json({
@@ -323,9 +645,11 @@ app.get("/api/categories", async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Ошибка загрузки категорий",
+      error: error.message,
     });
   }
 });
+
 
 // =====================================================
 // GET ALL CLIENTS
@@ -364,6 +688,7 @@ app.get("/api/clients", async (req, res) => {
   }
 });
 
+
 // =====================================================
 // GET CLIENT
 // =====================================================
@@ -400,6 +725,7 @@ app.get("/api/clients/:id", async (req, res) => {
     });
   }
 });
+
 
 // =====================================================
 // GET CLIENT PROFILE
@@ -464,6 +790,7 @@ app.get("/api/clients/:id/profile", async (req, res) => {
   }
 });
 
+
 // =====================================================
 // GET OPERATIONS
 // =====================================================
@@ -520,6 +847,7 @@ app.get("/api/clients/:id/operations", async (req, res) => {
   }
 });
 
+
 // =====================================================
 // CREATE CLIENT
 // =====================================================
@@ -544,7 +872,8 @@ app.post("/api/clients", async (req, res) => {
     if (!existingSnapshot.empty) {
       return res.status(409).json({
         success: false,
-        message: "Клиент с таким номером телефона уже существует",
+        message:
+          "Клиент с таким номером телефона уже существует",
       });
     }
 
@@ -578,10 +907,12 @@ app.post("/api/clients", async (req, res) => {
 
     return res.status(201).json({
       success: true,
+
       client: {
         id: clientRef.id,
         ...client,
-        createdAt: client.createdAt.toISOString(),
+        createdAt:
+          client.createdAt.toISOString(),
       },
     });
   } catch (error) {
@@ -593,6 +924,7 @@ app.post("/api/clients", async (req, res) => {
     });
   }
 });
+
 
 // =====================================================
 // UPDATE CLIENT
@@ -626,12 +958,29 @@ app.patch("/api/clients/:id", async (req, res) => {
 
     const updates = {};
 
-    if (name !== undefined) updates.name = name;
-    if (phone !== undefined) updates.phone = phone;
-    if (points !== undefined) updates.points = Number(points);
-    if (bonuses !== undefined) updates.bonuses = Number(bonuses);
-    if (status !== undefined) updates.status = status;
-    if (orders !== undefined) updates.orders = Number(orders);
+    if (name !== undefined) {
+      updates.name = name;
+    }
+
+    if (phone !== undefined) {
+      updates.phone = phone;
+    }
+
+    if (points !== undefined) {
+      updates.points = Number(points);
+    }
+
+    if (bonuses !== undefined) {
+      updates.bonuses = Number(bonuses);
+    }
+
+    if (status !== undefined) {
+      updates.status = status;
+    }
+
+    if (orders !== undefined) {
+      updates.orders = Number(orders);
+    }
 
     await clientRef.update(updates);
 
@@ -639,6 +988,7 @@ app.patch("/api/clients/:id", async (req, res) => {
 
     return res.json({
       success: true,
+
       client: {
         id: updatedDoc.id,
         ...updatedDoc.data(),
@@ -654,6 +1004,7 @@ app.patch("/api/clients/:id", async (req, res) => {
   }
 });
 
+
 // =====================================================
 // ADD BONUS
 // =====================================================
@@ -665,10 +1016,14 @@ app.post("/api/clients/:id/bonus/add", async (req, res) => {
 
     const amount = Number(points);
 
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Некорректное количество бонусов",
+        message:
+          "Некорректное количество бонусов",
       });
     }
 
@@ -687,8 +1042,12 @@ app.post("/api/clients/:id/bonus/add", async (req, res) => {
 
     const client = clientDoc.data();
 
-    const currentPoints = Number(client.points || 0);
-    const newPoints = currentPoints + amount;
+    const currentPoints = Number(
+      client.points || 0
+    );
+
+    const newPoints =
+      currentPoints + amount;
 
     await clientRef.update({
       points: newPoints,
@@ -700,7 +1059,8 @@ app.post("/api/clients/:id/bonus/add", async (req, res) => {
       .add({
         type: "add",
         points: amount,
-        reason: reason || "Начисление бонусов",
+        reason:
+          reason || "Начисление бонусов",
         date: new Date(),
       });
 
@@ -719,6 +1079,7 @@ app.post("/api/clients/:id/bonus/add", async (req, res) => {
   }
 });
 
+
 // =====================================================
 // REMOVE BONUS
 // =====================================================
@@ -730,10 +1091,14 @@ app.post("/api/clients/:id/bonus/remove", async (req, res) => {
 
     const amount = Number(points);
 
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Некорректное количество бонусов",
+        message:
+          "Некорректное количество бонусов",
       });
     }
 
@@ -752,7 +1117,9 @@ app.post("/api/clients/:id/bonus/remove", async (req, res) => {
 
     const client = clientDoc.data();
 
-    const currentPoints = Number(client.points || 0);
+    const currentPoints = Number(
+      client.points || 0
+    );
 
     if (amount > currentPoints) {
       return res.status(400).json({
@@ -761,7 +1128,8 @@ app.post("/api/clients/:id/bonus/remove", async (req, res) => {
       });
     }
 
-    const newPoints = currentPoints - amount;
+    const newPoints =
+      currentPoints - amount;
 
     await clientRef.update({
       points: newPoints,
@@ -773,7 +1141,8 @@ app.post("/api/clients/:id/bonus/remove", async (req, res) => {
       .add({
         type: "remove",
         points: amount,
-        reason: reason || "Списание бонусов",
+        reason:
+          reason || "Списание бонусов",
         date: new Date(),
       });
 
@@ -791,6 +1160,7 @@ app.post("/api/clients/:id/bonus/remove", async (req, res) => {
     });
   }
 });
+
 
 // =====================================================
 // BONUS CALCULATOR
@@ -815,7 +1185,10 @@ app.post("/api/bonus/calculate", async (req, res) => {
       result,
     });
   } catch (error) {
-    console.error("BONUS CALCULATION ERROR:", error);
+    console.error(
+      "BONUS CALCULATION ERROR:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
@@ -824,22 +1197,14 @@ app.post("/api/bonus/calculate", async (req, res) => {
   }
 });
 
-// =====================================================
-// 1C
-// =====================================================
 
-const ONE_C_API_KEY =
-  process.env.ONE_C_API_KEY ||
-  "KUSAI-MAX-1C-KEY-2026";
+// =====================================================
+// 1C TEST
+// =====================================================
 
 app.get("/api/1c/test", (req, res) => {
-  const apiKey = req.headers["x-api-key"];
-
-  if (apiKey !== ONE_C_API_KEY) {
-    return res.status(403).json({
-      success: false,
-      message: "Нет доступа",
-    });
+  if (!check1CAccess(req, res)) {
+    return;
   }
 
   return res.json({
@@ -849,13 +1214,10 @@ app.get("/api/1c/test", (req, res) => {
   });
 });
 
-/*
-|--------------------------------------------------------------------------
-| GET /api/1c/client?phone=...
-|
-| Поиск клиента в PostgreSQL
-|--------------------------------------------------------------------------
-*/
+
+// =====================================================
+// 1C GET CLIENT
+// =====================================================
 
 app.get("/api/1c/client", async (req, res) => {
   if (!check1CAccess(req, res)) {
@@ -930,7 +1292,6 @@ app.get("/api/1c/client", async (req, res) => {
             : null,
       },
     });
-
   } catch (error) {
     console.error(
       "Ошибка поиска клиента:",
@@ -948,133 +1309,6 @@ app.get("/api/1c/client", async (req, res) => {
   }
 });
 
-// =====================================================
-// PRODUCT GROUPS
-// =====================================================
-
-// GET ALL PRODUCT GROUPS
-app.get("/api/product-groups", async (req, res) => {
-  try {
-    const snapshot = await db
-      .collection("productGroups")
-      .orderBy("createdAt", "asc")
-      .get();
-
-    const groups = snapshot.docs.map((doc) => {
-      const data = doc.data();
-
-      return {
-        id: doc.id,
-        ...data,
-        createdAt:
-          data.createdAt?.toDate
-            ? data.createdAt.toDate().toISOString()
-            : data.createdAt ?? null,
-      };
-    });
-
-    return res.json({
-      success: true,
-      groups,
-    });
-  } catch (error) {
-    console.error("GET PRODUCT GROUPS ERROR:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Ошибка получения групп",
-    });
-  }
-});
-
-// CREATE PRODUCT GROUP
-app.post("/api/product-groups", async (req, res) => {
-  try {
-    const { name } = req.body;
-
-    if (!name || !String(name).trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Введите название группы",
-      });
-    }
-
-    const normalizedName = String(name).trim();
-
-    const existingSnapshot = await db
-      .collection("productGroups")
-      .where("name", "==", normalizedName)
-      .limit(1)
-      .get();
-
-    if (!existingSnapshot.empty) {
-      return res.status(409).json({
-        success: false,
-        message: "Такая группа уже существует",
-      });
-    }
-
-    const group = {
-      name: normalizedName,
-      createdAt: new Date(),
-    };
-
-    const groupRef = await db
-      .collection("productGroups")
-      .add(group);
-
-    return res.status(201).json({
-      success: true,
-      message: "Группа создана",
-      group: {
-        id: groupRef.id,
-        name: group.name,
-        createdAt: group.createdAt.toISOString(),
-      },
-    });
-  } catch (error) {
-    console.error("CREATE PRODUCT GROUP ERROR:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Ошибка создания группы",
-    });
-  }
-});
-
-// DELETE PRODUCT GROUP
-app.delete("/api/product-groups/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const groupRef = db
-      .collection("productGroups")
-      .doc(id);
-
-    const groupDoc = await groupRef.get();
-
-    if (!groupDoc.exists) {
-      return res.status(404).json({
-        success: false,
-        message: "Группа не найдена",
-      });
-    }
-
-    await groupRef.delete();
-
-    return res.json({
-      success: true,
-      message: "Группа удалена",
-    });
-  } catch (error) {
-    console.error("DELETE PRODUCT GROUP ERROR:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Ошибка удаления группы",
-    });
-  }
-});
 
 // =====================================================
 // UNKNOWN ROUTE
