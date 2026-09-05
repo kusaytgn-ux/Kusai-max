@@ -1833,6 +1833,59 @@ app.get(
   }
 );
 
+app.post("/api/product-groups/:id/subgroups", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const {
+      name,
+      slug,
+      sort_order = 0,
+    } = req.body;
+
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        message: "Название подгруппы обязательно",
+      });
+    }
+
+    const result = await query(
+      `
+      INSERT INTO product_groups (
+        name,
+        slug,
+        parent_id,
+        sort_order,
+        created_at,
+        updated_at
+      )
+      VALUES ($1, $2, $3, $4, NOW(), NOW())
+      RETURNING *
+      `,
+      [
+        name,
+        slug || null,
+        id,
+        sort_order,
+      ]
+    );
+
+    res.status(201).json({
+      success: true,
+      group: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Ошибка создания подгруппы:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Ошибка создания подгруппы",
+      error: error.message,
+    });
+  }
+});
+
 // =====================================================
 // PRODUCTS
 // POSTGRESQL
@@ -2157,6 +2210,30 @@ app.get("/api/debug/columns", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Ошибка получения структуры таблицы",
+      error: error.message,
+    });
+  }
+});
+
+app.get("/api/product-groups", async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT *
+      FROM product_groups
+      WHERE parent_id IS NULL
+      ORDER BY sort_order ASC, name ASC
+    `);
+
+    res.json({
+      success: true,
+      groups: result.rows,
+    });
+  } catch (error) {
+    console.error("Ошибка загрузки групп:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Ошибка загрузки групп",
       error: error.message,
     });
   }
