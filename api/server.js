@@ -1,4 +1,3 @@
-import { query } from "./postgres.js";
 import express from "express";
 import cors from "cors";
 import bcrypt from "bcryptjs";
@@ -218,13 +217,12 @@ app.get("/api/product-groups", async (req, res) => {
         id,
         name,
         slug,
-        parent_id,
         sort_order,
         created_at,
         updated_at
       FROM product_groups
+      WHERE parent_id IS NULL
       ORDER BY
-        parent_id NULLS FIRST,
         sort_order ASC,
         name ASC
     `);
@@ -234,7 +232,6 @@ app.get("/api/product-groups", async (req, res) => {
         id: group.id,
         name: group.name,
         slug: group.slug,
-        parentId: group.parent_id,
         sortOrder: group.sort_order,
         createdAt: group.created_at,
         updatedAt: group.updated_at,
@@ -276,7 +273,6 @@ app.get(
           id,
           name,
           slug,
-          parent_id,
           sort_order,
           created_at,
           updated_at
@@ -303,7 +299,6 @@ app.get(
           id: group.id,
           name: group.name,
           slug: group.slug,
-          parentId: group.parent_id,
           sortOrder: group.sort_order,
           createdAt: group.created_at,
           updatedAt: group.updated_at,
@@ -336,7 +331,6 @@ app.post(
       const {
         name,
         slug,
-        parentId,
         sortOrder,
       } = req.body || {};
 
@@ -354,49 +348,16 @@ app.post(
       const groupName =
         String(name).trim();
 
-      const normalizedParentId =
-        parentId &&
-        String(parentId).trim()
-          ? String(parentId).trim()
-          : null;
-
-      if (normalizedParentId) {
-        const parentResult =
-          await pgQuery(
-            `
-            SELECT id
-            FROM product_groups
-            WHERE id = $1
-            LIMIT 1
-            `,
-            [normalizedParentId]
-          );
-
-        if (
-          parentResult.rows.length === 0
-        ) {
-          return res.status(404).json({
-            success: false,
-            message:
-              "Родительская группа не найдена",
-          });
-        }
-      }
-
       const existingResult =
         await pgQuery(
           `
           SELECT id
           FROM product_groups
           WHERE name = $1
-          AND parent_id
-              IS NOT DISTINCT FROM $2
+          AND parent_id IS NULL
           LIMIT 1
           `,
-          [
-            groupName,
-            normalizedParentId,
-          ]
+          [groupName]
         );
 
       if (
@@ -424,8 +385,8 @@ app.post(
           $1,
           $2,
           $3,
-          $4,
-          $5
+          NULL,
+          $4
         )
         RETURNING *
         `,
@@ -435,7 +396,6 @@ app.post(
           slug
             ? String(slug).trim()
             : null,
-          normalizedParentId,
           Number(sortOrder) || 0,
         ]
       );
@@ -444,17 +404,12 @@ app.post(
 
       return res.status(201).json({
         success: true,
-
-        message:
-          normalizedParentId
-            ? "Подгруппа создана"
-            : "Группа создана",
+        message: "Группа создана",
 
         group: {
           id: group.id,
           name: group.name,
           slug: group.slug,
-          parentId: group.parent_id,
           sortOrder: group.sort_order,
           createdAt: group.created_at,
           updatedAt: group.updated_at,
@@ -489,7 +444,6 @@ app.patch(
       const {
         name,
         slug,
-        parentId,
         sortOrder,
       } = req.body || {};
 
@@ -514,58 +468,23 @@ app.patch(
         });
       }
 
-      const existingGroup =
+      const current =
         existingResult.rows[0];
-
-      let newParentId =
-        existingGroup.parent_id;
-
-      if (parentId !== undefined) {
-        newParentId =
-          parentId === null ||
-          parentId === ""
-            ? null
-            : parentId;
-      }
-
-      if (
-        newParentId &&
-        String(newParentId) === String(id)
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Группа не может быть родителем самой себе",
-        });
-      }
-
-      if (newParentId) {
-        const parentResult =
-          await pgQuery(
-            `
-            SELECT id
-            FROM product_groups
-            WHERE id = $1
-            LIMIT 1
-            `,
-            [newParentId]
-          );
-
-        if (
-          parentResult.rows.length === 0
-        ) {
-          return res.status(404).json({
-            success: false,
-            message:
-              "Родительская группа не найдена",
-          });
-        }
-      }
 
       const newName =
         name !== undefined
           ? String(name).trim()
-          : existingGroup.name;
+          : current.name;
+
+      const newSlug =
+        slug !== undefined
+          ? String(slug).trim() || null
+          : current.slug;
+
+      const newSortOrder =
+        sortOrder !== undefined
+          ? Number(sortOrder) || 0
+          : current.sort_order;
 
       if (!newName) {
         return res.status(400).json({
@@ -575,30 +494,18 @@ app.patch(
         });
       }
 
-      const newSlug =
-        slug !== undefined
-          ? String(slug).trim() || null
-          : existingGroup.slug;
-
-      const newSortOrder =
-        sortOrder !== undefined
-          ? Number(sortOrder) || 0
-          : existingGroup.sort_order;
-
       const duplicateResult =
         await pgQuery(
           `
           SELECT id
           FROM product_groups
           WHERE name = $1
-          AND parent_id
-              IS NOT DISTINCT FROM $2
-          AND id != $3
+          AND parent_id IS NULL
+          AND id != $2
           LIMIT 1
           `,
           [
             newName,
-            newParentId,
             id,
           ]
         );
@@ -619,8 +526,7 @@ app.patch(
         SET
           name = $2,
           slug = $3,
-          parent_id = $4,
-          sort_order = $5,
+          sort_order = $4,
           updated_at = NOW()
         WHERE id = $1
         RETURNING *
@@ -629,7 +535,6 @@ app.patch(
           id,
           newName,
           newSlug,
-          newParentId,
           newSortOrder,
         ]
       );
@@ -645,7 +550,6 @@ app.patch(
           id: group.id,
           name: group.name,
           slug: group.slug,
-          parentId: group.parent_id,
           sortOrder: group.sort_order,
           createdAt: group.created_at,
           updatedAt: group.updated_at,
@@ -698,24 +602,24 @@ app.delete(
         });
       }
 
-      const childrenResult =
+      const productsResult =
         await pgQuery(
           `
           SELECT id
-          FROM product_groups
-          WHERE parent_id = $1
+          FROM products
+          WHERE group_id = $1
           LIMIT 1
           `,
           [id]
         );
 
       if (
-        childrenResult.rows.length > 0
+        productsResult.rows.length > 0
       ) {
         return res.status(400).json({
           success: false,
           message:
-            "Нельзя удалить группу, пока в ней есть подгруппы",
+            "Нельзя удалить группу, пока в ней есть товары",
         });
       }
 
@@ -729,8 +633,7 @@ app.delete(
 
       return res.json({
         success: true,
-        message:
-          "Группа удалена",
+        message: "Группа удалена",
       });
     } catch (error) {
       console.error(
@@ -749,33 +652,624 @@ app.delete(
 );
 
 // =====================================================
+// PRODUCT SUBGROUPS
+// POSTGRESQL
+// =====================================================
+
+// =====================================================
+// GET ALL SUBGROUPS
+// =====================================================
+
+app.get(
+  "/api/product-subgroups",
+  async (req, res) => {
+    try {
+      const result = await pgQuery(`
+        SELECT
+          ps.id,
+          ps.group_id,
+          ps.name,
+          ps.created_at,
+          pg.name AS group_name
+        FROM product_subgroups ps
+        JOIN product_groups pg
+          ON pg.id = ps.group_id
+        ORDER BY
+          pg.name ASC,
+          ps.name ASC
+      `);
+
+      const subgroups =
+        result.rows.map(
+          (subgroup) => ({
+            id: subgroup.id,
+            groupId: subgroup.group_id,
+            groupName: subgroup.group_name,
+            name: subgroup.name,
+            createdAt:
+              subgroup.created_at,
+          })
+        );
+
+      return res.json({
+        success: true,
+        count: subgroups.length,
+        subgroups,
+      });
+    } catch (error) {
+      console.error(
+        "GET PRODUCT SUBGROUPS ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка загрузки подгрупп",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
+// GET SUBGROUPS BY GROUP
+// =====================================================
+
+app.get(
+  "/api/product-groups/:id/subgroups",
+  async (req, res) => {
+    try {
+      const { id: groupId } =
+        req.params;
+
+      const result = await pgQuery(
+        `
+        SELECT
+          id,
+          group_id,
+          name,
+          created_at
+        FROM product_subgroups
+        WHERE group_id = $1
+        ORDER BY name ASC
+        `,
+        [groupId]
+      );
+
+      const subgroups =
+        result.rows.map(
+          (subgroup) => ({
+            id: subgroup.id,
+            groupId: subgroup.group_id,
+            name: subgroup.name,
+            createdAt:
+              subgroup.created_at,
+          })
+        );
+
+      return res.json({
+        success: true,
+        count: subgroups.length,
+        subgroups,
+      });
+    } catch (error) {
+      console.error(
+        "GET GROUP SUBGROUPS ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка загрузки подгрупп",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
+// CREATE SUBGROUP
+// POSTGRESQL
+// =====================================================
+
+app.post(
+  "/api/product-groups/:id/subgroups",
+  async (req, res) => {
+    try {
+      const { id: groupId } = req.params;
+
+      const { name } = req.body || {};
+
+      if (!name || !String(name).trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Введите название подгруппы",
+        });
+      }
+
+      // Проверяем существование группы
+      const groupResult = await pgQuery(
+        `
+        SELECT id
+        FROM product_groups
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [groupId]
+      );
+
+      if (groupResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Группа не найдена",
+        });
+      }
+
+      const subgroupName = String(name).trim();
+
+      // Проверяем дубликат
+      const duplicateResult = await pgQuery(
+        `
+        SELECT id
+        FROM product_subgroups
+        WHERE group_id = $1
+        AND name = $2
+        LIMIT 1
+        `,
+        [
+          groupId,
+          subgroupName,
+        ]
+      );
+
+      if (duplicateResult.rows.length > 0) {
+        return res.status(409).json({
+          success: false,
+          message: "Такая подгруппа уже существует",
+        });
+      }
+
+      // Создаем подгруппу
+      const result = await pgQuery(
+        `
+        INSERT INTO product_subgroups (
+          id,
+          group_id,
+          name,
+          created_at
+        )
+        VALUES (
+          gen_random_uuid(),
+          $1,
+          $2,
+          NOW()
+        )
+        RETURNING *
+        `,
+        [
+          groupId,
+          subgroupName,
+        ]
+      );
+
+      const subgroup = result.rows[0];
+
+      return res.status(201).json({
+        success: true,
+        message: "Подгруппа успешно создана",
+
+        subgroup: {
+          id: subgroup.id,
+          groupId: subgroup.group_id,
+          name: subgroup.name,
+          createdAt: subgroup.created_at,
+        },
+      });
+
+    } catch (error) {
+      console.error(
+        "CREATE SUBGROUP ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: "Ошибка создания подгруппы",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
+// GET ALL SUBGROUPS
+// =====================================================
+
+app.get(
+  "/api/product-subgroups",
+  async (req, res) => {
+    try {
+      const result = await pgQuery(`
+        SELECT
+          ps.id,
+          ps.group_id,
+          ps.name,
+          ps.created_at,
+          pg.name AS group_name
+        FROM product_subgroups ps
+        JOIN product_groups pg
+          ON pg.id = ps.group_id
+        ORDER BY
+          pg.name ASC,
+          ps.name ASC
+      `);
+
+      const subgroups =
+        result.rows.map((item) => ({
+          id: item.id,
+          groupId: item.group_id,
+          groupName: item.group_name,
+          name: item.name,
+          createdAt: item.created_at,
+        }));
+
+      return res.json({
+        success: true,
+        count: subgroups.length,
+        subgroups,
+      });
+
+    } catch (error) {
+      console.error(
+        "GET SUBGROUPS ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка загрузки подгрупп",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
+// GET GROUP SUBGROUPS
+// =====================================================
+
+app.get(
+  "/api/product-groups/:id/subgroups",
+  async (req, res) => {
+    try {
+      const { id: groupId } = req.params;
+
+      const result = await pgQuery(
+        `
+        SELECT
+          id,
+          group_id,
+          name,
+          created_at
+        FROM product_subgroups
+        WHERE group_id = $1
+        ORDER BY name ASC
+        `,
+        [groupId]
+      );
+
+      const subgroups =
+        result.rows.map((item) => ({
+          id: item.id,
+          groupId: item.group_id,
+          name: item.name,
+          createdAt: item.created_at,
+        }));
+
+      return res.json({
+        success: true,
+        count: subgroups.length,
+        subgroups,
+      });
+
+    } catch (error) {
+      console.error(
+        "GET GROUP SUBGROUPS ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка загрузки подгрупп",
+        error: error.message,
+      });
+    }
+  }
+);
+
+
+
+// =====================================================
+// UPDATE SUBGROUP
+// =====================================================
+
+app.patch(
+  "/api/product-subgroups/:id",
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const {
+        name,
+        groupId,
+      } = req.body || {};
+
+      const existingResult =
+        await pgQuery(
+          `
+          SELECT *
+          FROM product_subgroups
+          WHERE id = $1
+          LIMIT 1
+          `,
+          [id]
+        );
+
+      if (
+        existingResult.rows.length === 0
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Подгруппа не найдена",
+        });
+      }
+
+      const current =
+        existingResult.rows[0];
+
+      const newName =
+        name !== undefined
+          ? String(name).trim()
+          : current.name;
+
+      const newGroupId =
+        groupId !== undefined
+          ? groupId
+          : current.group_id;
+
+      if (!newName) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Введите название подгруппы",
+        });
+      }
+
+      const groupResult =
+        await pgQuery(
+          `
+          SELECT id
+          FROM product_groups
+          WHERE id = $1
+          LIMIT 1
+          `,
+          [newGroupId]
+        );
+
+      if (
+        groupResult.rows.length === 0
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Группа не найдена",
+        });
+      }
+
+      const duplicateResult =
+        await pgQuery(
+          `
+          SELECT id
+          FROM product_subgroups
+          WHERE group_id = $1
+          AND name = $2
+          AND id != $3
+          LIMIT 1
+          `,
+          [
+            newGroupId,
+            newName,
+            id,
+          ]
+        );
+
+      if (
+        duplicateResult.rows.length > 0
+      ) {
+        return res.status(409).json({
+          success: false,
+          message:
+            "Такая подгруппа уже существует",
+        });
+      }
+
+      const result =
+        await pgQuery(
+          `
+          UPDATE product_subgroups
+          SET
+            name = $2,
+            group_id = $3
+          WHERE id = $1
+          RETURNING *
+          `,
+          [
+            id,
+            newName,
+            newGroupId,
+          ]
+        );
+
+      const subgroup =
+        result.rows[0];
+
+      return res.json({
+        success: true,
+        message:
+          "Подгруппа обновлена",
+
+        subgroup: {
+          id: subgroup.id,
+          groupId: subgroup.group_id,
+          name: subgroup.name,
+          createdAt:
+            subgroup.created_at,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "UPDATE SUBGROUP ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка обновления подгруппы",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
+// DELETE SUBGROUP
+// =====================================================
+
+app.delete(
+  "/api/product-subgroups/:id",
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const productsResult =
+        await pgQuery(
+          `
+          SELECT id
+          FROM products
+          WHERE subgroup_id = $1
+          LIMIT 1
+          `,
+          [id]
+        );
+
+      if (
+        productsResult.rows.length > 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Нельзя удалить подгруппу, пока в ней есть товары",
+        });
+      }
+
+      const result =
+        await pgQuery(
+          `
+          DELETE FROM product_subgroups
+          WHERE id = $1
+          RETURNING id
+          `,
+          [id]
+        );
+
+      if (
+        result.rows.length === 0
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Подгруппа не найдена",
+        });
+      }
+
+      return res.json({
+        success: true,
+        message:
+          "Подгруппа удалена",
+      });
+    } catch (error) {
+      console.error(
+        "DELETE SUBGROUP ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка удаления подгруппы",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
 // CATEGORIES
 // =====================================================
 
 app.get("/api/categories", async (req, res) => {
   try {
-    const result = await pgQuery(`
-      SELECT
-        id,
-        name,
-        slug,
-        parent_id,
-        sort_order
-      FROM product_groups
-      ORDER BY
-        parent_id NULLS FIRST,
-        sort_order ASC,
-        name ASC
-    `);
+    const groupsResult =
+      await pgQuery(`
+        SELECT
+          id,
+          name,
+          slug,
+          sort_order
+        FROM product_groups
+        WHERE parent_id IS NULL
+        ORDER BY
+          sort_order ASC,
+          name ASC
+      `);
 
-    const categories =
-      result.rows.map((group) => ({
+    const categories = [];
+
+    for (const group of groupsResult.rows) {
+      const subgroupsResult =
+        await pgQuery(
+          `
+          SELECT
+            id,
+            name
+          FROM product_subgroups
+          WHERE group_id = $1
+          ORDER BY name ASC
+          `,
+          [group.id]
+        );
+
+      categories.push({
         id: group.id,
         name: group.name,
         slug: group.slug,
-        parentId: group.parent_id,
         sortOrder: group.sort_order,
-      }));
+
+        subgroups:
+          subgroupsResult.rows.map(
+            (subgroup) => ({
+              id: subgroup.id,
+              name: subgroup.name,
+            })
+          ),
+      });
+    }
 
     return res.json({
       success: true,
@@ -1834,149 +2328,7 @@ app.get(
 );
 
 // =====================================================
-// CREATE SUBGROUP
-// =====================================================
-
-app.post(
-  "/api/product-groups/:id/subgroups",
-  async (req, res) => {
-    try {
-      const { id: parentId } = req.params;
-
-      const {
-        name,
-        slug,
-        sortOrder,
-      } = req.body || {};
-
-      // Проверяем название
-      if (!name || !String(name).trim()) {
-        return res.status(400).json({
-          success: false,
-          message: "Введите название подгруппы",
-        });
-      }
-
-      // Проверяем существование родительской группы
-      const parentResult = await pgQuery(
-        `
-        SELECT id
-        FROM product_groups
-        WHERE id = $1
-        LIMIT 1
-        `,
-        [parentId]
-      );
-
-      if (parentResult.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: "Родительская группа не найдена",
-        });
-      }
-
-      const subgroupName = String(name).trim();
-
-      // Проверяем, нет ли такой подгруппы
-      const duplicateResult = await pgQuery(
-        `
-        SELECT id
-        FROM product_groups
-        WHERE name = $1
-        AND parent_id = $2
-        LIMIT 1
-        `,
-        [
-          subgroupName,
-          parentId,
-        ]
-      );
-
-      if (duplicateResult.rows.length > 0) {
-        return res.status(409).json({
-          success: false,
-          message: "Такая подгруппа уже существует",
-        });
-      }
-
-      // Создаём UUID
-      const subgroupId = crypto.randomUUID();
-
-      // Создаём подгруппу
-      const result = await pgQuery(
-        `
-        INSERT INTO product_groups (
-          id,
-          name,
-          slug,
-          parent_id,
-          sort_order,
-          created_at,
-          updated_at
-        )
-        VALUES (
-          $1,
-          $2,
-          $3,
-          $4,
-          $5,
-          NOW(),
-          NOW()
-        )
-        RETURNING *
-        `,
-        [
-          subgroupId,
-          subgroupName,
-          slug
-            ? String(slug).trim()
-            : null,
-          parentId,
-          Number(sortOrder) || 0,
-        ]
-      );
-
-      const subgroup = result.rows[0];
-
-      return res.status(201).json({
-        success: true,
-        message: "Подгруппа успешно создана",
-
-        group: {
-          id: subgroup.id,
-          name: subgroup.name,
-          slug: subgroup.slug,
-          parentId: subgroup.parent_id,
-          sortOrder: subgroup.sort_order,
-          createdAt: subgroup.created_at,
-          updatedAt: subgroup.updated_at,
-        },
-      });
-
-    } catch (error) {
-
-      console.error(
-        "CREATE SUBGROUP ERROR:",
-        error
-      );
-
-      return res.status(500).json({
-        success: false,
-        message: "Ошибка создания подгруппы",
-        error: error.message,
-      });
-    }
-  }
-);
-
-// =====================================================
-// PRODUCTS
-// POSTGRESQL
-// =====================================================
-
-
-// =====================================================
-// DATABASE TABLES DEBUG
+// DATABASE DEBUG
 // =====================================================
 
 app.get("/api/debug/tables", async (req, res) => {
@@ -1995,49 +2347,166 @@ app.get("/api/debug/tables", async (req, res) => {
       ),
     });
   } catch (error) {
-    console.error("DATABASE TABLES ERROR:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Ошибка получения таблиц",
-      error: error.message,
-    });
-  }
-});
-
-// =====================================================
-// PRODUCTS TABLE DEBUG
-// =====================================================
-
-app.get("/api/debug/products-columns", async (req, res) => {
-  try {
-    const result = await pgQuery(`
-      SELECT
-        column_name,
-        data_type
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-      AND table_name = 'products'
-      ORDER BY ordinal_position
-    `);
-
-    return res.json({
-      success: true,
-      columns: result.rows,
-    });
-  } catch (error) {
     console.error(
-      "PRODUCTS COLUMNS ERROR:",
+      "DATABASE TABLES ERROR:",
       error
     );
 
     return res.status(500).json({
       success: false,
-      message: "Ошибка получения структуры products",
+      message:
+        "Ошибка получения таблиц",
       error: error.message,
     });
   }
 });
+
+app.get(
+  "/api/debug/products-columns",
+  async (req, res) => {
+    try {
+      const result = await pgQuery(`
+        SELECT
+          column_name,
+          data_type
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+        AND table_name = 'products'
+        ORDER BY ordinal_position
+      `);
+
+      return res.json({
+        success: true,
+        columns: result.rows,
+      });
+    } catch (error) {
+      console.error(
+        "PRODUCTS COLUMNS ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка получения структуры products",
+        error: error.message,
+      });
+    }
+  }
+);
+
+app.get("/api/debug/columns", async (req, res) => {
+  try {
+    const { table } = req.query;
+
+    if (!table) {
+      return res.status(400).json({
+        success: false,
+        message: "Укажите table",
+      });
+    }
+
+    const result = await pgQuery(
+      `
+      SELECT
+        column_name,
+        data_type
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+      AND table_name = $1
+      ORDER BY ordinal_position
+      `,
+      [table]
+    );
+
+    return res.json({
+      success: true,
+      table,
+      columns: result.rows,
+    });
+  } catch (error) {
+    console.error(
+      "Ошибка получения колонок:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Ошибка получения структуры таблицы",
+      error: error.message,
+    });
+  }
+});
+
+// =====================================================
+// ADD GROUP_ID TO PRODUCTS
+// =====================================================
+
+app.post(
+  "/api/debug/add-products-group-id",
+  async (req, res) => {
+    try {
+      await pgQuery(`
+        ALTER TABLE products
+        ADD COLUMN IF NOT EXISTS group_id UUID
+      `);
+
+      return res.json({
+        success: true,
+        message:
+          "Колонка group_id успешно добавлена в products",
+      });
+    } catch (error) {
+      console.error(
+        "ADD GROUP_ID ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка добавления group_id",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
+// ADD SUBGROUP_ID TO PRODUCTS
+// =====================================================
+
+app.post(
+  "/api/debug/add-products-subgroup-id",
+  async (req, res) => {
+    try {
+      await pgQuery(`
+        ALTER TABLE products
+        ADD COLUMN IF NOT EXISTS subgroup_id UUID
+      `);
+
+      return res.json({
+        success: true,
+        message:
+          "Колонка subgroup_id успешно добавлена в products",
+      });
+    } catch (error) {
+      console.error(
+        "ADD SUBGROUP_ID ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка добавления subgroup_id",
+        error: error.message,
+      });
+    }
+  }
+);
+
 // =====================================================
 // PRODUCTS
 // POSTGRESQL
@@ -2056,19 +2525,26 @@ app.get("/api/products", async (req, res) => {
         name,
         price,
         images,
+
+        group_id,
+        subgroup_id,
+
         category,
         category_group,
         category_path,
         category_leaf,
+
         badge,
         rating,
         reviews,
         delivery,
+
         in_stock,
         stock,
         reserve,
         in_transit,
         quantity,
+
         description,
         memory,
         color,
@@ -2077,123 +2553,170 @@ app.get("/api/products", async (req, res) => {
         product,
         characteristics,
         variants_count,
+
         weight,
         volume,
+
         article,
         code,
         external_code,
         barcode,
+
         archived,
         updated_at,
         hidden,
         buy_price,
         synced_at
+
       FROM products
+
       WHERE archived IS NOT TRUE
       AND hidden IS NOT TRUE
+
       ORDER BY updated_at DESC NULLS LAST
     `);
 
-    const products = result.rows.map((item) => ({
-      id: item.id,
+    const products =
+      result.rows.map((item) => ({
+        id: item.id,
 
-      // Основное название
-      title: item.title || item.name || "",
+        title:
+          item.title ||
+          item.name ||
+          "",
 
-      name: item.name || item.title || "",
+        name:
+          item.name ||
+          item.title ||
+          "",
 
-      price: Number(item.price || 0),
+        price:
+          Number(item.price || 0),
 
-      // Фото
-      images: Array.isArray(item.images)
-        ? item.images
-        : [],
+        images:
+          Array.isArray(item.images)
+            ? item.images
+            : [],
 
-      // Категории
-      category: item.category || "",
-      categoryGroup: item.category_group || "",
-      categoryPath: item.category_path || [],
-      categoryLeaf: item.category_leaf || "",
+        // Группа
 
-      // Дополнительно
-      badge: item.badge || "",
+        groupId:
+          item.group_id || null,
 
-      rating: Number(item.rating || 0),
+        // Подгруппа
 
-      reviews: Number(item.reviews || 0),
+        subgroupId:
+          item.subgroup_id || null,
 
-      delivery: item.delivery || "",
+        // Старые категории
 
-      // Наличие
-      inStock: Boolean(item.in_stock),
+        category:
+          item.category || "",
 
-      stock: Number(item.stock || 0),
+        categoryGroup:
+          item.category_group || "",
 
-      reserve: Number(item.reserve || 0),
+        categoryPath:
+          item.category_path || [],
 
-      inTransit: Number(item.in_transit || 0),
+        categoryLeaf:
+          item.category_leaf || "",
 
-      quantity: Number(item.quantity || 0),
+        badge:
+          item.badge || "",
 
-      // Описание
-      description: item.description || "",
+        rating:
+          Number(item.rating || 0),
 
-      // Характеристики
-      memory: item.memory || "",
+        reviews:
+          Number(item.reviews || 0),
 
-      color: item.color || "",
+        delivery:
+          item.delivery || "",
 
-      warranty: item.warranty || "",
+        inStock:
+          Boolean(item.in_stock),
 
-      type: item.type || "",
+        stock:
+          Number(item.stock || 0),
 
-      product: item.product || "",
+        reserve:
+          Number(item.reserve || 0),
 
-      characteristics:
-        item.characteristics || {},
+        inTransit:
+          Number(item.in_transit || 0),
 
-      variantsCount:
-        Number(item.variants_count || 0),
+        quantity:
+          Number(item.quantity || 0),
 
-      weight: item.weight
-        ? Number(item.weight)
-        : null,
+        description:
+          item.description || "",
 
-      volume: item.volume
-        ? Number(item.volume)
-        : null,
+        memory:
+          item.memory || "",
 
-      // Артикулы
-      article: item.article || "",
+        color:
+          item.color || "",
 
-      code: item.code || "",
+        warranty:
+          item.warranty || "",
 
-      externalCode:
-        item.external_code || "",
+        type:
+          item.type || "",
 
-      barcode: item.barcode || "",
+        product:
+          item.product || "",
 
-      archived: Boolean(item.archived),
+        characteristics:
+          item.characteristics || {},
 
-      hidden: Boolean(item.hidden),
+        variantsCount:
+          Number(
+            item.variants_count || 0
+          ),
 
-      buyPrice: item.buy_price
-        ? Number(item.buy_price)
-        : null,
+        weight: item.weight
+          ? Number(item.weight)
+          : null,
 
-      updatedAt: item.updated_at,
+        volume: item.volume
+          ? Number(item.volume)
+          : null,
 
-      syncedAt: item.synced_at,
-    }));
+        article:
+          item.article || "",
+
+        code:
+          item.code || "",
+
+        externalCode:
+          item.external_code || "",
+
+        barcode:
+          item.barcode || "",
+
+        archived:
+          Boolean(item.archived),
+
+        hidden:
+          Boolean(item.hidden),
+
+        buyPrice: item.buy_price
+          ? Number(item.buy_price)
+          : null,
+
+        updatedAt:
+          item.updated_at,
+
+        syncedAt:
+          item.synced_at,
+      }));
 
     return res.json({
       success: true,
-
       count: products.length,
-
       products,
     });
-
   } catch (error) {
     console.error(
       "GET PRODUCTS ERROR:",
@@ -2202,97 +2725,8 @@ app.get("/api/products", async (req, res) => {
 
     return res.status(500).json({
       success: false,
-
       message:
         "Ошибка загрузки товаров",
-
-      error: error.message,
-    });
-  }
-});
-
-app.get("/api/debug/columns", async (req, res) => {
-  try {
-    const { table } = req.query;
-
-    if (!table) {
-      return res.status(400).json({
-        success: false,
-        message: "Укажите table",
-      });
-    }
-
-    const result = await query(
-      `
-      SELECT
-        column_name,
-        data_type
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-        AND table_name = $1
-      ORDER BY ordinal_position
-      `,
-      [table]
-    );
-
-    res.json({
-      success: true,
-      table,
-      columns: result.rows,
-    });
-  } catch (error) {
-    console.error("Ошибка получения колонок:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Ошибка получения структуры таблицы",
-      error: error.message,
-    });
-  }
-});
-
-// =====================================================
-// ADD GROUP_ID TO PRODUCTS
-// =====================================================
-
-app.post("/api/debug/add-products-group-id", async (req, res) => {
-  try {
-    await pgQuery(`
-      ALTER TABLE products
-      ADD COLUMN IF NOT EXISTS group_id UUID
-    `);
-
-    return res.json({
-      success: true,
-      message: "Колонка group_id успешно добавлена в products",
-    });
-
-  } catch (error) {
-    console.error("ADD GROUP_ID ERROR:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Ошибка добавления group_id",
-      error: error.message,
-    });
-  }
-});
-
-app.get("/api/debug/add-products-group-id", async (req, res) => {
-  try {
-    await pgQuery(`
-      ALTER TABLE products
-      ADD COLUMN IF NOT EXISTS group_id UUID
-    `);
-
-    return res.json({
-      success: true,
-      message: "Колонка group_id успешно добавлена в products",
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Ошибка добавления group_id",
       error: error.message,
     });
   }
@@ -2310,11 +2744,21 @@ app.use((req, res) => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
+// =====================================================
+// START SERVER
+// =====================================================
+
+const PORT =
+  process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`🚀 KUSAI MAX API запущен на порту ${PORT}`);
-  console.log(`📡 http://localhost:${PORT}`);
+  console.log(
+    `🚀 KUSAI MAX API запущен на порту ${PORT}`
+  );
+
+  console.log(
+    `📡 http://localhost:${PORT}`
+  );
 });
 
 export default app;
