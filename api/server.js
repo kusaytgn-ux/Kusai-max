@@ -849,46 +849,101 @@ app.get("/api/1c/test", (req, res) => {
   });
 });
 
-app.get("/api/1c/clients", async (req, res) => {
-  const apiKey = req.headers["x-api-key"];
+/*
+|--------------------------------------------------------------------------
+| GET /api/1c/client?phone=...
+|
+| Поиск клиента в PostgreSQL
+|--------------------------------------------------------------------------
+*/
 
-  if (apiKey !== ONE_C_API_KEY) {
-    return res.status(403).json({
-      success: false,
-      message: "Нет доступа",
-    });
+app.get("/api/1c/client", async (req, res) => {
+  if (!check1CAccess(req, res)) {
+    return;
   }
 
   try {
-    const snapshot = await db
-      .collection("clients")
-      .get();
+    let phone = String(
+      req.query.phone || ""
+    ).trim();
 
-    const clients = snapshot.docs.map((clientDoc) => {
-      const data = clientDoc.data();
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        message: "Не указан телефон",
+      });
+    }
 
-      return {
-        id: clientDoc.id,
-        name: data.name,
-        phone: data.phone,
-        points: data.points || 0,
-        createdAt: data.createdAt?.toDate
-          ? data.createdAt.toDate().toISOString()
-          : null,
-      };
-    });
+    phone = normalizePhone(phone);
+
+    const result = await pgQuery(
+      `
+      SELECT
+        id,
+        name,
+        phone,
+        points,
+        bonuses,
+        status,
+        created_at
+      FROM clients
+      WHERE phone = $1
+      LIMIT 1
+      `,
+      [phone]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Клиент не найден",
+      });
+    }
+
+    const client = result.rows[0];
 
     return res.json({
       success: true,
-      count: clients.length,
-      clients,
+
+      client: {
+        id: client.id,
+
+        name: client.name || "",
+
+        phone: client.phone || "",
+
+        points: Number(
+          client.bonuses ??
+          client.points ??
+          0
+        ),
+
+        status:
+          client.status ||
+          "NEW CLIENT",
+
+        createdAt:
+          client.created_at
+            ? new Date(
+                client.created_at
+              ).toISOString()
+            : null,
+      },
     });
+
   } catch (error) {
-    console.error("1C CLIENTS ERROR:", error);
+    console.error(
+      "Ошибка поиска клиента:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
-      message: "Ошибка получения клиентов",
+      message: "Ошибка поиска клиента",
+
+      error:
+        error?.message ||
+        String(error),
     });
   }
 });

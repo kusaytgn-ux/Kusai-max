@@ -1,9 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import { getFirestore } from "firebase-admin/firestore";
 import "dotenv/config";
-import { Timestamp } from "firebase-admin/firestore";
 import { query as pgQuery, checkPostgres } from "../api/postgres.js";
 import crypto from "node:crypto";
 import {
@@ -18,7 +16,6 @@ import {
    getAllOneCCustomers,
   normalizePhone,
 } from "../api/oneC.js";
-import { db } from "../api/firebaseAdmin.js";
 
 
 
@@ -1596,31 +1593,34 @@ function check1CAccess(req, res) {
 async function findClientByPhone(phone) {
   const normalizedPhone = normalizePhone(phone);
 
-  // Ищем в Firebase сначала по нормализованному номеру
-  const snapshot = await db
-    .collection("clients")
-    .where("phone", "==", normalizedPhone)
-    .limit(1)
-    .get();
+  const result = await pgQuery(
+    `
+    SELECT
+      id,
+      name,
+      phone,
+      login,
+      points,
+      bonuses,
+      orders,
+      status,
+      role,
+      address,
+      birth_day,
+      passport_details,
+      onec_customer_id
+    FROM clients
+    WHERE
+      regexp_replace(phone, '\\D', '', 'g') =
+      regexp_replace($1, '\\D', '', 'g')
+    LIMIT 1
+    `,
+    [normalizedPhone]
+  );
 
-  if (!snapshot.empty) {
-    return snapshot.docs[0];
-  }
-
-  // Дополнительно пробуем вариант с +7
-  const plusPhone =  normalizedPhone;
-
-  const plusSnapshot = await db
-    .collection("clients")
-    .where("phone", "==", plusPhone)
-    .limit(1)
-    .get();
-
-  if (!plusSnapshot.empty) {
-    return plusSnapshot.docs[0];
-  }
-
-  return null;
+  return result.rows.length > 0
+    ? result.rows[0]
+    : null;
 }
 
 /*
@@ -2048,245 +2048,669 @@ app.get(
 
 /*
 |--------------------------------------------------------------------------
-| GET /api/clients/1c?phone=
+| GET /api/clients/1c
 |
-| Получение клиента из 1С + синхронизация с Firebase
+| Получение клиента из 1С + синхронизация с PostgreSQL
 |--------------------------------------------------------------------------
 */
 
-app.get(
-  "/api/clients/1c",
+app.get("/api/clients/1c", async (req, res) => {
+  try {
+    const rawPhone = String(
+      req.query.phone || ""
+    ).trim();
+
+    if (!rawPhone) {
+      return res.status(400).json({
+        success: false,
+        message: "Не указан телефон",
+      });
+    }
+
+    const phone = normalizePhone(rawPhone);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Получаем клиента из 1С
+    |--------------------------------------------------------------------------
+    */
+
+    const customer =
+      await getOneCCustomer(phone);
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Клиент не найден в 1С",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Нормализуем данные клиента
+    |--------------------------------------------------------------------------
+    */
+
+    const customerPhone =
+      normalizePhone(
+        customer.phone || phone
+      );
+
+    const points = Number(
+      customer.bonusBalance ?? 0
+    );
+
+    const customerName =
+      customer.name || "";
+
+    const birthDay =
+      customer.birthDay || null;
+
+    const address =
+      customer.address || "";
+
+    /*
+    |--------------------------------------------------------------------------
+    | Ищем клиента в PostgreSQL
+    |--------------------------------------------------------------------------
+    */
+
+    const existing =
+      await pgQuery(
+        `
+        SELECT id
+        FROM clients
+        WHERE phone = $1
+        LIMIT 1
+        `,
+        [customerPhone]
+      );
+
+    let client;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Клиент существует → обновляем
+    |--------------------------------------------------------------------------
+    */
+
+    if (existing.rows.length > 0) {
+
+      const clientId =
+        existing.rows[0].id;
+
+      const result =
+        await pgQuery(
+          `
+          UPDATE clients
+          SET
+            name = $1,
+            phone = $2,
+            points = $3,
+            bonuses = $4,
+            birth_day = $5,
+            address = $6,
+            source = $7,
+            updated_at = NOW()
+          WHERE id = $8
+          RETURNING *
+          `,
+          [
+            customerName,
+            customerPhone,
+            points,
+            points,
+            birthDay,
+            address,
+            "1C",
+            clientId,
+          ]
+        );
+
+      client = result.rows[0];
+
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Клиента нет → создаём
+    |--------------------------------------------------------------------------
+    */
+
+    else {
+
+      const clientId =
+        crypto.randomUUID();
+
+      const result =
+        await pgQuery(
+          `
+          INSERT INTO clients (
+            id,
+            name,
+            phone,
+            login,
+            points,
+            bonuses,
+            orders,
+            status,
+            role,
+            birth_day,
+            address,
+            source,
+            welcome_bonus,
+            created_at,
+            updated_at,
+            raw
+          )
+          VALUES (
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,
+            $10,$11,$12,$13,NOW(),NOW(),$14::jsonb
+          )
+          RETURNING *
+          `,
+          [
+            clientId,
+            customerName,
+            customerPhone,
+            customerName,
+            points,
+            points,
+            0,
+            "ACTIVE",
+            "user",
+            birthDay,
+            address,
+            "1C",
+            false,
+            JSON.stringify(customer),
+          ]
+        );
+
+      client = result.rows[0];
+
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Возвращаем клиента
+    |--------------------------------------------------------------------------
+    */
+
+    return res.json({
+      success: true,
+
+      client: {
+        id: client.id,
+        name: client.name || "",
+        phone: client.phone || "",
+        points: Number(client.points || 0),
+        bonuses: Number(
+          client.bonuses || 0
+        ),
+        birthDay:
+          client.birth_day || null,
+        address:
+          client.address || "",
+        customerQR:
+          customer.customerQR || null,
+      },
+
+      source: "1C",
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Ошибка синхронизации клиента 1С → PostgreSQL:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Ошибка получения клиента из 1С",
+      error:
+        error?.message ||
+        String(error),
+    });
+  }
+});
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/1c/clients
+|
+| Получение всех клиентов из PostgreSQL
+|--------------------------------------------------------------------------
+*/
+
+app.get("/api/1c/clients", async (req, res) => {
+
+  if (!check1CAccess(req, res)) {
+    return;
+  }
+
+  try {
+
+    const result =
+      await pgQuery(
+        `
+        SELECT
+          id,
+          name,
+          phone,
+          points,
+          bonuses,
+          orders,
+          status,
+          role,
+          birth_day,
+          address,
+          created_at,
+          updated_at
+        FROM clients
+        ORDER BY created_at DESC NULLS LAST
+        `
+      );
+
+    const clients =
+      result.rows.map((client) => ({
+        id: client.id,
+
+        name:
+          client.name || "",
+
+        phone:
+          client.phone || "",
+
+        points:
+          Number(client.points || 0),
+
+        bonuses:
+          Number(client.bonuses || 0),
+
+        orders:
+          Number(client.orders || 0),
+
+        status:
+          client.status || "NEW CLIENT",
+
+        role:
+          client.role || "user",
+
+        birthDay:
+          client.birth_day || null,
+
+        address:
+          client.address || "",
+
+        createdAt:
+          client.created_at
+            ? new Date(
+                client.created_at
+              ).toISOString()
+            : null,
+
+        updatedAt:
+          client.updated_at
+            ? new Date(
+                client.updated_at
+              ).toISOString()
+            : null,
+      }));
+
+    return res.json({
+      success: true,
+
+      count:
+        clients.length,
+
+      clients,
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Ошибка выгрузки клиентов для 1С:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Ошибка получения клиентов",
+      error:
+        error?.message ||
+        String(error),
+    });
+  }
+});
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/1c/client?phone=...
+|
+| Поиск клиента в PostgreSQL
+|--------------------------------------------------------------------------
+*/
+
+app.get("/api/1c/client", async (req, res) => {
+
+  if (!check1CAccess(req, res)) {
+    return;
+  }
+
+  try {
+
+    const rawPhone =
+      String(
+        req.query.phone || ""
+      ).trim();
+
+    if (!rawPhone) {
+
+      return res.status(400).json({
+        success: false,
+        message:
+          "Не указан телефон",
+      });
+    }
+
+    const phone =
+      normalizePhone(rawPhone);
+
+    const result =
+      await pgQuery(
+        `
+        SELECT
+          id,
+          name,
+          phone,
+          points,
+          bonuses,
+          orders,
+          status,
+          role,
+          birth_day,
+          address,
+          created_at,
+          updated_at
+        FROM clients
+        WHERE phone = $1
+        LIMIT 1
+        `,
+        [phone]
+      );
+
+    if (result.rows.length === 0) {
+
+      return res.status(404).json({
+        success: false,
+        message:
+          "Клиент не найден",
+      });
+    }
+
+    const client =
+      result.rows[0];
+
+    return res.json({
+      success: true,
+
+      client: {
+
+        id:
+          client.id,
+
+        name:
+          client.name || "",
+
+        phone:
+          client.phone || "",
+
+        points:
+          Number(
+            client.points || 0
+          ),
+
+        bonuses:
+          Number(
+            client.bonuses || 0
+          ),
+
+        orders:
+          Number(
+            client.orders || 0
+          ),
+
+        status:
+          client.status ||
+          "NEW CLIENT",
+
+        role:
+          client.role ||
+          "user",
+
+        birthDay:
+          client.birth_day ||
+          null,
+
+        address:
+          client.address ||
+          "",
+
+        createdAt:
+          client.created_at
+            ? new Date(
+                client.created_at
+              ).toISOString()
+            : null,
+
+        updatedAt:
+          client.updated_at
+            ? new Date(
+                client.updated_at
+              ).toISOString()
+            : null,
+      },
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Ошибка поиска клиента PostgreSQL:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Ошибка поиска клиента",
+      error:
+        error?.message ||
+        String(error),
+    });
+  }
+});
+
+/*
+|--------------------------------------------------------------------------
+| POST /api/1c/bonus/add
+|--------------------------------------------------------------------------
+*/
+
+app.post(
+  "/api/1c/bonus/add",
   async (req, res) => {
+
+    if (!check1CAccess(req, res)) {
+      return;
+    }
+
     try {
-      const phone =
+
+      const rawPhone =
         String(
-          req.query.phone || ""
+          req.body.phone || ""
         ).trim();
-
-      if (!phone) {
-        return res.status(400).json({
-          success: false,
-          message: "Не указан телефон",
-        });
-      }
-
-      /*
-      |--------------------------------------------------------------------------
-      | Получаем клиента из 1С
-      |--------------------------------------------------------------------------
-      */
-
-      const customer =
-        await getOneCCustomer(phone);
-
-      if (!customer) {
-        return res.status(404).json({
-          success: false,
-          message:
-            "Клиент не найден в 1С",
-        });
-      }
-
-      /*
-      |--------------------------------------------------------------------------
-      | Нормализуем данные
-      |--------------------------------------------------------------------------
-      */
-
-      const customerPhone =
-        customer.phone || phone;
 
       const points =
         Number(
-          customer.bonusBalance || 0
+          req.body.points
         );
 
-      /*
-      |--------------------------------------------------------------------------
-      | Ищем клиента в Firebase
-      |--------------------------------------------------------------------------
-      */
+      const reason =
+        String(
+          req.body.reason || ""
+        ).trim() ||
+        "Начисление бонусов из 1С";
 
-      const clientsRef =
-        db.collection("clients");
+      if (!rawPhone) {
 
-      let snapshot =
-        await clientsRef
-          .where(
-            "phone",
-            "==",
-            customerPhone
-          )
-          .limit(1)
-          .get();
-
-      /*
-      |--------------------------------------------------------------------------
-      | Если по номеру с + не нашли —
-      | пробуем вариант без +
-      |--------------------------------------------------------------------------
-      */
-
-      if (snapshot.empty) {
-        const phoneWithoutPlus =
-          customerPhone.replace(
-            /^\+/,
-            ""
-          );
-
-        snapshot =
-          await clientsRef
-            .where(
-              "phone",
-              "==",
-              phoneWithoutPlus
-            )
-            .limit(1)
-            .get();
+        return res.status(400).json({
+          success: false,
+          message:
+            "Не указан телефон",
+        });
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | Клиент существует → обновляем
-      |--------------------------------------------------------------------------
-      */
+      const phone =
+        normalizePhone(rawPhone);
 
-      let clientId;
-      let clientData;
+      if (
+        !Number.isFinite(points) ||
+        points <= 0
+      ) {
 
-      if (!snapshot.empty) {
-        const clientDoc =
-          snapshot.docs[0];
-
-        clientId =
-          clientDoc.id;
-
-        clientData =
-          clientDoc.data();
-
-        await clientDoc.ref.update({
-          name:
-            customer.name ||
-            clientData.name ||
-            "",
-
-          phone:
-            customer.phone ||
-            clientData.phone ||
-            customerPhone,
-
-          points,
-
-          birthDay:
-            customer.birthDay ||
-            null,
-
-          address:
-            customer.address ||
-            "",
-
-          updatedFrom1C:
-            new Date(),
-
-          oneCSyncedAt:
-            new Date(),
+        return res.status(400).json({
+          success: false,
+          message:
+            "Количество бонусов должно быть больше 0",
         });
       }
 
       /*
       |--------------------------------------------------------------------------
-      | Клиента ещё нет → создаём
+      | Находим и обновляем клиента
       |--------------------------------------------------------------------------
       */
 
-      else {
-        const newClientRef =
-          clientsRef.doc();
-
-        clientId =
-          newClientRef.id;
-
-        clientData = {
-          name:
-            customer.name || "",
-
-          phone:
-            customer.phone ||
-            customerPhone,
-
-          points,
-
-          status:
-            "ACTIVE",
-
-          birthDay:
-            customer.birthDay ||
-            null,
-
-          address:
-            customer.address ||
-            "",
-
-          createdAt:
-            new Date(),
-
-          updatedFrom1C:
-            new Date(),
-
-          oneCSyncedAt:
-            new Date(),
-        };
-
-        await newClientRef.set(
-          clientData
+      const updateResult =
+        await pgQuery(
+          `
+          UPDATE clients
+          SET
+            points = COALESCE(points, 0) + $1,
+            bonuses = COALESCE(bonuses, 0) + $1,
+            updated_at = NOW()
+          WHERE phone = $2
+          RETURNING *
+          `,
+          [
+            points,
+            phone,
+          ]
         );
+
+      if (
+        updateResult.rows.length === 0
+      ) {
+
+        return res.status(404).json({
+          success: false,
+          message:
+            "Клиент не найден",
+        });
       }
+
+      const client =
+        updateResult.rows[0];
+
+      const newPoints =
+        Number(
+          client.points || 0
+        );
+
+      const previousPoints =
+        newPoints - points;
 
       /*
       |--------------------------------------------------------------------------
-      | Возвращаем клиенту сайта
+      | Записываем операцию
       |--------------------------------------------------------------------------
       */
+
+      await pgQuery(
+        `
+        INSERT INTO client_operations (
+          id,
+          client_id,
+          type,
+          points,
+          reason,
+          source,
+          created_at
+        )
+        VALUES (
+          $1,$2,$3,$4,$5,$6,NOW()
+        )
+        `,
+        [
+          crypto.randomUUID(),
+          client.id,
+          "add",
+          points,
+          reason,
+          "1C",
+        ]
+      );
 
       return res.json({
         success: true,
 
+        message:
+          "Бонусы начислены",
+
         client: {
-          id: clientId,
+          id:
+            client.id,
 
           name:
-            customer.name || "",
+            client.name || "",
 
           phone:
-            customer.phone ||
-            customerPhone,
-
-          points,
-
-          birthDay:
-            customer.birthDay ||
-            null,
-
-          address:
-            customer.address ||
-            "",
+            client.phone || phone,
         },
 
-        source: "1C",
+        operation: {
+          type: "add",
+          points,
+          reason,
+        },
+
+        previousPoints,
+
+        points:
+          newPoints,
+
+        bonuses:
+          Number(
+            client.bonuses || 0
+          ),
       });
 
     } catch (error) {
+
       console.error(
-        "Ошибка синхронизации клиента 1С → Firebase:",
+        "Ошибка начисления бонусов из 1С:",
         error
       );
 
       return res.status(500).json({
         success: false,
-
         message:
-          "Ошибка получения клиента из 1С",
-
+          "Ошибка начисления бонусов",
         error:
           error?.message ||
           String(error),
@@ -2297,278 +2721,29 @@ app.get(
 
 /*
 |--------------------------------------------------------------------------
-| GET /api/1c/clients
-|
-| Получение всех клиентов
-|--------------------------------------------------------------------------
-*/
-
-app.get("/api/1c/clients", async (req, res) => {
-  if (!check1CAccess(req, res)) {
-    return;
-  }
-
-  try {
-    const snapshot = await db
-      .collection("clients")
-      .get();
-
-    const clients = [];
-
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-
-      clients.push({
-        id: doc.id,
-        name: data.name || "",
-        phone: data.phone || "",
-        points: Number(data.points || 0),
-        status: data.status || "NEW CLIENT",
-        createdAt: data.createdAt?.toDate
-          ? data.createdAt.toDate().toISOString()
-          : data.createdAt || null,
-      });
-    });
-
-    res.json({
-      success: true,
-      count: clients.length,
-      clients,
-    });
-  } catch (error) {
-    console.error(
-      "Ошибка выгрузки клиентов для 1С:",
-      error
-    );
-
-    res.status(500).json({
-      success: false,
-      message: "Ошибка получения клиентов",
-    });
-  }
-});
-
-/*
-|--------------------------------------------------------------------------
-| GET /api/1c/client?phone=...
-|
-| Поиск клиента по номеру телефона
-|--------------------------------------------------------------------------
-*/
-
-app.get("/api/1c/client", async (req, res) => {
-  if (!check1CAccess(req, res)) {
-    return;
-  }
-
-  try {
-    let phone = String(
-      req.query.phone || ""
-    ).trim();
-
-    if (!phone) {
-      return res.status(400).json({
-        success: false,
-        message: "Не указан телефон",
-      });
-    }
-
-    if (!phone.startsWith("+")) {
-      phone = "+" + phone;
-    }
-
-    const snapshot = await db
-      .collection("clients")
-      .where("phone", "==", phone)
-      .limit(1)
-      .get();
-
-    if (snapshot.empty) {
-      return res.status(404).json({
-        success: false,
-        message: "Клиент не найден",
-      });
-    }
-
-    const doc = snapshot.docs[0];
-    const data = doc.data();
-
-    res.json({
-      success: true,
-      client: {
-        id: doc.id,
-        name: data.name || "",
-        phone: data.phone || "",
-        points: Number(data.points || 0),
-        status: data.status || "NEW CLIENT",
-        createdAt: data.createdAt?.toDate
-          ? data.createdAt.toDate().toISOString()
-          : data.createdAt || null,
-      },
-    });
-  } catch (error) {
-    console.error(
-      "Ошибка поиска клиента:",
-      error
-    );
-
-    res.status(500).json({
-      success: false,
-      message: "Ошибка поиска клиента",
-    });
-  }
-});
-
-/*
-|--------------------------------------------------------------------------
-| POST /api/1c/bonus/add
-|
-| Начисление бонусов клиенту из 1С
-|
-| Body:
-|
-| {
-|   "phone": "+79064142361",
-|   "points": 500,
-|   "reason": "Покупка"
-| }
-|--------------------------------------------------------------------------
-*/
-
-app.post("/api/1c/bonus/add", async (req, res) => {
-  if (!check1CAccess(req, res)) {
-    return;
-  }
-
-  try {
-    let phone = String(
-      req.body.phone || ""
-    ).trim();
-
-    const points = Number(req.body.points);
-    const reason =
-      String(req.body.reason || "").trim() ||
-      "Начисление бонусов из 1С";
-
-    if (!phone) {
-      return res.status(400).json({
-        success: false,
-        message: "Не указан телефон",
-      });
-    }
-
-    if (!phone.startsWith("+")) {
-      phone = "+" + phone;
-    }
-
-    if (
-      !Number.isFinite(points) ||
-      points <= 0
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Количество бонусов должно быть больше 0",
-      });
-    }
-
-    const snapshot = await db
-      .collection("clients")
-      .where("phone", "==", phone)
-      .limit(1)
-      .get();
-
-    if (snapshot.empty) {
-      return res.status(404).json({
-        success: false,
-        message: "Клиент не найден",
-      });
-    }
-
-    const clientDoc = snapshot.docs[0];
-    const clientRef = clientDoc.ref;
-    const client = clientDoc.data();
-
-    const currentPoints =
-      Number(client.points || 0);
-
-    const newPoints =
-      currentPoints + points;
-
-    await clientRef.update({
-      points: newPoints,
-    });
-
-    await clientRef
-      .collection("operations")
-      .add({
-        type: "add",
-        points,
-        reason,
-        source: "1C",
-        date: new Date(),
-      });
-
-    res.json({
-      success: true,
-      message: "Бонусы начислены",
-      client: {
-        id: clientDoc.id,
-        name: client.name || "",
-        phone: client.phone || phone,
-      },
-      operation: {
-        type: "add",
-        points,
-        reason,
-      },
-      previousPoints: currentPoints,
-      points: newPoints,
-    });
-  } catch (error) {
-    console.error(
-      "Ошибка начисления бонусов из 1С:",
-      error
-    );
-
-    res.status(500).json({
-      success: false,
-      message: "Ошибка начисления бонусов",
-    });
-  }
-});
-
-/*
-|--------------------------------------------------------------------------
 | POST /api/1c/bonus/remove
-|
-| Списание бонусов клиенту из 1С
-|
-| Body:
-|
-| {
-|   "phone": "+79064142361",
-|   "points": 500,
-|   "reason": "Оплата бонусами"
-| }
 |--------------------------------------------------------------------------
 */
 
 app.post(
   "/api/1c/bonus/remove",
   async (req, res) => {
+
     if (!check1CAccess(req, res)) {
       return;
     }
 
     try {
-      let phone = String(
-        req.body.phone || ""
-      ).trim();
 
-      const points = Number(
-        req.body.points
-      );
+      const rawPhone =
+        String(
+          req.body.phone || ""
+        ).trim();
+
+      const points =
+        Number(
+          req.body.points
+        );
 
       const reason =
         String(
@@ -2576,21 +2751,23 @@ app.post(
         ).trim() ||
         "Списание бонусов из 1С";
 
-      if (!phone) {
+      if (!rawPhone) {
+
         return res.status(400).json({
           success: false,
-          message: "Не указан телефон",
+          message:
+            "Не указан телефон",
         });
       }
 
-      if (!phone.startsWith("+")) {
-        phone = "+" + phone;
-      }
+      const phone =
+        normalizePhone(rawPhone);
 
       if (
         !Number.isFinite(points) ||
         points <= 0
       ) {
+
         return res.status(400).json({
           success: false,
           message:
@@ -2598,88 +2775,171 @@ app.post(
         });
       }
 
-      const snapshot = await db
-        .collection("clients")
-        .where("phone", "==", phone)
-        .limit(1)
-        .get();
+      /*
+      |--------------------------------------------------------------------------
+      | Получаем клиента
+      |--------------------------------------------------------------------------
+      */
 
-      if (snapshot.empty) {
+      const clientResult =
+        await pgQuery(
+          `
+          SELECT *
+          FROM clients
+          WHERE phone = $1
+          LIMIT 1
+          `,
+          [phone]
+        );
+
+      if (
+        clientResult.rows.length === 0
+      ) {
+
         return res.status(404).json({
           success: false,
-          message: "Клиент не найден",
+          message:
+            "Клиент не найден",
         });
       }
 
-      const clientDoc =
-        snapshot.docs[0];
-
-      const clientRef =
-        clientDoc.ref;
-
-      const client =
-        clientDoc.data();
+      const existingClient =
+        clientResult.rows[0];
 
       const currentPoints =
-        Number(client.points || 0);
+        Number(
+          existingClient.points || 0
+        );
 
-      if (points > currentPoints) {
+      if (
+        points > currentPoints
+      ) {
+
         return res.status(400).json({
           success: false,
-          message: "Недостаточно бонусов",
-          points: currentPoints,
+          message:
+            "Недостаточно бонусов",
+
+          points:
+            currentPoints,
         });
       }
 
-      const newPoints =
-        currentPoints - points;
+      /*
+      |--------------------------------------------------------------------------
+      | Списываем бонусы
+      |--------------------------------------------------------------------------
+      */
 
-      await clientRef.update({
-        points: newPoints,
-      });
+      const updateResult =
+        await pgQuery(
+          `
+          UPDATE clients
+          SET
+            points = COALESCE(points, 0) - $1,
+            bonuses = COALESCE(bonuses, 0) - $1,
+            updated_at = NOW()
+          WHERE id = $2
+          RETURNING *
+          `,
+          [
+            points,
+            existingClient.id,
+          ]
+        );
 
-      await clientRef
-        .collection("operations")
-        .add({
-          type: "remove",
+      const client =
+        updateResult.rows[0];
+
+      /*
+      |--------------------------------------------------------------------------
+      | Сохраняем операцию
+      |--------------------------------------------------------------------------
+      */
+
+      await pgQuery(
+        `
+        INSERT INTO client_operations (
+          id,
+          client_id,
+          type,
           points,
           reason,
-          source: "1C",
-          date: new Date(),
-        });
+          source,
+          created_at
+        )
+        VALUES (
+          $1,$2,$3,$4,$5,$6,NOW()
+        )
+        `,
+        [
+          crypto.randomUUID(),
+          client.id,
+          "remove",
+          points,
+          reason,
+          "1C",
+        ]
+      );
 
-      res.json({
+      return res.json({
         success: true,
-        message: "Бонусы списаны",
+
+        message:
+          "Бонусы списаны",
+
         client: {
-          id: clientDoc.id,
-          name: client.name || "",
-          phone: client.phone || phone,
+          id:
+            client.id,
+
+          name:
+            client.name || "",
+
+          phone:
+            client.phone || phone,
         },
+
         operation: {
           type: "remove",
           points,
           reason,
         },
-        previousPoints: currentPoints,
-        points: newPoints,
+
+        previousPoints:
+          currentPoints,
+
+        points:
+          Number(
+            client.points || 0
+          ),
+
+        bonuses:
+          Number(
+            client.bonuses || 0
+          ),
       });
+
     } catch (error) {
+
       console.error(
         "Ошибка списания бонусов из 1С:",
         error
       );
 
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
-        message: "Ошибка списания бонусов",
+        message:
+          "Ошибка списания бонусов",
+        error:
+          error?.message ||
+          String(error),
       });
     }
   }
 );
 /*
 |--------------------------------------------------------------------------
-| MOYSKLAD → FIREBASE
+| MOYSKLAD → POSTGRESQL
 |
 | Синхронизация товаров
 |--------------------------------------------------------------------------
@@ -2688,154 +2948,536 @@ app.post(
 let syncInProgress = false;
 
 async function upsertProductToPostgres(product) {
+
   const normalized = {
-    id: String(product.id),
-    title: product.title || product.name || "",
-    name: product.name || product.title || "",
-    price: Number(product.price || 0),
-    images: Array.isArray(product.images) ? product.images : [],
-    category: product.category || "",
-    badge: product.badge == null ? null : String(product.badge),
-    rating: Number(product.rating || 0),
-    reviews: Number(product.reviews || 0),
-    delivery: product.delivery || "Уточняется",
-    inStock: Boolean(product.inStock),
-    stock: Number(product.stock || 0),
-    reserve: Number(product.reserve || 0),
-    inTransit: Number(product.inTransit || 0),
-    quantity: Number(product.quantity || 0),
-    description: product.description || "",
-    memory: product.memory || "",
-    color: product.color || "",
-    warranty: product.warranty || "",
-    type: product.type || null,
-    product: product.product == null ? null : String(product.product),
-    characteristics: Array.isArray(product.characteristics)
-      ? product.characteristics
-      : [],
-    variantsCount: Number(product.variantsCount || 0),
-    weight: product.weight == null ? null : Number(product.weight),
-    volume: product.volume == null ? null : Number(product.volume),
-    article: product.article || null,
-    code: product.code || null,
-    externalCode: product.externalCode || null,
-    barcode: product.barcode || null,
-    archived: Boolean(product.archived),
-    hidden: Boolean(product.hidden),
-    buyPrice: product.buyPrice == null ? null : Number(product.buyPrice),
-    syncedAt: new Date(),
+
+    id:
+      String(product.id),
+
+    title:
+      product.title ||
+      product.name ||
+      "",
+
+    name:
+      product.name ||
+      product.title ||
+      "",
+
+    price:
+      Number(product.price || 0),
+
+    images:
+      Array.isArray(product.images)
+        ? product.images
+        : [],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Категории
+    |--------------------------------------------------------------------------
+    */
+
+    category:
+      product.category || "",
+
+    categoryGroup:
+      product.categoryGroup || null,
+
+    categoryPath:
+      Array.isArray(product.categoryPath)
+        ? product.categoryPath
+        : [],
+
+    categoryLeaf:
+      product.categoryLeaf || null,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Основная информация
+    |--------------------------------------------------------------------------
+    */
+
+    badge:
+      product.badge == null
+        ? null
+        : String(product.badge),
+
+    rating:
+      Number(product.rating || 0),
+
+    reviews:
+      Number(product.reviews || 0),
+
+    delivery:
+      product.delivery ||
+      "Уточняется",
+
+    /*
+    |--------------------------------------------------------------------------
+    | Остатки
+    |--------------------------------------------------------------------------
+    */
+
+    inStock:
+      Boolean(product.inStock),
+
+    stock:
+      Number(product.stock || 0),
+
+    reserve:
+      Number(product.reserve || 0),
+
+    inTransit:
+      Number(product.inTransit || 0),
+
+    quantity:
+      Number(product.quantity || 0),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Описание
+    |--------------------------------------------------------------------------
+    */
+
+    description:
+      product.description || "",
+
+    memory:
+      product.memory || "",
+
+    color:
+      product.color || "",
+
+    warranty:
+      product.warranty || "",
+
+    type:
+      product.type || null,
+
+    product:
+      product.product == null
+        ? null
+        : String(product.product),
+
+    characteristics:
+      Array.isArray(product.characteristics)
+        ? product.characteristics
+        : [],
+
+    variantsCount:
+      Number(product.variantsCount || 0),
+
+    weight:
+      product.weight == null
+        ? null
+        : Number(product.weight),
+
+    volume:
+      product.volume == null
+        ? null
+        : Number(product.volume),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Идентификаторы
+    |--------------------------------------------------------------------------
+    */
+
+    article:
+      product.article || null,
+
+    code:
+      product.code || null,
+
+    externalCode:
+      product.externalCode || null,
+
+    barcode:
+      product.barcode || null,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Статусы
+    |--------------------------------------------------------------------------
+    */
+
+    archived:
+      Boolean(product.archived),
+
+    /*
+    ВАЖНО:
+    hidden приходит из PostgreSQL,
+    чтобы МойСклад не отменял ручное
+    скрытие товара администратором.
+    */
+
+    hidden:
+      Boolean(product.hidden),
+
+    buyPrice:
+      product.buyPrice == null
+        ? null
+        : Number(product.buyPrice),
+
+    syncedAt:
+      new Date(),
   };
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | INSERT / UPDATE
+  |--------------------------------------------------------------------------
+  */
 
   await pgQuery(
     `
     INSERT INTO products (
-      id, title, name, price, images, category, badge, rating, reviews,
-      delivery, in_stock, stock, reserve, in_transit, quantity, description,
-      memory, color, warranty, type, product, characteristics, variants_count,
-      weight, volume, article, code, external_code, barcode, archived,
-      hidden, buy_price, synced_at, raw
+
+      id,
+
+      title,
+      name,
+      price,
+
+      images,
+
+      category,
+      category_group,
+      category_path,
+      category_leaf,
+
+      badge,
+      rating,
+      reviews,
+      delivery,
+
+      in_stock,
+      stock,
+      reserve,
+      in_transit,
+      quantity,
+
+      description,
+      memory,
+      color,
+      warranty,
+
+      type,
+      product,
+
+      characteristics,
+      variants_count,
+
+      weight,
+      volume,
+
+      article,
+      code,
+      external_code,
+      barcode,
+
+      archived,
+      hidden,
+
+      buy_price,
+
+      synced_at,
+
+      raw
+
     )
+
     VALUES (
-      $1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,
-      $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22::jsonb,$23,
-      $24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34::jsonb
+
+      $1,
+
+      $2,
+      $3,
+      $4,
+
+      $5::jsonb,
+
+      $6,
+      $7,
+      $8::jsonb,
+      $9,
+
+      $10,
+      $11,
+      $12,
+      $13,
+
+      $14,
+      $15,
+      $16,
+      $17,
+      $18,
+
+      $19,
+      $20,
+      $21,
+      $22,
+
+      $23,
+      $24,
+
+      $25::jsonb,
+      $26,
+
+      $27,
+      $28,
+
+      $29,
+      $30,
+      $31,
+      $32,
+
+      $33,
+      $34,
+
+      $35,
+
+      $36,
+
+      $37::jsonb
+
     )
-    ON CONFLICT (id) DO UPDATE SET
-      title = EXCLUDED.title,
-      name = EXCLUDED.name,
-      price = EXCLUDED.price,
-      images = EXCLUDED.images,
-      category = EXCLUDED.category,
-      badge = EXCLUDED.badge,
-      rating = EXCLUDED.rating,
-      reviews = EXCLUDED.reviews,
-      delivery = EXCLUDED.delivery,
-      in_stock = EXCLUDED.in_stock,
-      stock = EXCLUDED.stock,
-      reserve = EXCLUDED.reserve,
-      in_transit = EXCLUDED.in_transit,
-      quantity = EXCLUDED.quantity,
-      description = EXCLUDED.description,
-      memory = EXCLUDED.memory,
-      color = EXCLUDED.color,
-      warranty = EXCLUDED.warranty,
-      type = EXCLUDED.type,
-      product = EXCLUDED.product,
-      characteristics = EXCLUDED.characteristics,
-      variants_count = EXCLUDED.variants_count,
-      weight = EXCLUDED.weight,
-      volume = EXCLUDED.volume,
-      article = EXCLUDED.article,
-      code = EXCLUDED.code,
-      external_code = EXCLUDED.external_code,
-      barcode = EXCLUDED.barcode,
-      archived = EXCLUDED.archived,
-      hidden = EXCLUDED.hidden,
-      buy_price = EXCLUDED.buy_price,
-      synced_at = EXCLUDED.synced_at,
-      raw = EXCLUDED.raw
+
+    ON CONFLICT (id)
+    DO UPDATE SET
+
+      title =
+        EXCLUDED.title,
+
+      name =
+        EXCLUDED.name,
+
+      price =
+        EXCLUDED.price,
+
+      images =
+        EXCLUDED.images,
+
+      category =
+        EXCLUDED.category,
+
+      category_group =
+        EXCLUDED.category_group,
+
+      category_path =
+        EXCLUDED.category_path,
+
+      category_leaf =
+        EXCLUDED.category_leaf,
+
+      badge =
+        EXCLUDED.badge,
+
+      rating =
+        EXCLUDED.rating,
+
+      reviews =
+        EXCLUDED.reviews,
+
+      delivery =
+        EXCLUDED.delivery,
+
+      in_stock =
+        EXCLUDED.in_stock,
+
+      stock =
+        EXCLUDED.stock,
+
+      reserve =
+        EXCLUDED.reserve,
+
+      in_transit =
+        EXCLUDED.in_transit,
+
+      quantity =
+        EXCLUDED.quantity,
+
+      description =
+        EXCLUDED.description,
+
+      memory =
+        EXCLUDED.memory,
+
+      color =
+        EXCLUDED.color,
+
+      warranty =
+        EXCLUDED.warranty,
+
+      type =
+        EXCLUDED.type,
+
+      product =
+        EXCLUDED.product,
+
+      characteristics =
+        EXCLUDED.characteristics,
+
+      variants_count =
+        EXCLUDED.variants_count,
+
+      weight =
+        EXCLUDED.weight,
+
+      volume =
+        EXCLUDED.volume,
+
+      article =
+        EXCLUDED.article,
+
+      code =
+        EXCLUDED.code,
+
+      external_code =
+        EXCLUDED.external_code,
+
+      barcode =
+        EXCLUDED.barcode,
+
+      archived =
+        EXCLUDED.archived,
+
+      /*
+      hidden сохраняем из PostgreSQL
+      */
+
+      hidden =
+        products.hidden,
+
+      buy_price =
+        EXCLUDED.buy_price,
+
+      synced_at =
+        EXCLUDED.synced_at,
+
+      raw =
+        EXCLUDED.raw,
+
+      updated_at =
+        NOW()
+
     `,
     [
+
       normalized.id,
+
       normalized.title,
       normalized.name,
       normalized.price,
-      JSON.stringify(normalized.images),
+
+      JSON.stringify(
+        normalized.images
+      ),
+
       normalized.category,
+      normalized.categoryGroup,
+
+      JSON.stringify(
+        normalized.categoryPath
+      ),
+
+      normalized.categoryLeaf,
+
       normalized.badge,
       normalized.rating,
       normalized.reviews,
       normalized.delivery,
+
       normalized.inStock,
       normalized.stock,
       normalized.reserve,
       normalized.inTransit,
       normalized.quantity,
+
       normalized.description,
       normalized.memory,
       normalized.color,
       normalized.warranty,
+
       normalized.type,
       normalized.product,
-      JSON.stringify(normalized.characteristics),
+
+      JSON.stringify(
+        normalized.characteristics
+      ),
+
       normalized.variantsCount,
+
       normalized.weight,
       normalized.volume,
+
       normalized.article,
       normalized.code,
       normalized.externalCode,
       normalized.barcode,
+
       normalized.archived,
       normalized.hidden,
+
       normalized.buyPrice,
+
       normalized.syncedAt,
-      product,
+
+      JSON.stringify(product),
+
     ]
   );
 }
 
 
-async function syncMoySkladToFirebase() {
+async function syncMoySkladToPostgres() {
+
+  /*
+  |--------------------------------------------------------------------------
+  | Защита от параллельной синхронизации
+  |--------------------------------------------------------------------------
+  */
+
   if (syncInProgress) {
+
     console.log(
-      "Синхронизация уже выполняется. Пропускаем новый запуск."
+      "Синхронизация уже выполняется. Новый запуск пропущен."
     );
 
     return {
       success: false,
       skipped: true,
-      message: "Синхронизация уже выполняется",
+      message:
+        "Синхронизация уже выполняется",
     };
   }
 
+
   syncInProgress = true;
 
+
   console.log("");
-  console.log("======================================");
-  console.log("MOYSKLAD → FIREBASE: СИНХРОНИЗАЦИЯ");
-  console.log("======================================");
+  console.log(
+    "======================================"
+  );
+  console.log(
+    "MOYSKLAD → POSTGRESQL: СИНХРОНИЗАЦИЯ"
+  );
+  console.log(
+    "======================================"
+  );
+
 
   try {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Получаем товары
+    |--------------------------------------------------------------------------
+    */
+
     console.log(
       "1. Получаем товары из МойСклад..."
     );
@@ -2843,216 +3485,524 @@ async function syncMoySkladToFirebase() {
     const moySkladProducts =
       await getProducts();
 
+
     console.log(
-      `2. Получено товаров из МойСклад: ${moySkladProducts.length}`
+      `2. Получено товаров: ${moySkladProducts.length}`
     );
 
-    const productsCollection =
-      db.collection("products");
 
     let created = 0;
     let updated = 0;
     let skipped = 0;
 
-    for (const product of moySkladProducts) {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Обрабатываем товары
+    |--------------------------------------------------------------------------
+    */
+
+    for (
+      const product of moySkladProducts
+    ) {
+
       try {
+
+        /*
+        |--------------------------------------------------------------------------
+        | Проверяем ID
+        |--------------------------------------------------------------------------
+        */
+
         if (!product.id) {
+
           console.log(
             "Пропущен товар без ID:",
-            product.name
+            product.name ||
+            product.title
           );
 
           skipped++;
+
           continue;
         }
 
-        const productRef =
-          productsCollection.doc(
-            String(product.id)
+
+        const productId =
+          String(product.id);
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Проверяем существование товара
+        |--------------------------------------------------------------------------
+        */
+
+        const existingResult =
+          await pgQuery(
+            `
+            SELECT
+              id,
+              hidden
+            FROM products
+            WHERE id = $1
+            LIMIT 1
+            `,
+            [
+              productId
+            ]
           );
 
-        const productDoc =
-          await productRef.get();
 
-        const firebaseProduct = {
-          id: String(product.id),
+        const exists =
+          existingResult.rows.length > 0;
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Получаем hidden из PostgreSQL
+        |
+        | МойСклад НЕ имеет права
+        | менять ручное скрытие товара.
+        |--------------------------------------------------------------------------
+        */
+
+        const existingHidden =
+          exists
+            ? Boolean(
+                existingResult.rows[0].hidden
+              )
+            : false;
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Остатки
+        |--------------------------------------------------------------------------
+        */
+
+        const stock =
+          Number(
+            product.stock || 0
+          );
+
+
+        const quantity =
+          Number(
+            product.quantity || 0
+          );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Формируем товар для PostgreSQL
+        |--------------------------------------------------------------------------
+        */
+
+        const postgresProduct = {
+
+          id:
+            productId,
+
+
+          /*
+          ------------------------------------------------------------------
+          Название
+          ------------------------------------------------------------------
+          */
 
           title:
-            product.name || "",
+            product.title ||
+            product.name ||
+            "",
 
-          description:
-            product.description || "",
+          name:
+            product.name ||
+            product.title ||
+            "",
+
+
+          /*
+          ------------------------------------------------------------------
+          Цена
+          ------------------------------------------------------------------
+          */
 
           price:
-            Number(product.price || 0),
+            Number(
+              product.price || 0
+            ),
+
+
+          /*
+          ------------------------------------------------------------------
+          Изображения
+          ------------------------------------------------------------------
+          */
+
+          images:
+            Array.isArray(product.images)
+              ? product.images
+              : [],
+
+
+          /*
+          ------------------------------------------------------------------
+          Категории
+          ------------------------------------------------------------------
+          */
 
           category:
             product.category || "",
 
-          article:
-            product.article || null,
+          categoryGroup:
+            product.categoryGroup ||
+            null,
 
-          code:
-            product.code || null,
+          categoryPath:
+            Array.isArray(
+              product.categoryPath
+            )
+              ? product.categoryPath
+              : [],
 
-          externalCode:
-            product.externalCode || null,
+          categoryLeaf:
+            product.categoryLeaf ||
+            null,
 
-          barcode:
-            product.barcode || null,
-
-          stock:
-            Number(product.stock || 0),
-
-          reserve:
-            Number(product.reserve || 0),
-
-          inTransit:
-            Number(product.inTransit || 0),
-
-          quantity:
-            Number(product.quantity || 0),
-
-          inStock:
-            Number(product.quantity || 0) > 0,
-
-          images:
-            product.images || [],
 
           /*
-           * ВАЖНО:
-           * hidden НЕ перезаписываем,
-           * если товар уже существует.
-           */
-
-          hidden:
-            productDoc.exists
-              ? Boolean(
-                  productDoc.data().hidden ??
-                  false
-                )
-              : false,
-
-          rating:
-            Number(product.rating || 0),
-
-          reviews:
-            Number(product.reviews || 0),
+          ------------------------------------------------------------------
+          Дополнительно
+          ------------------------------------------------------------------
+          */
 
           badge:
-            product.badge || null,
+            product.badge ||
+            null,
+
+          rating:
+            Number(
+              product.rating || 0
+            ),
+
+          reviews:
+            Number(
+              product.reviews || 0
+            ),
 
           delivery:
             product.delivery ||
             "Уточняется",
 
-          updated:
-            product.updated || null,
 
-          syncedAt:
-            new Date(),
+          /*
+          ------------------------------------------------------------------
+          Остатки
+          ------------------------------------------------------------------
+          */
+
+          stock,
+
+          reserve:
+            Number(
+              product.reserve || 0
+            ),
+
+          inTransit:
+            Number(
+              product.inTransit || 0
+            ),
+
+          quantity,
+
+
+          /*
+          ВАЖНО
+
+          Товар считается доступным,
+          если есть stock ИЛИ quantity.
+          */
+
+          inStock:
+            stock > 0 ||
+            quantity > 0,
+
+
+          /*
+          ------------------------------------------------------------------
+          Описание
+          ------------------------------------------------------------------
+          */
+
+          description:
+            product.description ||
+            "",
+
+          memory:
+            product.memory ||
+            "",
+
+          color:
+            product.color ||
+            "",
+
+          warranty:
+            product.warranty ||
+            "",
+
+
+          /*
+          ------------------------------------------------------------------
+          Тип товара
+          ------------------------------------------------------------------
+          */
+
+          type:
+            product.type ||
+            null,
+
+          product:
+            product.product ||
+            null,
+
+
+          /*
+          ------------------------------------------------------------------
+          Характеристики
+          ------------------------------------------------------------------
+          */
+
+          characteristics:
+            Array.isArray(
+              product.characteristics
+            )
+              ? product.characteristics
+              : [],
+
+          variantsCount:
+            Number(
+              product.variantsCount || 0
+            ),
+
+
+          /*
+          ------------------------------------------------------------------
+          Вес / объём
+          ------------------------------------------------------------------
+          */
+
+          weight:
+            product.weight == null
+              ? null
+              : Number(
+                  product.weight
+                ),
+
+          volume:
+            product.volume == null
+              ? null
+              : Number(
+                  product.volume
+                ),
+
+
+          /*
+          ------------------------------------------------------------------
+          Артикулы
+          ------------------------------------------------------------------
+          */
+
+          article:
+            product.article ||
+            null,
+
+          code:
+            product.code ||
+            null,
+
+          externalCode:
+            product.externalCode ||
+            null,
+
+          barcode:
+            product.barcode ||
+            null,
+
+
+          /*
+          ------------------------------------------------------------------
+          Статусы
+          ------------------------------------------------------------------
+          */
+
+          archived:
+            Boolean(
+              product.archived
+            ),
+
+
+          /*
+          ВАЖНО
+
+          hidden сохраняем из PostgreSQL.
+          */
+
+          hidden:
+            existingHidden,
+
+
+          /*
+          ------------------------------------------------------------------
+          Закупочная цена
+          ------------------------------------------------------------------
+          */
+
+          buyPrice:
+            product.buyPrice == null
+              ? null
+              : Number(
+                  product.buyPrice
+                ),
         };
 
-        if (!productDoc.exists) {
-          await productRef.set(
-            firebaseProduct
-          );
 
-          created++;
+        /*
+        |--------------------------------------------------------------------------
+        | Сохраняем товар
+        |--------------------------------------------------------------------------
+        */
 
-          console.log(
-            `Создан: ${product.name}`
-          );
-        } else {
-          await productRef.update(
-            firebaseProduct
-          );
+        await upsertProductToPostgres(
+          postgresProduct
+        );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Логируем результат
+        |--------------------------------------------------------------------------
+        */
+
+        if (exists) {
 
           updated++;
 
           console.log(
-            `Обновлён: ${product.name}`
+            `✓ Обновлён: ${postgresProduct.name}`
           );
+
+        } else {
+
+          created++;
+
+          console.log(
+            `+ Создан: ${postgresProduct.name}`
+          );
+
         }
 
-        // Phase 3: dual-write Firebase + PostgreSQL.
-        // Firebase remains the current source for the frontend for now.
-        try {
-          await upsertProductToPostgres({
-            ...firebaseProduct,
-            hidden: firebaseProduct.hidden,
-            memory: product.memory,
-            color: product.color,
-            warranty: product.warranty,
-            variantsCount: product.variantsCount,
-            weight: product.weight,
-            volume: product.volume,
-            type: product.type,
-            product: product.product,
-            characteristics: product.characteristics,
-            buyPrice: product.buyPrice,
-            archived: product.archived,
-          });
-        } catch (postgresError) {
-          console.error(
-            `PostgreSQL dual-write failed for ${product.name}:`,
-            postgresError?.message || postgresError
-          );
-        }
+
       } catch (productError) {
+
         skipped++;
 
+
         console.error(
-          `Ошибка сохранения товара ${product.name}:`,
+          `✗ Ошибка товара ${
+            product.name ||
+            product.title ||
+            product.id
+          }:`,
           productError?.message ||
-            productError
+          productError
         );
+
       }
+
     }
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Итог
+    |--------------------------------------------------------------------------
+    */
+
     console.log("");
-    console.log(
-      "СИНХРОНИЗАЦИЯ ЗАВЕРШЕНА"
-    );
-    console.log(
-      `Создано: ${created}`
-    );
-    console.log(
-      `Обновлено: ${updated}`
-    );
-    console.log(
-      `Пропущено: ${skipped}`
-    );
-    console.log(
-      `Всего из МойСклад: ${moySkladProducts.length}`
-    );
     console.log(
       "======================================"
     );
-    console.log("");
 
-    return {
-      success: true,
-      moySkladCount:
-        moySkladProducts.length,
-      created,
-      updated,
-      skipped,
-    };
-  } catch (error) {
-    console.error(
-      "Ошибка синхронизации МойСклад → Firebase:",
-      error?.response?.data ||
-        error?.message ||
-        error
+    console.log(
+      "СИНХРОНИЗАЦИЯ ЗАВЕРШЕНА"
     );
 
+    console.log(
+      "======================================"
+    );
+
+    console.log(
+      `Всего из МойСклад: ${moySkladProducts.length}`
+    );
+
+    console.log(
+      `Создано: ${created}`
+    );
+
+    console.log(
+      `Обновлено: ${updated}`
+    );
+
+    console.log(
+      `Пропущено: ${skipped}`
+    );
+
+    console.log(
+      "======================================"
+    );
+
+
+    return {
+
+      success: true,
+
+      moySkladCount:
+        moySkladProducts.length,
+
+      created,
+
+      updated,
+
+      skipped,
+
+    };
+
+
+  } catch (error) {
+
+    console.error(
+      "Ошибка синхронизации МойСклад → PostgreSQL:",
+      error?.response?.data ||
+      error?.message ||
+      error
+    );
+
+
     throw error;
+
+
   } finally {
+
+    /*
+    Всегда снимаем блокировку.
+    Даже если произошла ошибка.
+    */
+
     syncInProgress = false;
+
   }
 }
-
 /*
 |--------------------------------------------------------------------------
 | GET /api/moysklad/products
@@ -3066,7 +4016,7 @@ app.get(
   async (req, res) => {
     try {
       const result =
-        await syncMoySkladToFirebase();
+        await syncMoySkladToPostgres();
 
       res.json(result);
     } catch (error) {
@@ -3191,7 +4141,7 @@ async function startAutoSync() {
   );
 
   try {
-    await syncMoySkladToFirebase();
+    await syncMoySkladToPostgres();
   } catch (error) {
     console.error(
       "Первоначальная синхронизация не удалась:",
@@ -3208,7 +4158,7 @@ async function startAutoSync() {
       );
 
       try {
-        await syncMoySkladToFirebase();
+        await syncMoySkladToPostgres();
       } catch (error) {
         console.error(
           "Автоматическая синхронизация завершилась ошибкой:",
@@ -4120,14 +5070,19 @@ app.get("/api/products/:id", async (req, res) => {
 | POST /api/auth/login
 |
 | Клиентский вход через PostgreSQL.
-| Firebase остаётся fallback/dual-write на переходном этапе.
+| Firebase больше не используется.
 |--------------------------------------------------------------------------
 */
 
 app.post("/api/auth/login", async (req, res) => {
   try {
-    const name = String(req.body?.name || "").trim();
-    const rawPhone = String(req.body?.phone || "").trim();
+    const name = String(
+      req.body?.name || ""
+    ).trim();
+
+    const rawPhone = String(
+      req.body?.phone || ""
+    ).trim();
 
     if (!name || !rawPhone) {
       return res.status(400).json({
@@ -4144,16 +5099,21 @@ app.post("/api/auth/login", async (req, res) => {
     console.log("Телефон:", phone);
     console.log("======================================");
 
-    // ==========================================
-    // 1. ПОЛУЧАЕМ АКТУАЛЬНЫЕ ДАННЫЕ ИЗ 1С
-    // ==========================================
+    /*
+    |--------------------------------------------------------------------------
+    | 1. Получаем актуальные данные клиента из 1С
+    |--------------------------------------------------------------------------
+    */
 
     let oneCCustomer = null;
 
     try {
-      console.log("1С: получаем клиента...");
+      console.log(
+        "1С: получаем клиента..."
+      );
 
-      oneCCustomer = await getOneCCustomer(phone);
+      oneCCustomer =
+        await getOneCCustomer(phone);
 
       console.log(
         "1С клиент получен:",
@@ -4165,60 +5125,133 @@ app.post("/api/auth/login", async (req, res) => {
         !!oneCCustomer?.customerQR
       );
 
-      if (oneCCustomer?.customerQR) {
-        console.log(
-          "QR начало:",
-          oneCCustomer.customerQR.substring(0, 50)
-        );
-      }
-
     } catch (oneCError) {
+
       console.error(
         "Ошибка получения клиента из 1С:",
-        oneCError.message
+        oneCError?.message ||
+        oneCError
       );
 
-      // Не останавливаем вход,
-      // если 1С временно недоступна
+      /*
+      Не останавливаем вход.
+
+      Если 1С временно недоступна,
+      используем данные PostgreSQL.
+      */
     }
 
-    // ==========================================
-    // 2. ИЩЕМ КЛИЕНТА В POSTGRESQL
-    // ==========================================
+    /*
+    |--------------------------------------------------------------------------
+    | 2. Ищем клиента в PostgreSQL
+    |--------------------------------------------------------------------------
+    */
 
-    const pgResult = await pgQuery(
-      `
-      SELECT
-        id,
-        name,
-        phone,
-        login,
-        points,
-        bonuses,
-        orders,
-        status,
-        role
-      FROM clients
-      WHERE phone = $1
-      LIMIT 1
-      `,
-      [phone]
-    );
+    const pgResult =
+      await pgQuery(
+        `
+        SELECT
+          id,
+          name,
+          phone,
+          login,
+          points,
+          bonuses,
+          orders,
+          status,
+          role
+        FROM clients
+        WHERE phone = $1
+        LIMIT 1
+        `,
+        [phone]
+      );
+
+    /*
+    |--------------------------------------------------------------------------
+    | 3. Клиент найден
+    |--------------------------------------------------------------------------
+    */
 
     if (pgResult.rows.length > 0) {
-      const client = pgResult.rows[0];
 
-      console.log("Клиент найден в PostgreSQL");
+      const client =
+        pgResult.rows[0];
+
+      console.log(
+        "Клиент найден в PostgreSQL"
+      );
+
+      /*
+      Если получили актуальные данные
+      из 1С — обновляем бонусы и имя
+      в PostgreSQL.
+      */
+
+      if (oneCCustomer) {
+
+        const updatedName =
+          oneCCustomer.name ||
+          client.name ||
+          name;
+
+        const updatedPhone =
+          normalizePhone(
+            oneCCustomer.phone ||
+            client.phone ||
+            phone
+          );
+
+        const updatedPoints =
+          Number(
+            oneCCustomer.bonusBalance ??
+            client.points ??
+            0
+          );
+
+        try {
+
+          await pgQuery(
+            `
+            UPDATE clients
+            SET
+              name = $1,
+              phone = $2,
+              points = $3,
+              bonuses = $4
+            WHERE id = $5
+            `,
+            [
+              updatedName,
+              updatedPhone,
+              updatedPoints,
+              updatedPoints,
+              client.id,
+            ]
+          );
+
+          console.log(
+            "Клиент обновлён данными из 1С"
+          );
+
+        } catch (updateError) {
+
+          console.error(
+            "Ошибка обновления клиента:",
+            updateError?.message ||
+            updateError
+          );
+        }
+      }
 
       return res.json({
         success: true,
         message: "Успешный вход",
 
         client: {
+
           id: client.id,
 
-          // Берём актуальные данные из 1С,
-          // если они доступны
           name:
             oneCCustomer?.name ||
             client.name ||
@@ -4260,7 +5293,11 @@ app.post("/api/auth/login", async (req, res) => {
             client.role ||
             "user",
 
-          // 🔥 QR-КОД ИЗ 1С
+          /*
+          QR пока получаем напрямую из 1С.
+          В PostgreSQL его пока не сохраняем.
+          */
+
           customerQR:
             oneCCustomer?.customerQR ||
             null,
@@ -4268,249 +5305,152 @@ app.post("/api/auth/login", async (req, res) => {
       });
     }
 
-    // ==========================================
-    // 3. FALLBACK — FIREBASE
-    // ==========================================
+    /*
+    |--------------------------------------------------------------------------
+    | 4. Клиент не найден
+    |--------------------------------------------------------------------------
+    */
 
-    const firebaseSnapshot = await db
-      .collection("clients")
-      .where("phone", "==", phone)
-      .limit(1)
-      .get();
+    console.log(
+      "Клиент не найден в PostgreSQL"
+    );
 
-    if (!firebaseSnapshot.empty) {
-      const firebaseDoc =
-        firebaseSnapshot.docs[0];
+    /*
+    Создаём клиента сразу в PostgreSQL.
+    */
 
-      const firebaseData =
-        firebaseDoc.data();
+    const clientId =
+      crypto.randomUUID();
 
-      await pgQuery(
-        `
-        INSERT INTO clients (
-          id,
-          name,
-          phone,
-          login,
-          points,
-          bonuses,
-          orders,
-          status,
-          role,
-          source,
-          welcome_bonus,
-          address,
-          created_at,
-          raw
-        )
-        VALUES (
-          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-          $11,$12,$13,$14
-        )
-        ON CONFLICT (id) DO UPDATE SET
-          name = EXCLUDED.name,
-          phone = EXCLUDED.phone,
-          login = EXCLUDED.login,
-          points = EXCLUDED.points,
-          bonuses = EXCLUDED.bonuses,
-          orders = EXCLUDED.orders,
-          status = EXCLUDED.status,
-          role = EXCLUDED.role,
-          source = EXCLUDED.source,
-          welcome_bonus = EXCLUDED.welcome_bonus,
-          address = EXCLUDED.address,
-          created_at = EXCLUDED.created_at,
-          raw = EXCLUDED.raw
-        `,
-        [
-          firebaseDoc.id,
-          oneCCustomer?.name ||
-            firebaseData.name ||
-            name,
+    /*
+    Если клиент существует в 1С —
+    используем данные из 1С.
+    */
 
-          firebaseData.phone || phone,
+    const clientName =
+      oneCCustomer?.name ||
+      name;
 
-          firebaseData.login ||
-            oneCCustomer?.name ||
-            firebaseData.name ||
-            name,
-
-          Number(
-            oneCCustomer?.bonusBalance ??
-            firebaseData.points ??
-            0
-          ),
-
-          Number(
-            oneCCustomer?.bonusBalance ??
-            firebaseData.bonuses ??
-            firebaseData.points ??
-            0
-          ),
-
-          Number(firebaseData.orders || 0),
-
-          firebaseData.status ||
-            "NEW CLIENT",
-
-          firebaseData.role || "user",
-
-          firebaseData.source || null,
-
-          Boolean(firebaseData.welcomeBonus),
-
-          firebaseData.address || null,
-
-          firebaseData.createdAt?.toDate?.() ||
-            null,
-
-          firebaseData,
-        ]
+    const clientPhone =
+      normalizePhone(
+        oneCCustomer?.phone ||
+        phone
       );
 
-      return res.json({
-        success: true,
-        message: "Успешный вход",
+    /*
+    Бонусы из 1С.
 
-        client: {
-          id: firebaseDoc.id,
+    Если клиент новый и в 1С его нет —
+    выдаём стартовые бонусы.
+    */
 
-          name:
-            oneCCustomer?.name ||
-            firebaseData.name ||
-            name,
-
-          login:
-            firebaseData.login ||
-            oneCCustomer?.name ||
-            firebaseData.name ||
-            name,
-
-          phone:
-            oneCCustomer?.phone ||
-            firebaseData.phone ||
-            phone,
-
-          points: Number(
-            oneCCustomer?.bonusBalance ??
-            firebaseData.points ??
-            0
-          ),
-
-          bonuses: Number(
-            oneCCustomer?.bonusBalance ??
-            firebaseData.bonuses ??
-            firebaseData.points ??
-            0
-          ),
-
-          orders: Number(
-            firebaseData.orders || 0
-          ),
-
-          status:
-            firebaseData.status ||
-            "MAX START",
-
-          role: "user",
-
-          // 🔥 QR ИЗ 1С
-          customerQR:
-            oneCCustomer?.customerQR ||
-            null,
-        },
-      });
-    }
-
-    // ==========================================
-    // 4. НОВЫЙ КЛИЕНТ
-    // ==========================================
-
-    const firebaseRef = db
-      .collection("clients")
-      .doc();
-
-    const clientId = firebaseRef.id;
-
-    const newClient = {
-      name,
-      phone,
-      login: name,
-      points: 100000,
-      bonuses: 100000,
-      orders: 0,
-      status: "NEW CLIENT",
-      role: "user",
-      source: "telegram",
-      welcomeBonus: true,
-      createdAt: Timestamp.now(),
-    };
-
-    await firebaseRef.set(newClient);
-
-    try {
-      await pgQuery(
-        `
-        INSERT INTO clients (
-          id,
-          name,
-          phone,
-          login,
-          points,
-          bonuses,
-          orders,
-          status,
-          role,
-          source,
-          welcome_bonus,
-          created_at,
-          raw
-        )
-        VALUES (
-          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-          $11,$12,$13
-        )
-        `,
-        [
-          clientId,
-          name,
-          phone,
-          name,
-          100000,
-          100000,
-          0,
-          "NEW CLIENT",
-          "user",
-          "telegram",
-          true,
-          new Date(),
-          newClient,
-        ]
+    const points =
+      Number(
+        oneCCustomer?.bonusBalance ??
+        100000
       );
-    } catch (postgresError) {
-      console.error(
-        "PostgreSQL client create failed:",
-        postgresError
-      );
-    }
+
+    const bonuses =
+      points;
+
+    await pgQuery(
+      `
+      INSERT INTO clients (
+        id,
+        name,
+        phone,
+        login,
+        points,
+        bonuses,
+        orders,
+        status,
+        role,
+        source,
+        welcome_bonus,
+        created_at,
+        raw
+      )
+      VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+        $11,NOW(),$12::jsonb
+      )
+      `,
+      [
+        clientId,
+
+        clientName,
+
+        clientPhone,
+
+        clientName,
+
+        points,
+
+        bonuses,
+
+        0,
+
+        oneCCustomer
+          ? "ACTIVE"
+          : "NEW CLIENT",
+
+        "user",
+
+        oneCCustomer
+          ? "1C"
+          : "telegram",
+
+        !oneCCustomer,
+
+        JSON.stringify(
+          oneCCustomer || {
+            name: clientName,
+            phone: clientPhone,
+          }
+        ),
+      ]
+    );
+
+    console.log(
+      "Новый клиент создан в PostgreSQL:",
+      clientId
+    );
 
     return res.json({
       success: true,
       message: "Успешный вход",
 
       client: {
-        id: clientId,
-        name,
-        login: name,
-        phone,
-        points: 100000,
-        bonuses: 100000,
-        orders: 0,
-        status: "NEW CLIENT",
-        role: "user",
 
-        // Если клиент уже появился в 1С —
-        // передадим QR
+        id: clientId,
+
+        name:
+          clientName,
+
+        login:
+          clientName,
+
+        phone:
+          clientPhone,
+
+        points,
+
+        bonuses,
+
+        orders: 0,
+
+        status:
+          oneCCustomer
+            ? "ACTIVE"
+            : "NEW CLIENT",
+
+        role:
+          "user",
+
+        /*
+        QR напрямую из 1С
+        */
+
         customerQR:
           oneCCustomer?.customerQR ||
           null,
@@ -4518,17 +5458,21 @@ app.post("/api/auth/login", async (req, res) => {
     });
 
   } catch (error) {
+
     console.error(
       "POST /api/auth/login failed:",
+      error?.message ||
       error
     );
 
     return res.status(500).json({
       success: false,
-      message: "Ошибка авторизации",
+      message:
+        "Ошибка авторизации",
     });
   }
 });
+
 
 
 app.get("/api/health/postgres", async (req, res) => {
