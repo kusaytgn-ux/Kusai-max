@@ -1833,58 +1833,141 @@ app.get(
   }
 );
 
-app.post("/api/product-groups/:id/subgroups", async (req, res) => {
-  try {
-    const { id } = req.params;
+// =====================================================
+// CREATE SUBGROUP
+// =====================================================
 
-    const {
-      name,
-      slug,
-      sort_order = 0,
-    } = req.body;
+app.post(
+  "/api/product-groups/:id/subgroups",
+  async (req, res) => {
+    try {
+      const { id: parentId } = req.params;
 
-    if (!name) {
-      return res.status(400).json({
-        success: false,
-        message: "Название подгруппы обязательно",
-      });
-    }
-
-    const result = await query(
-      `
-      INSERT INTO product_groups (
+      const {
         name,
         slug,
-        parent_id,
-        sort_order,
-        created_at,
-        updated_at
-      )
-      VALUES ($1, $2, $3, $4, NOW(), NOW())
-      RETURNING *
-      `,
-      [
-        name,
-        slug || null,
-        id,
-        sort_order,
-      ]
-    );
+        sortOrder,
+      } = req.body || {};
 
-    res.status(201).json({
-      success: true,
-      group: result.rows[0],
-    });
-  } catch (error) {
-    console.error("Ошибка создания подгруппы:", error);
+      // Проверяем название
+      if (!name || !String(name).trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Введите название подгруппы",
+        });
+      }
 
-    res.status(500).json({
-      success: false,
-      message: "Ошибка создания подгруппы",
-      error: error.message,
-    });
+      // Проверяем существование родительской группы
+      const parentResult = await pgQuery(
+        `
+        SELECT id
+        FROM product_groups
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [parentId]
+      );
+
+      if (parentResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Родительская группа не найдена",
+        });
+      }
+
+      const subgroupName = String(name).trim();
+
+      // Проверяем, нет ли такой подгруппы
+      const duplicateResult = await pgQuery(
+        `
+        SELECT id
+        FROM product_groups
+        WHERE name = $1
+        AND parent_id = $2
+        LIMIT 1
+        `,
+        [
+          subgroupName,
+          parentId,
+        ]
+      );
+
+      if (duplicateResult.rows.length > 0) {
+        return res.status(409).json({
+          success: false,
+          message: "Такая подгруппа уже существует",
+        });
+      }
+
+      // Создаём UUID
+      const subgroupId = crypto.randomUUID();
+
+      // Создаём подгруппу
+      const result = await pgQuery(
+        `
+        INSERT INTO product_groups (
+          id,
+          name,
+          slug,
+          parent_id,
+          sort_order,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          NOW(),
+          NOW()
+        )
+        RETURNING *
+        `,
+        [
+          subgroupId,
+          subgroupName,
+          slug
+            ? String(slug).trim()
+            : null,
+          parentId,
+          Number(sortOrder) || 0,
+        ]
+      );
+
+      const subgroup = result.rows[0];
+
+      return res.status(201).json({
+        success: true,
+        message: "Подгруппа успешно создана",
+
+        group: {
+          id: subgroup.id,
+          name: subgroup.name,
+          slug: subgroup.slug,
+          parentId: subgroup.parent_id,
+          sortOrder: subgroup.sort_order,
+          createdAt: subgroup.created_at,
+          updatedAt: subgroup.updated_at,
+        },
+      });
+
+    } catch (error) {
+
+      console.error(
+        "CREATE SUBGROUP ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: "Ошибка создания подгруппы",
+        error: error.message,
+      });
+    }
   }
-});
+);
 
 // =====================================================
 // PRODUCTS
