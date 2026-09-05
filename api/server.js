@@ -2168,6 +2168,32 @@ app.get("/api/debug/columns", async (req, res) => {
   }
 });
 
+// =====================================================
+// ADD GROUP_ID TO PRODUCTS
+// =====================================================
+
+app.post("/api/debug/add-products-group-id", async (req, res) => {
+  try {
+    await pgQuery(`
+      ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS group_id UUID
+    `);
+
+    return res.json({
+      success: true,
+      message: "Колонка group_id успешно добавлена в products",
+    });
+
+  } catch (error) {
+    console.error("ADD GROUP_ID ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка добавления group_id",
+      error: error.message,
+    });
+  }
+});
 
 // =====================================================
 // UNKNOWN ROUTE
