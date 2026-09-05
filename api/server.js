@@ -2735,6 +2735,481 @@ app.patch(
 );
 
 // =====================================================
+// CREATE PRODUCT
+// =====================================================
+
+app.post("/api/products", async (req, res) => {
+  try {
+    const {
+      id,
+      title,
+      name,
+      price,
+      images,
+      category,
+      categoryGroup,
+      categoryPath,
+      categoryLeaf,
+      badge,
+      rating,
+      reviews,
+      delivery,
+      inStock,
+      stock,
+      reserve,
+      inTransit,
+      quantity,
+      description,
+      memory,
+      color,
+      warranty,
+      type,
+      product,
+      characteristics,
+      variantsCount,
+      weight,
+      volume,
+      article,
+      code,
+      externalCode,
+      barcode,
+      archived,
+      hidden,
+      buyPrice,
+      groupId,
+    } = req.body || {};
+
+    if (!title && !name) {
+      return res.status(400).json({
+        success: false,
+        message: "Введите название товара",
+      });
+    }
+
+    const productId = id || crypto.randomUUID();
+
+    const result = await pgQuery(
+      `
+      INSERT INTO products (
+        id,
+        title,
+        name,
+        price,
+        images,
+        category,
+        category_group,
+        category_path,
+        category_leaf,
+        badge,
+        rating,
+        reviews,
+        delivery,
+        in_stock,
+        stock,
+        reserve,
+        in_transit,
+        quantity,
+        description,
+        memory,
+        color,
+        warranty,
+        type,
+        product,
+        characteristics,
+        variants_count,
+        weight,
+        volume,
+        article,
+        code,
+        external_code,
+        barcode,
+        archived,
+        hidden,
+        buy_price,
+        group_id,
+        updated_at
+      )
+      VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+        $11,$12,$13,$14,$15,$16,$17,$18,
+        $19,$20,$21,$22,$23,$24,$25,$26,
+        $27,$28,$29,$30,$31,$32,$33,$34,
+        $35,$36,NOW()
+      )
+      RETURNING *
+      `,
+      [
+        productId,
+        title || name || "",
+        name || title || "",
+        Number(price) || 0,
+        Array.isArray(images) ? images : [],
+        category || "",
+        categoryGroup || "",
+        categoryPath || [],
+        categoryLeaf || "",
+        badge || "",
+        Number(rating) || 0,
+        Number(reviews) || 0,
+        delivery || "",
+        Boolean(inStock),
+        Number(stock) || 0,
+        Number(reserve) || 0,
+        Number(inTransit) || 0,
+        Number(quantity) || 0,
+        description || "",
+        memory || "",
+        color || "",
+        warranty || "",
+        type || "",
+        product || "",
+        characteristics || {},
+        Number(variantsCount) || 0,
+        weight ? Number(weight) : null,
+        volume ? Number(volume) : null,
+        article || "",
+        code || "",
+        externalCode || "",
+        barcode || "",
+        Boolean(archived),
+        Boolean(hidden),
+        buyPrice ? Number(buyPrice) : null,
+        groupId || null,
+      ]
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: "Товар создан",
+      product: result.rows[0],
+    });
+
+  } catch (error) {
+    console.error("CREATE PRODUCT ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка создания товара",
+      error: error.message,
+    });
+  }
+});
+
+
+// =====================================================
+// UPDATE PRODUCT
+// =====================================================
+
+app.patch("/api/products/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const existingResult = await pgQuery(
+      `
+      SELECT *
+      FROM products
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [id]
+    );
+
+    if (existingResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Товар не найден",
+      });
+    }
+
+    const current = existingResult.rows[0];
+
+    const {
+      title,
+      name,
+      price,
+      images,
+      category,
+      categoryGroup,
+      categoryPath,
+      categoryLeaf,
+      badge,
+      rating,
+      reviews,
+      delivery,
+      inStock,
+      stock,
+      reserve,
+      inTransit,
+      quantity,
+      description,
+      memory,
+      color,
+      warranty,
+      type,
+      product,
+      characteristics,
+      variantsCount,
+      weight,
+      volume,
+      article,
+      code,
+      externalCode,
+      barcode,
+      archived,
+      hidden,
+      buyPrice,
+      groupId,
+    } = req.body || {};
+
+    const result = await pgQuery(
+      `
+      UPDATE products
+      SET
+        title = $2,
+        name = $3,
+        price = $4,
+        images = $5,
+        category = $6,
+        category_group = $7,
+        category_path = $8,
+        category_leaf = $9,
+        badge = $10,
+        rating = $11,
+        reviews = $12,
+        delivery = $13,
+        in_stock = $14,
+        stock = $15,
+        reserve = $16,
+        in_transit = $17,
+        quantity = $18,
+        description = $19,
+        memory = $20,
+        color = $21,
+        warranty = $22,
+        type = $23,
+        product = $24,
+        characteristics = $25,
+        variants_count = $26,
+        weight = $27,
+        volume = $28,
+        article = $29,
+        code = $30,
+        external_code = $31,
+        barcode = $32,
+        archived = $33,
+        hidden = $34,
+        buy_price = $35,
+        group_id = $36,
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING *
+      `,
+      [
+        id,
+
+        title !== undefined
+          ? title
+          : current.title,
+
+        name !== undefined
+          ? name
+          : current.name,
+
+        price !== undefined
+          ? Number(price)
+          : current.price,
+
+        images !== undefined
+          ? images
+          : current.images,
+
+        category !== undefined
+          ? category
+          : current.category,
+
+        categoryGroup !== undefined
+          ? categoryGroup
+          : current.category_group,
+
+        categoryPath !== undefined
+          ? categoryPath
+          : current.category_path,
+
+        categoryLeaf !== undefined
+          ? categoryLeaf
+          : current.category_leaf,
+
+        badge !== undefined
+          ? badge
+          : current.badge,
+
+        rating !== undefined
+          ? Number(rating)
+          : current.rating,
+
+        reviews !== undefined
+          ? Number(reviews)
+          : current.reviews,
+
+        delivery !== undefined
+          ? delivery
+          : current.delivery,
+
+        inStock !== undefined
+          ? Boolean(inStock)
+          : current.in_stock,
+
+        stock !== undefined
+          ? Number(stock)
+          : current.stock,
+
+        reserve !== undefined
+          ? Number(reserve)
+          : current.reserve,
+
+        inTransit !== undefined
+          ? Number(inTransit)
+          : current.in_transit,
+
+        quantity !== undefined
+          ? Number(quantity)
+          : current.quantity,
+
+        description !== undefined
+          ? description
+          : current.description,
+
+        memory !== undefined
+          ? memory
+          : current.memory,
+
+        color !== undefined
+          ? color
+          : current.color,
+
+        warranty !== undefined
+          ? warranty
+          : current.warranty,
+
+        type !== undefined
+          ? type
+          : current.type,
+
+        product !== undefined
+          ? product
+          : current.product,
+
+        characteristics !== undefined
+          ? characteristics
+          : current.characteristics,
+
+        variantsCount !== undefined
+          ? Number(variantsCount)
+          : current.variants_count,
+
+        weight !== undefined
+          ? Number(weight)
+          : current.weight,
+
+        volume !== undefined
+          ? Number(volume)
+          : current.volume,
+
+        article !== undefined
+          ? article
+          : current.article,
+
+        code !== undefined
+          ? code
+          : current.code,
+
+        externalCode !== undefined
+          ? externalCode
+          : current.external_code,
+
+        barcode !== undefined
+          ? barcode
+          : current.barcode,
+
+        archived !== undefined
+          ? Boolean(archived)
+          : current.archived,
+
+        hidden !== undefined
+          ? Boolean(hidden)
+          : current.hidden,
+
+        buyPrice !== undefined
+          ? Number(buyPrice)
+          : current.buy_price,
+
+        groupId !== undefined
+          ? groupId
+          : current.group_id,
+      ]
+    );
+
+    return res.json({
+      success: true,
+      message: "Товар успешно обновлён",
+      product: result.rows[0],
+    });
+
+  } catch (error) {
+
+    console.error("UPDATE PRODUCT ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка сохранения товара",
+      error: error.message,
+    });
+  }
+});
+
+
+// =====================================================
+// DELETE PRODUCT
+// =====================================================
+
+app.delete("/api/products/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pgQuery(
+      `
+      DELETE FROM products
+      WHERE id = $1
+      RETURNING id
+      `,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Товар не найден",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Товар удалён",
+    });
+
+  } catch (error) {
+
+    console.error("DELETE PRODUCT ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка удаления товара",
+      error: error.message,
+    });
+  }
+});
+
+// =====================================================
 // UNKNOWN ROUTE
 // =====================================================
 

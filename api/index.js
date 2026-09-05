@@ -396,77 +396,141 @@ app.get(
 
 app.post("/api/clients", async (req, res) => {
   try {
-    const { name, phone } =
-      req.body;
 
-    if (!name || !phone) {
+    const body = req.body || {};
+
+    const name =
+      body.name ||
+      body.firstName ||
+      body.first_name ||
+      body.username ||
+      "";
+
+    const phone =
+      body.phone ||
+      body.phoneNumber ||
+      body.phone_number ||
+      "";
+
+    if (!String(name).trim()) {
       return res.status(400).json({
         success: false,
-        message:
-          "Введите имя и телефон",
+        message: "Введите имя",
       });
     }
 
-    const existingSnapshot =
-      await db
-        .collection("clients")
-        .where(
-          "phone",
-          "==",
-          phone
-        )
-        .limit(1)
-        .get();
-
-    if (!existingSnapshot.empty) {
-      return res.status(409).json({
+    if (!String(phone).trim()) {
+      return res.status(400).json({
         success: false,
-        message:
-          "Клиент с таким номером телефона уже существует",
+        message: "Введите телефон",
       });
     }
 
-    const welcomeBonus =
-      100000;
+    const normalizedPhone =
+      normalizePhone(phone);
 
-    const clientRef =
-      db
-        .collection("clients")
-        .doc();
+    const existingResult =
+      await pgQuery(
+        `
+        SELECT *
+        FROM clients
+        WHERE phone = $1
+        LIMIT 1
+        `,
+        [normalizedPhone]
+      );
 
-    const client = {
-      name,
-      phone,
-      points: welcomeBonus,
-      bonuses: welcomeBonus,
-      orders: 0,
-      status: "NEW CLIENT",
-      role: "user",
-      createdAt: new Date(),
-    };
-
-    await clientRef.set(client);
-
-    await clientRef
-      .collection("operations")
-      .add({
-        type: "add",
-        points: welcomeBonus,
-        reason:
-          "Приветственные бонусы",
-        date: new Date(),
+    // Если клиент уже существует —
+    // просто пропускаем его в приложение
+    if (existingResult.rows.length > 0) {
+      return res.json({
+        success: true,
+        message: "Клиент уже зарегистрирован",
+        alreadyExists: true,
+        client: formatClient(
+          existingResult.rows[0]
+        ),
       });
+    }
+
+    const clientId = crypto.randomUUID();
+
+    const welcomeBonus = 100000;
+
+    const result = await pgQuery(
+      `
+      INSERT INTO clients (
+        id,
+        name,
+        phone,
+        points,
+        bonuses,
+        orders,
+        status,
+        role,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        0,
+        'NEW CLIENT',
+        'user',
+        NOW(),
+        NOW()
+      )
+      RETURNING *
+      `,
+      [
+        clientId,
+        String(name).trim(),
+        normalizedPhone,
+        welcomeBonus,
+        welcomeBonus,
+      ]
+    );
+
+    const client = result.rows[0];
+
+    await pgQuery(
+      `
+      INSERT INTO client_operations (
+        id,
+        client_id,
+        type,
+        points,
+        reason,
+        created_at
+      )
+      VALUES (
+        $1,
+        $2,
+        'add',
+        $3,
+        'Приветственные бонусы',
+        NOW()
+      )
+      `,
+      [
+        crypto.randomUUID(),
+        clientId,
+        welcomeBonus,
+      ]
+    );
 
     return res.status(201).json({
       success: true,
-      client: {
-        id: clientRef.id,
-        ...client,
-        createdAt:
-          client.createdAt.toISOString(),
-      },
+      message: "Регистрация успешно завершена",
+      alreadyExists: false,
+      client: formatClient(client),
     });
+
   } catch (error) {
+
     console.error(
       "CREATE CLIENT ERROR:",
       error
@@ -474,8 +538,8 @@ app.post("/api/clients", async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message:
-        "Ошибка создания клиента",
+      message: "Ошибка регистрации клиента",
+      error: error.message,
     });
   }
 });
