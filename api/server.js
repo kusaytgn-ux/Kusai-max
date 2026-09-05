@@ -2121,6 +2121,46 @@ app.get("/api/products", async (req, res) => {
   }
 });
 
+app.get("/api/debug/columns", async (req, res) => {
+  try {
+    const { table } = req.query;
+
+    if (!table) {
+      return res.status(400).json({
+        success: false,
+        message: "Укажите table",
+      });
+    }
+
+    const result = await query(
+      `
+      SELECT
+        column_name,
+        data_type
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = $1
+      ORDER BY ordinal_position
+      `,
+      [table]
+    );
+
+    res.json({
+      success: true,
+      table,
+      columns: result.rows,
+    });
+  } catch (error) {
+    console.error("Ошибка получения колонок:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Ошибка получения структуры таблицы",
+      error: error.message,
+    });
+  }
+});
+
 // =====================================================
 // UNKNOWN ROUTE
 // =====================================================
