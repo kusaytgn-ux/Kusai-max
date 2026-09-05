@@ -1844,4 +1844,11 @@ app.use((req, res) => {
   });
 });
 
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`🚀 KUSAI MAX API запущен на порту ${PORT}`);
+  console.log(`📡 http://localhost:${PORT}`);
+});
+
 export default app;
