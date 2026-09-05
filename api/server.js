@@ -1833,6 +1833,60 @@ app.get(
 );
 
 // =====================================================
+// PRODUCTS
+// POSTGRESQL
+// =====================================================
+
+// =====================================================
+// GET ALL PRODUCTS
+// =====================================================
+
+app.get("/api/products", async (req, res) => {
+  try {
+    const result = await pgQuery(`
+      SELECT *
+      FROM products
+      ORDER BY created_at DESC
+    `);
+
+    const products = result.rows.map((product) => ({
+      id: product.id,
+      name: product.name,
+      description: product.description || "",
+      price: Number(product.price || 0),
+      oldPrice: product.old_price
+        ? Number(product.old_price)
+        : null,
+      groupId: product.group_id || null,
+      brand: product.brand || "",
+      model: product.model || "",
+      color: product.color || "",
+      memory: product.memory || "",
+      sim: product.sim || "",
+      images: product.images || [],
+      status: product.status || "available",
+      quantity: Number(product.quantity || 0),
+      createdAt: product.created_at,
+      updatedAt: product.updated_at,
+    }));
+
+    return res.json({
+      success: true,
+      count: products.length,
+      products,
+    });
+  } catch (error) {
+    console.error("GET PRODUCTS ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка загрузки товаров",
+      error: error.message,
+    });
+  }
+});
+
+// =====================================================
 // UNKNOWN ROUTE
 // =====================================================
 
