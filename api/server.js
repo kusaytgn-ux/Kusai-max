@@ -1914,6 +1914,40 @@ app.get("/api/debug/tables", async (req, res) => {
     });
   }
 });
+
+// =====================================================
+// PRODUCTS TABLE DEBUG
+// =====================================================
+
+app.get("/api/debug/products-columns", async (req, res) => {
+  try {
+    const result = await pgQuery(`
+      SELECT
+        column_name,
+        data_type
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+      AND table_name = 'products'
+      ORDER BY ordinal_position
+    `);
+
+    return res.json({
+      success: true,
+      columns: result.rows,
+    });
+  } catch (error) {
+    console.error(
+      "PRODUCTS COLUMNS ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка получения структуры products",
+      error: error.message,
+    });
+  }
+});
 // =====================================================
 // UNKNOWN ROUTE
 // =====================================================
