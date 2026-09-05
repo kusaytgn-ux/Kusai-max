@@ -1885,7 +1885,35 @@ app.get("/api/products", async (req, res) => {
     });
   }
 });
+// =====================================================
+// DATABASE TABLES DEBUG
+// =====================================================
 
+app.get("/api/debug/tables", async (req, res) => {
+  try {
+    const result = await pgQuery(`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+      ORDER BY table_name
+    `);
+
+    return res.json({
+      success: true,
+      tables: result.rows.map(
+        (row) => row.table_name
+      ),
+    });
+  } catch (error) {
+    console.error("DATABASE TABLES ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка получения таблиц",
+      error: error.message,
+    });
+  }
+});
 // =====================================================
 // UNKNOWN ROUTE
 // =====================================================
