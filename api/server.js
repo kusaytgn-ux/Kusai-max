@@ -65,16 +65,30 @@ function formatClient(client) {
     name: client.name || "",
     phone: client.phone || "",
     points: Number(client.points || 0),
+
     bonuses: Number(
       client.bonuses ??
       client.points ??
       0
     ),
+
     orders: Number(client.orders || 0),
-    status: client.status || "NEW CLIENT",
-    role: client.role || "user",
-    createdAt: client.created_at || null,
-    updatedAt: client.updated_at || null,
+
+    status:
+      client.status ||
+      "NEW CLIENT",
+
+    role:
+      client.role ||
+      "user",
+
+    createdAt:
+      client.created_at ||
+      null,
+
+    updatedAt:
+      client.updated_at ||
+      null,
   };
 }
 
@@ -123,12 +137,14 @@ app.get("/api/health", async (req, res) => {
 
 app.post("/api/admin/login", async (req, res) => {
   try {
-    const { login, password } = req.body || {};
+    const { login, password } =
+      req.body || {};
 
     if (!login || !password) {
       return res.status(400).json({
         success: false,
-        message: "Введите логин и пароль",
+        message:
+          "Введите логин и пароль",
       });
     }
 
@@ -145,12 +161,16 @@ app.post("/api/admin/login", async (req, res) => {
     if (snapshot.empty) {
       return res.status(401).json({
         success: false,
-        message: "Неверный логин или пароль",
+        message:
+          "Неверный логин или пароль",
       });
     }
 
-    const adminDoc = snapshot.docs[0];
-    const admin = adminDoc.data();
+    const adminDoc =
+      snapshot.docs[0];
+
+    const admin =
+      adminDoc.data();
 
     if (!admin.passwordHash) {
       return res.status(500).json({
@@ -169,7 +189,8 @@ app.post("/api/admin/login", async (req, res) => {
     if (!passwordValid) {
       return res.status(401).json({
         success: false,
-        message: "Неверный логин или пароль",
+        message:
+          "Неверный логин или пароль",
       });
     }
 
@@ -180,9 +201,11 @@ app.post("/api/admin/login", async (req, res) => {
       admin: {
         id: adminDoc.id,
         login: admin.login,
+
         name:
           admin.name ||
           "Administrator",
+
         role:
           admin.role ||
           "admin",
@@ -203,59 +226,65 @@ app.post("/api/admin/login", async (req, res) => {
 
 // =====================================================
 // PRODUCT GROUPS
-// POSTGRESQL
 // =====================================================
 
 // =====================================================
 // GET ALL PRODUCT GROUPS
 // =====================================================
 
-app.get("/api/product-groups", async (req, res) => {
-  try {
-    const result = await pgQuery(`
-      SELECT
-        id,
-        name,
-        slug,
-        sort_order,
-        created_at,
-        updated_at
-      FROM product_groups
-      WHERE parent_id IS NULL
-      ORDER BY
-        sort_order ASC,
-        name ASC
-    `);
+app.get(
+  "/api/product-groups",
+  async (req, res) => {
+    try {
+      const result =
+        await pgQuery(`
+          SELECT
+            id,
+            name,
+            slug,
+            sort_order,
+            created_at,
+            updated_at
+          FROM product_groups
+          ORDER BY
+            sort_order ASC,
+            name ASC
+        `);
 
-    const groups = result.rows.map(
-      (group) => ({
-        id: group.id,
-        name: group.name,
-        slug: group.slug,
-        sortOrder: group.sort_order,
-        createdAt: group.created_at,
-        updatedAt: group.updated_at,
-      })
-    );
+      const groups =
+        result.rows.map((group) => ({
+          id: group.id,
+          name: group.name,
+          slug: group.slug,
+          sortOrder:
+            Number(group.sort_order || 0),
+          createdAt:
+            group.created_at,
+          updatedAt:
+            group.updated_at,
+        }));
 
-    return res.json({
-      success: true,
-      groups,
-    });
-  } catch (error) {
-    console.error(
-      "GET PRODUCT GROUPS ERROR:",
-      error
-    );
+      return res.json({
+        success: true,
+        count: groups.length,
+        groups,
+      });
 
-    return res.status(500).json({
-      success: false,
-      message:
-        "Ошибка загрузки групп",
-      error: error.message,
-    });
+    } catch (error) {
+      console.error(
+        "GET PRODUCT GROUPS ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка загрузки групп",
+        error: error.message,
+      });
+    }
   }
-});
+);
 
 // =====================================================
 // GET ONE PRODUCT GROUP
@@ -265,32 +294,36 @@ app.get(
   "/api/product-groups/:id",
   async (req, res) => {
     try {
-      const { id } = req.params;
+      const { id } =
+        req.params;
 
-      const result = await pgQuery(
-        `
-        SELECT
-          id,
-          name,
-          slug,
-          sort_order,
-          created_at,
-          updated_at
-        FROM product_groups
-        WHERE id = $1
-        LIMIT 1
-        `,
-        [id]
-      );
+      const result =
+        await pgQuery(
+          `
+          SELECT
+            id,
+            name,
+            slug,
+            sort_order,
+            created_at,
+            updated_at
+          FROM product_groups
+          WHERE id = $1
+          LIMIT 1
+          `,
+          [id]
+        );
 
       if (result.rows.length === 0) {
         return res.status(404).json({
           success: false,
-          message: "Группа не найдена",
+          message:
+            "Группа не найдена",
         });
       }
 
-      const group = result.rows[0];
+      const group =
+        result.rows[0];
 
       return res.json({
         success: true,
@@ -299,11 +332,20 @@ app.get(
           id: group.id,
           name: group.name,
           slug: group.slug,
-          sortOrder: group.sort_order,
-          createdAt: group.created_at,
-          updatedAt: group.updated_at,
+
+          sortOrder:
+            Number(
+              group.sort_order || 0
+            ),
+
+          createdAt:
+            group.created_at,
+
+          updatedAt:
+            group.updated_at,
         },
       });
+
     } catch (error) {
       console.error(
         "GET PRODUCT GROUP ERROR:",
@@ -348,20 +390,19 @@ app.post(
       const groupName =
         String(name).trim();
 
-      const existingResult =
+      const duplicateResult =
         await pgQuery(
           `
           SELECT id
           FROM product_groups
-          WHERE name = $1
-          AND parent_id IS NULL
+          WHERE LOWER(name) = LOWER($1)
           LIMIT 1
           `,
           [groupName]
         );
 
       if (
-        existingResult.rows.length > 0
+        duplicateResult.rows.length > 0
       ) {
         return res.status(409).json({
           success: false,
@@ -370,51 +411,65 @@ app.post(
         });
       }
 
-      const id = crypto.randomUUID();
+      const result =
+        await pgQuery(
+          `
+          INSERT INTO product_groups (
+            id,
+            name,
+            slug,
+            sort_order,
+            created_at,
+            updated_at
+          )
+          VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            NOW(),
+            NOW()
+          )
+          RETURNING *
+          `,
+          [
+            crypto.randomUUID(),
+            groupName,
 
-      const result = await pgQuery(
-        `
-        INSERT INTO product_groups (
-          id,
-          name,
-          slug,
-          parent_id,
-          sort_order
-        )
-        VALUES (
-          $1,
-          $2,
-          $3,
-          NULL,
-          $4
-        )
-        RETURNING *
-        `,
-        [
-          id,
-          groupName,
-          slug
-            ? String(slug).trim()
-            : null,
-          Number(sortOrder) || 0,
-        ]
-      );
+            slug
+              ? String(slug).trim()
+              : null,
 
-      const group = result.rows[0];
+            Number(sortOrder) || 0,
+          ]
+        );
+
+      const group =
+        result.rows[0];
 
       return res.status(201).json({
         success: true,
-        message: "Группа создана",
+        message:
+          "Группа создана",
 
         group: {
           id: group.id,
           name: group.name,
           slug: group.slug,
-          sortOrder: group.sort_order,
-          createdAt: group.created_at,
-          updatedAt: group.updated_at,
+
+          sortOrder:
+            Number(
+              group.sort_order || 0
+            ),
+
+          createdAt:
+            group.created_at,
+
+          updatedAt:
+            group.updated_at,
         },
       });
+
     } catch (error) {
       console.error(
         "CREATE PRODUCT GROUP ERROR:",
@@ -439,7 +494,8 @@ app.patch(
   "/api/product-groups/:id",
   async (req, res) => {
     try {
-      const { id } = req.params;
+      const { id } =
+        req.params;
 
       const {
         name,
@@ -468,23 +524,13 @@ app.patch(
         });
       }
 
-      const current =
+      const existing =
         existingResult.rows[0];
 
       const newName =
         name !== undefined
           ? String(name).trim()
-          : current.name;
-
-      const newSlug =
-        slug !== undefined
-          ? String(slug).trim() || null
-          : current.slug;
-
-      const newSortOrder =
-        sortOrder !== undefined
-          ? Number(sortOrder) || 0
-          : current.sort_order;
+          : existing.name;
 
       if (!newName) {
         return res.status(400).json({
@@ -494,52 +540,40 @@ app.patch(
         });
       }
 
-      const duplicateResult =
+      const newSlug =
+        slug !== undefined
+          ? String(slug).trim() || null
+          : existing.slug;
+
+      const newSortOrder =
+        sortOrder !== undefined
+          ? Number(sortOrder) || 0
+          : Number(
+              existing.sort_order || 0
+            );
+
+      const result =
         await pgQuery(
           `
-          SELECT id
-          FROM product_groups
-          WHERE name = $1
-          AND parent_id IS NULL
-          AND id != $2
-          LIMIT 1
+          UPDATE product_groups
+          SET
+            name = $2,
+            slug = $3,
+            sort_order = $4,
+            updated_at = NOW()
+          WHERE id = $1
+          RETURNING *
           `,
           [
-            newName,
             id,
+            newName,
+            newSlug,
+            newSortOrder,
           ]
         );
 
-      if (
-        duplicateResult.rows.length > 0
-      ) {
-        return res.status(409).json({
-          success: false,
-          message:
-            "Такая группа уже существует",
-        });
-      }
-
-      const result = await pgQuery(
-        `
-        UPDATE product_groups
-        SET
-          name = $2,
-          slug = $3,
-          sort_order = $4,
-          updated_at = NOW()
-        WHERE id = $1
-        RETURNING *
-        `,
-        [
-          id,
-          newName,
-          newSlug,
-          newSortOrder,
-        ]
-      );
-
-      const group = result.rows[0];
+      const group =
+        result.rows[0];
 
       return res.json({
         success: true,
@@ -550,11 +584,20 @@ app.patch(
           id: group.id,
           name: group.name,
           slug: group.slug,
-          sortOrder: group.sort_order,
-          createdAt: group.created_at,
-          updatedAt: group.updated_at,
+
+          sortOrder:
+            Number(
+              group.sort_order || 0
+            ),
+
+          createdAt:
+            group.created_at,
+
+          updatedAt:
+            group.updated_at,
         },
       });
+
     } catch (error) {
       console.error(
         "UPDATE PRODUCT GROUP ERROR:",
@@ -579,22 +622,20 @@ app.delete(
   "/api/product-groups/:id",
   async (req, res) => {
     try {
-      const { id } = req.params;
+      const { id } =
+        req.params;
 
-      const groupResult =
+      const result =
         await pgQuery(
           `
-          SELECT id
-          FROM product_groups
+          DELETE FROM product_groups
           WHERE id = $1
-          LIMIT 1
+          RETURNING id
           `,
           [id]
         );
 
-      if (
-        groupResult.rows.length === 0
-      ) {
+      if (result.rows.length === 0) {
         return res.status(404).json({
           success: false,
           message:
@@ -602,39 +643,12 @@ app.delete(
         });
       }
 
-      const productsResult =
-        await pgQuery(
-          `
-          SELECT id
-          FROM products
-          WHERE group_id = $1
-          LIMIT 1
-          `,
-          [id]
-        );
-
-      if (
-        productsResult.rows.length > 0
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Нельзя удалить группу, пока в ней есть товары",
-        });
-      }
-
-      await pgQuery(
-        `
-        DELETE FROM product_groups
-        WHERE id = $1
-        `,
-        [id]
-      );
-
       return res.json({
         success: true,
-        message: "Группа удалена",
+        message:
+          "Группа удалена",
       });
+
     } catch (error) {
       console.error(
         "DELETE PRODUCT GROUP ERROR:",
@@ -653,7 +667,6 @@ app.delete(
 
 // =====================================================
 // PRODUCT SUBGROUPS
-// POSTGRESQL
 // =====================================================
 
 // =====================================================
@@ -664,260 +677,47 @@ app.get(
   "/api/product-subgroups",
   async (req, res) => {
     try {
-      const result = await pgQuery(`
-        SELECT
-          ps.id,
-          ps.group_id,
-          ps.name,
-          ps.created_at,
-          pg.name AS group_name
-        FROM product_subgroups ps
-        JOIN product_groups pg
-          ON pg.id = ps.group_id
-        ORDER BY
-          pg.name ASC,
-          ps.name ASC
-      `);
+      const result =
+        await pgQuery(`
+          SELECT
+            ps.id,
+            ps.group_id,
+            ps.name,
+            ps.created_at,
 
-      const subgroups =
-        result.rows.map(
-          (subgroup) => ({
-            id: subgroup.id,
-            groupId: subgroup.group_id,
-            groupName: subgroup.group_name,
-            name: subgroup.name,
-            createdAt:
-              subgroup.created_at,
-          })
-        );
+            pg.name AS group_name
 
-      return res.json({
-        success: true,
-        count: subgroups.length,
-        subgroups,
-      });
-    } catch (error) {
-      console.error(
-        "GET PRODUCT SUBGROUPS ERROR:",
-        error
-      );
+          FROM product_subgroups ps
 
-      return res.status(500).json({
-        success: false,
-        message:
-          "Ошибка загрузки подгрупп",
-        error: error.message,
-      });
-    }
-  }
-);
+          LEFT JOIN product_groups pg
+            ON pg.id = ps.group_id
 
-// =====================================================
-// GET SUBGROUPS BY GROUP
-// =====================================================
-
-app.get(
-  "/api/product-groups/:id/subgroups",
-  async (req, res) => {
-    try {
-      const { id: groupId } =
-        req.params;
-
-      const result = await pgQuery(
-        `
-        SELECT
-          id,
-          group_id,
-          name,
-          created_at
-        FROM product_subgroups
-        WHERE group_id = $1
-        ORDER BY name ASC
-        `,
-        [groupId]
-      );
-
-      const subgroups =
-        result.rows.map(
-          (subgroup) => ({
-            id: subgroup.id,
-            groupId: subgroup.group_id,
-            name: subgroup.name,
-            createdAt:
-              subgroup.created_at,
-          })
-        );
-
-      return res.json({
-        success: true,
-        count: subgroups.length,
-        subgroups,
-      });
-    } catch (error) {
-      console.error(
-        "GET GROUP SUBGROUPS ERROR:",
-        error
-      );
-
-      return res.status(500).json({
-        success: false,
-        message:
-          "Ошибка загрузки подгрупп",
-        error: error.message,
-      });
-    }
-  }
-);
-
-// =====================================================
-// CREATE SUBGROUP
-// POSTGRESQL
-// =====================================================
-
-app.post(
-  "/api/product-groups/:id/subgroups",
-  async (req, res) => {
-    try {
-      const { id: groupId } = req.params;
-
-      const { name } = req.body || {};
-
-      if (!name || !String(name).trim()) {
-        return res.status(400).json({
-          success: false,
-          message: "Введите название подгруппы",
-        });
-      }
-
-      // Проверяем существование группы
-      const groupResult = await pgQuery(
-        `
-        SELECT id
-        FROM product_groups
-        WHERE id = $1
-        LIMIT 1
-        `,
-        [groupId]
-      );
-
-      if (groupResult.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: "Группа не найдена",
-        });
-      }
-
-      const subgroupName = String(name).trim();
-
-      // Проверяем дубликат
-      const duplicateResult = await pgQuery(
-        `
-        SELECT id
-        FROM product_subgroups
-        WHERE group_id = $1
-        AND name = $2
-        LIMIT 1
-        `,
-        [
-          groupId,
-          subgroupName,
-        ]
-      );
-
-      if (duplicateResult.rows.length > 0) {
-        return res.status(409).json({
-          success: false,
-          message: "Такая подгруппа уже существует",
-        });
-      }
-
-      // Создаем подгруппу
-      const result = await pgQuery(
-        `
-        INSERT INTO product_subgroups (
-          id,
-          group_id,
-          name,
-          created_at
-        )
-        VALUES (
-          gen_random_uuid(),
-          $1,
-          $2,
-          NOW()
-        )
-        RETURNING *
-        `,
-        [
-          groupId,
-          subgroupName,
-        ]
-      );
-
-      const subgroup = result.rows[0];
-
-      return res.status(201).json({
-        success: true,
-        message: "Подгруппа успешно создана",
-
-        subgroup: {
-          id: subgroup.id,
-          groupId: subgroup.group_id,
-          name: subgroup.name,
-          createdAt: subgroup.created_at,
-        },
-      });
-
-    } catch (error) {
-      console.error(
-        "CREATE SUBGROUP ERROR:",
-        error
-      );
-
-      return res.status(500).json({
-        success: false,
-        message: "Ошибка создания подгруппы",
-        error: error.message,
-      });
-    }
-  }
-);
-
-// =====================================================
-// GET ALL SUBGROUPS
-// =====================================================
-
-app.get(
-  "/api/product-subgroups",
-  async (req, res) => {
-    try {
-      const result = await pgQuery(`
-        SELECT
-          ps.id,
-          ps.group_id,
-          ps.name,
-          ps.created_at,
-          pg.name AS group_name
-        FROM product_subgroups ps
-        JOIN product_groups pg
-          ON pg.id = ps.group_id
-        ORDER BY
-          pg.name ASC,
-          ps.name ASC
-      `);
+          ORDER BY
+            pg.name ASC,
+            ps.name ASC
+        `);
 
       const subgroups =
         result.rows.map((item) => ({
           id: item.id,
-          groupId: item.group_id,
-          groupName: item.group_name,
-          name: item.name,
-          createdAt: item.created_at,
+
+          groupId:
+            item.group_id,
+
+          groupName:
+            item.group_name || "",
+
+          name:
+            item.name,
+
+          createdAt:
+            item.created_at,
         }));
 
       return res.json({
         success: true,
-        count: subgroups.length,
+        count:
+          subgroups.length,
         subgroups,
       });
 
@@ -938,40 +738,49 @@ app.get(
 );
 
 // =====================================================
-// GET GROUP SUBGROUPS
+// GET SUBGROUPS OF GROUP
 // =====================================================
 
 app.get(
   "/api/product-groups/:id/subgroups",
   async (req, res) => {
     try {
-      const { id: groupId } = req.params;
+      const { id: groupId } =
+        req.params;
 
-      const result = await pgQuery(
-        `
-        SELECT
-          id,
-          group_id,
-          name,
-          created_at
-        FROM product_subgroups
-        WHERE group_id = $1
-        ORDER BY name ASC
-        `,
-        [groupId]
-      );
+      const result =
+        await pgQuery(
+          `
+          SELECT
+            id,
+            group_id,
+            name,
+            created_at
+          FROM product_subgroups
+          WHERE group_id = $1
+          ORDER BY name ASC
+          `,
+          [groupId]
+        );
 
       const subgroups =
         result.rows.map((item) => ({
           id: item.id,
-          groupId: item.group_id,
-          name: item.name,
-          createdAt: item.created_at,
+
+          groupId:
+            item.group_id,
+
+          name:
+            item.name,
+
+          createdAt:
+            item.created_at,
         }));
 
       return res.json({
         success: true,
-        count: subgroups.length,
+        count:
+          subgroups.length,
         subgroups,
       });
 
@@ -991,7 +800,230 @@ app.get(
   }
 );
 
+// =====================================================
+// GET ONE SUBGROUP
+// =====================================================
 
+app.get(
+  "/api/product-subgroups/:id",
+  async (req, res) => {
+    try {
+      const { id } =
+        req.params;
+
+      const result =
+        await pgQuery(
+          `
+          SELECT
+            ps.id,
+            ps.group_id,
+            ps.name,
+            ps.created_at,
+
+            pg.name AS group_name
+
+          FROM product_subgroups ps
+
+          LEFT JOIN product_groups pg
+            ON pg.id = ps.group_id
+
+          WHERE ps.id = $1
+
+          LIMIT 1
+          `,
+          [id]
+        );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Подгруппа не найдена",
+        });
+      }
+
+      const subgroup =
+        result.rows[0];
+
+      return res.json({
+        success: true,
+
+        subgroup: {
+          id:
+            subgroup.id,
+
+          groupId:
+            subgroup.group_id,
+
+          groupName:
+            subgroup.group_name || "",
+
+          name:
+            subgroup.name,
+
+          createdAt:
+            subgroup.created_at,
+        },
+      });
+
+    } catch (error) {
+      console.error(
+        "GET SUBGROUP ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка получения подгруппы",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
+// CREATE SUBGROUP
+// =====================================================
+
+app.post(
+  "/api/product-groups/:id/subgroups",
+  async (req, res) => {
+    try {
+      const { id: groupId } =
+        req.params;
+
+      const { name } =
+        req.body || {};
+
+      if (
+        !name ||
+        !String(name).trim()
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Введите название подгруппы",
+        });
+      }
+
+      // Проверяем группу
+
+      const groupResult =
+        await pgQuery(
+          `
+          SELECT id
+          FROM product_groups
+          WHERE id = $1
+          LIMIT 1
+          `,
+          [groupId]
+        );
+
+      if (
+        groupResult.rows.length === 0
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Группа не найдена",
+        });
+      }
+
+      const subgroupName =
+        String(name).trim();
+
+      // Проверяем дубликат
+
+      const duplicateResult =
+        await pgQuery(
+          `
+          SELECT id
+          FROM product_subgroups
+          WHERE group_id = $1
+          AND LOWER(name) = LOWER($2)
+          LIMIT 1
+          `,
+          [
+            groupId,
+            subgroupName,
+          ]
+        );
+
+      if (
+        duplicateResult.rows.length > 0
+      ) {
+        return res.status(409).json({
+          success: false,
+          message:
+            "Такая подгруппа уже существует",
+        });
+      }
+
+      // Создаём подгруппу
+
+      const result =
+        await pgQuery(
+          `
+          INSERT INTO product_subgroups (
+            id,
+            group_id,
+            name,
+            created_at
+          )
+          VALUES (
+            $1,
+            $2,
+            $3,
+            NOW()
+          )
+          RETURNING *
+          `,
+          [
+            crypto.randomUUID(),
+            groupId,
+            subgroupName,
+          ]
+        );
+
+      const subgroup =
+        result.rows[0];
+
+      return res.status(201).json({
+        success: true,
+        message:
+          "Подгруппа успешно создана",
+
+        subgroup: {
+          id:
+            subgroup.id,
+
+          groupId:
+            subgroup.group_id,
+
+          name:
+            subgroup.name,
+
+          createdAt:
+            subgroup.created_at,
+        },
+      });
+
+    } catch (error) {
+      console.error(
+        "CREATE SUBGROUP ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка создания подгруппы",
+        error: error.message,
+      });
+    }
+  }
+);
 
 // =====================================================
 // UPDATE SUBGROUP
@@ -1001,7 +1033,8 @@ app.patch(
   "/api/product-subgroups/:id",
   async (req, res) => {
     try {
-      const { id } = req.params;
+      const { id } =
+        req.params;
 
       const {
         name,
@@ -1029,72 +1062,24 @@ app.patch(
         });
       }
 
-      const current =
+      const existing =
         existingResult.rows[0];
 
       const newName =
         name !== undefined
           ? String(name).trim()
-          : current.name;
+          : existing.name;
 
       const newGroupId =
         groupId !== undefined
           ? groupId
-          : current.group_id;
+          : existing.group_id;
 
       if (!newName) {
         return res.status(400).json({
           success: false,
           message:
             "Введите название подгруппы",
-        });
-      }
-
-      const groupResult =
-        await pgQuery(
-          `
-          SELECT id
-          FROM product_groups
-          WHERE id = $1
-          LIMIT 1
-          `,
-          [newGroupId]
-        );
-
-      if (
-        groupResult.rows.length === 0
-      ) {
-        return res.status(404).json({
-          success: false,
-          message:
-            "Группа не найдена",
-        });
-      }
-
-      const duplicateResult =
-        await pgQuery(
-          `
-          SELECT id
-          FROM product_subgroups
-          WHERE group_id = $1
-          AND name = $2
-          AND id != $3
-          LIMIT 1
-          `,
-          [
-            newGroupId,
-            newName,
-            id,
-          ]
-        );
-
-      if (
-        duplicateResult.rows.length > 0
-      ) {
-        return res.status(409).json({
-          success: false,
-          message:
-            "Такая подгруппа уже существует",
         });
       }
 
@@ -1124,13 +1109,20 @@ app.patch(
           "Подгруппа обновлена",
 
         subgroup: {
-          id: subgroup.id,
-          groupId: subgroup.group_id,
-          name: subgroup.name,
+          id:
+            subgroup.id,
+
+          groupId:
+            subgroup.group_id,
+
+          name:
+            subgroup.name,
+
           createdAt:
             subgroup.created_at,
         },
       });
+
     } catch (error) {
       console.error(
         "UPDATE SUBGROUP ERROR:",
@@ -1155,28 +1147,19 @@ app.delete(
   "/api/product-subgroups/:id",
   async (req, res) => {
     try {
-      const { id } = req.params;
+      const { id } =
+        req.params;
 
-      const productsResult =
-        await pgQuery(
-          `
-          SELECT id
-          FROM products
-          WHERE subgroup_id = $1
-          LIMIT 1
-          `,
-          [id]
-        );
+      // Сначала отвязываем товары
 
-      if (
-        productsResult.rows.length > 0
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Нельзя удалить подгруппу, пока в ней есть товары",
-        });
-      }
+      await pgQuery(
+        `
+        UPDATE products
+        SET subgroup_id = NULL
+        WHERE subgroup_id = $1
+        `,
+        [id]
+      );
 
       const result =
         await pgQuery(
@@ -1203,6 +1186,7 @@ app.delete(
         message:
           "Подгруппа удалена",
       });
+
     } catch (error) {
       console.error(
         "DELETE SUBGROUP ERROR:",
@@ -1223,122 +1207,146 @@ app.delete(
 // CATEGORIES
 // =====================================================
 
-app.get("/api/categories", async (req, res) => {
-  try {
-    const groupsResult =
-      await pgQuery(`
-        SELECT
-          id,
-          name,
-          slug,
-          sort_order
-        FROM product_groups
-        WHERE parent_id IS NULL
-        ORDER BY
-          sort_order ASC,
-          name ASC
-      `);
-
-    const categories = [];
-
-    for (const group of groupsResult.rows) {
-      const subgroupsResult =
-        await pgQuery(
-          `
+app.get(
+  "/api/categories",
+  async (req, res) => {
+    try {
+      const groupsResult =
+        await pgQuery(`
           SELECT
             id,
+            name,
+            slug,
+            sort_order
+          FROM product_groups
+          ORDER BY
+            sort_order ASC,
+            name ASC
+        `);
+
+      const subgroupsResult =
+        await pgQuery(`
+          SELECT
+            id,
+            group_id,
             name
           FROM product_subgroups
-          WHERE group_id = $1
           ORDER BY name ASC
-          `,
-          [group.id]
-        );
+        `);
 
-      categories.push({
-        id: group.id,
-        name: group.name,
-        slug: group.slug,
-        sortOrder: group.sort_order,
+      const categories =
+        groupsResult.rows.map((group) => ({
+          id: group.id,
 
-        subgroups:
-          subgroupsResult.rows.map(
-            (subgroup) => ({
-              id: subgroup.id,
-              name: subgroup.name,
-            })
-          ),
+          name:
+            group.name,
+
+          slug:
+            group.slug,
+
+          sortOrder:
+            Number(
+              group.sort_order || 0
+            ),
+
+          subgroups:
+            subgroupsResult.rows
+              .filter(
+                (subgroup) =>
+                  subgroup.group_id ===
+                  group.id
+              )
+              .map(
+                (subgroup) => ({
+                  id:
+                    subgroup.id,
+
+                  groupId:
+                    subgroup.group_id,
+
+                  name:
+                    subgroup.name,
+                })
+              ),
+        }));
+
+      return res.json({
+        success: true,
+        categories,
+      });
+
+    } catch (error) {
+      console.error(
+        "GET CATEGORIES ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка загрузки категорий",
+        error: error.message,
       });
     }
-
-    return res.json({
-      success: true,
-      categories,
-    });
-  } catch (error) {
-    console.error(
-      "GET CATEGORIES ERROR:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "Ошибка загрузки категорий",
-      error: error.message,
-    });
   }
-});
+);
 
 // =====================================================
 // CLIENTS
-// POSTGRESQL
 // =====================================================
 
 // =====================================================
 // GET ALL CLIENTS
 // =====================================================
 
-app.get("/api/clients", async (req, res) => {
-  try {
-    const result = await pgQuery(`
-      SELECT
-        id,
-        name,
-        phone,
-        points,
-        bonuses,
-        orders,
-        status,
-        role,
-        created_at,
-        updated_at
-      FROM clients
-      ORDER BY created_at DESC
-    `);
+app.get(
+  "/api/clients",
+  async (req, res) => {
+    try {
+      const result =
+        await pgQuery(`
+          SELECT
+            id,
+            name,
+            phone,
+            points,
+            bonuses,
+            orders,
+            status,
+            role,
+            created_at,
+            updated_at
+          FROM clients
+          ORDER BY created_at DESC
+        `);
 
-    const clients =
-      result.rows.map(formatClient);
+      const clients =
+        result.rows.map(
+          formatClient
+        );
 
-    return res.json({
-      success: true,
-      count: clients.length,
-      clients,
-    });
-  } catch (error) {
-    console.error(
-      "GET ALL CLIENTS ERROR:",
-      error
-    );
+      return res.json({
+        success: true,
+        count:
+          clients.length,
+        clients,
+      });
 
-    return res.status(500).json({
-      success: false,
-      message:
-        "Ошибка получения клиентов",
-      error: error.message,
-    });
+    } catch (error) {
+      console.error(
+        "GET ALL CLIENTS ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка получения клиентов",
+        error: error.message,
+      });
+    }
   }
-});
+);
 
 // =====================================================
 // GET CLIENT
@@ -1348,29 +1356,23 @@ app.get(
   "/api/clients/:id",
   async (req, res) => {
     try {
-      const { id } = req.params;
+      const { id } =
+        req.params;
 
-      const result = await pgQuery(
-        `
-        SELECT
-          id,
-          name,
-          phone,
-          points,
-          bonuses,
-          orders,
-          status,
-          role,
-          created_at,
-          updated_at
-        FROM clients
-        WHERE id = $1
-        LIMIT 1
-        `,
-        [id]
-      );
+      const result =
+        await pgQuery(
+          `
+          SELECT *
+          FROM clients
+          WHERE id = $1
+          LIMIT 1
+          `,
+          [id]
+        );
 
-      if (result.rows.length === 0) {
+      if (
+        result.rows.length === 0
+      ) {
         return res.status(404).json({
           success: false,
           message:
@@ -1380,10 +1382,13 @@ app.get(
 
       return res.json({
         success: true,
-        client: formatClient(
-          result.rows[0]
-        ),
+
+        client:
+          formatClient(
+            result.rows[0]
+          ),
       });
+
     } catch (error) {
       console.error(
         "GET CLIENT ERROR:",
@@ -1401,37 +1406,171 @@ app.get(
 );
 
 // =====================================================
-// GET CLIENT PROFILE
+// CREATE CLIENT
 // =====================================================
 
-app.get(
-  "/api/clients/:id/profile",
+app.post(
+  "/api/clients",
   async (req, res) => {
     try {
-      const { id } = req.params;
-
-      const clientResult =
-        await pgQuery(
-          `
-          SELECT *
-          FROM clients
-          WHERE id = $1
-          LIMIT 1
-          `,
-          [id]
-        );
+      const { name, phone } =
+        req.body || {};
 
       if (
-        clientResult.rows.length === 0
+        !name ||
+        !String(name).trim()
       ) {
-        return res.status(404).json({
+        return res.status(400).json({
           success: false,
           message:
-            "Клиент не найден",
+            "Введите имя",
         });
       }
 
-      const operationsResult =
+      if (!phone) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Введите телефон",
+        });
+      }
+
+      const normalizedPhone =
+        normalizePhone(phone);
+
+      const existingResult =
+        await pgQuery(
+          `
+          SELECT id
+          FROM clients
+          WHERE phone = $1
+          LIMIT 1
+          `,
+          [normalizedPhone]
+        );
+
+      if (
+        existingResult.rows.length > 0
+      ) {
+        return res.status(409).json({
+          success: false,
+          message:
+            "Клиент с таким номером уже существует",
+        });
+      }
+
+      const clientId =
+        crypto.randomUUID();
+
+      const welcomeBonus =
+        100000;
+
+      const result =
+        await pgQuery(
+          `
+          INSERT INTO clients (
+            id,
+            name,
+            phone,
+            points,
+            bonuses,
+            orders,
+            status,
+            role,
+            created_at,
+            updated_at
+          )
+          VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            $8,
+            NOW(),
+            NOW()
+          )
+          RETURNING *
+          `,
+          [
+            clientId,
+            String(name).trim(),
+            normalizedPhone,
+            welcomeBonus,
+            welcomeBonus,
+            0,
+            "NEW CLIENT",
+            "user",
+          ]
+        );
+
+      await pgQuery(
+        `
+        INSERT INTO client_operations (
+          id,
+          client_id,
+          type,
+          points,
+          reason,
+          created_at
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          NOW()
+        )
+        `,
+        [
+          crypto.randomUUID(),
+          clientId,
+          "add",
+          welcomeBonus,
+          "Приветственные бонусы",
+        ]
+      );
+
+      return res.status(201).json({
+        success: true,
+
+        client:
+          formatClient(
+            result.rows[0]
+          ),
+      });
+
+    } catch (error) {
+      console.error(
+        "CREATE CLIENT ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка создания клиента",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
+// GET CLIENT OPERATIONS
+// =====================================================
+
+app.get(
+  "/api/clients/:id/operations",
+  async (req, res) => {
+    try {
+      const { id } =
+        req.params;
+
+      const result =
         await pgQuery(
           `
           SELECT
@@ -1448,106 +1587,24 @@ app.get(
         );
 
       const operations =
-        operationsResult.rows.map(
-          (operation) => ({
-            id: operation.id,
-            type: operation.type,
-            points: Number(
-              operation.points || 0
-            ),
-            reason:
-              operation.reason || "",
-            date:
-              operation.created_at ||
-              null,
-          })
-        );
-
-      return res.json({
-        success: true,
-
-        client: {
-          ...formatClient(
-            clientResult.rows[0]
-          ),
-          operations,
-        },
-      });
-    } catch (error) {
-      console.error(
-        "GET CLIENT PROFILE ERROR:",
-        error
-      );
-
-      return res.status(500).json({
-        success: false,
-        message:
-          "Ошибка получения профиля клиента",
-        error: error.message,
-      });
-    }
-  }
-);
-
-// =====================================================
-// GET CLIENT OPERATIONS
-// =====================================================
-
-app.get(
-  "/api/clients/:id/operations",
-  async (req, res) => {
-    try {
-      const { id } = req.params;
-
-      const clientResult =
-        await pgQuery(
-          `
-          SELECT id
-          FROM clients
-          WHERE id = $1
-          LIMIT 1
-          `,
-          [id]
-        );
-
-      if (
-        clientResult.rows.length === 0
-      ) {
-        return res.status(404).json({
-          success: false,
-          message:
-            "Клиент не найден",
-        });
-      }
-
-      const result = await pgQuery(
-        `
-        SELECT
-          id,
-          type,
-          points,
-          reason,
-          created_at
-        FROM client_operations
-        WHERE client_id = $1
-        ORDER BY created_at DESC
-        `,
-        [id]
-      );
-
-      const operations =
         result.rows.map(
           (operation) => ({
-            id: operation.id,
-            type: operation.type,
-            points: Number(
-              operation.points || 0
-            ),
+            id:
+              operation.id,
+
+            type:
+              operation.type,
+
+            points:
+              Number(
+                operation.points || 0
+              ),
+
             reason:
               operation.reason || "",
+
             date:
-              operation.created_at ||
-              null,
+              operation.created_at,
           })
         );
 
@@ -1555,310 +1612,12 @@ app.get(
         success: true,
         operations,
       });
-    } catch (error) {
-      console.error(
-        "GET OPERATIONS ERROR:",
-        error
-      );
 
+    } catch (error) {
       return res.status(500).json({
         success: false,
         message:
           "Ошибка получения истории",
-        error: error.message,
-      });
-    }
-  }
-);
-
-// =====================================================
-// CREATE CLIENT
-// =====================================================
-
-app.post("/api/clients", async (req, res) => {
-  try {
-    const { name, phone } =
-      req.body || {};
-
-    if (
-      !name ||
-      !String(name).trim()
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Введите имя",
-      });
-    }
-
-    if (!phone) {
-      return res.status(400).json({
-        success: false,
-        message: "Введите телефон",
-      });
-    }
-
-    const normalizedPhone =
-      normalizePhone(phone);
-
-    const existingResult =
-      await pgQuery(
-        `
-        SELECT id
-        FROM clients
-        WHERE phone = $1
-        LIMIT 1
-        `,
-        [normalizedPhone]
-      );
-
-    if (
-      existingResult.rows.length > 0
-    ) {
-      return res.status(409).json({
-        success: false,
-        message:
-          "Клиент с таким номером телефона уже существует",
-      });
-    }
-
-    const clientId =
-      crypto.randomUUID();
-
-    const welcomeBonus = 100000;
-
-    const result = await pgQuery(
-      `
-      INSERT INTO clients (
-        id,
-        name,
-        phone,
-        points,
-        bonuses,
-        orders,
-        status,
-        role,
-        created_at,
-        updated_at
-      )
-      VALUES (
-        $1,
-        $2,
-        $3,
-        $4,
-        $5,
-        $6,
-        $7,
-        $8,
-        NOW(),
-        NOW()
-      )
-      RETURNING *
-      `,
-      [
-        clientId,
-        String(name).trim(),
-        normalizedPhone,
-        welcomeBonus,
-        welcomeBonus,
-        0,
-        "NEW CLIENT",
-        "user",
-      ]
-    );
-
-    const client = result.rows[0];
-
-    await pgQuery(
-      `
-      INSERT INTO client_operations (
-        id,
-        client_id,
-        type,
-        points,
-        reason,
-        created_at
-      )
-      VALUES (
-        $1,
-        $2,
-        $3,
-        $4,
-        $5,
-        NOW()
-      )
-      `,
-      [
-        crypto.randomUUID(),
-        clientId,
-        "add",
-        welcomeBonus,
-        "Приветственные бонусы",
-      ]
-    );
-
-    return res.status(201).json({
-      success: true,
-      client: formatClient(client),
-    });
-  } catch (error) {
-    console.error(
-      "CREATE CLIENT ERROR:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "Ошибка создания клиента",
-      error: error.message,
-    });
-  }
-});
-
-// =====================================================
-// UPDATE CLIENT
-// =====================================================
-
-app.patch(
-  "/api/clients/:id",
-  async (req, res) => {
-    try {
-      const { id } = req.params;
-
-      const {
-        name,
-        phone,
-        points,
-        bonuses,
-        status,
-        orders,
-      } = req.body || {};
-
-      const existingResult =
-        await pgQuery(
-          `
-          SELECT *
-          FROM clients
-          WHERE id = $1
-          LIMIT 1
-          `,
-          [id]
-        );
-
-      if (
-        existingResult.rows.length === 0
-      ) {
-        return res.status(404).json({
-          success: false,
-          message:
-            "Клиент не найден",
-        });
-      }
-
-      const current =
-        existingResult.rows[0];
-
-      const newName =
-        name !== undefined
-          ? String(name).trim()
-          : current.name;
-
-      const newPhone =
-        phone !== undefined
-          ? normalizePhone(phone)
-          : current.phone;
-
-      const newPoints =
-        points !== undefined
-          ? Number(points)
-          : Number(current.points || 0);
-
-      const newBonuses =
-        bonuses !== undefined
-          ? Number(bonuses)
-          : Number(
-              current.bonuses ||
-              newPoints
-            );
-
-      const newStatus =
-        status !== undefined
-          ? String(status)
-          : current.status;
-
-      const newOrders =
-        orders !== undefined
-          ? Number(orders)
-          : Number(current.orders || 0);
-
-      if (
-        phone !== undefined &&
-        newPhone !== current.phone
-      ) {
-        const phoneResult =
-          await pgQuery(
-            `
-            SELECT id
-            FROM clients
-            WHERE phone = $1
-            AND id != $2
-            LIMIT 1
-            `,
-            [newPhone, id]
-          );
-
-        if (
-          phoneResult.rows.length > 0
-        ) {
-          return res.status(409).json({
-            success: false,
-            message:
-              "Клиент с таким номером уже существует",
-          });
-        }
-      }
-
-      const result = await pgQuery(
-        `
-        UPDATE clients
-        SET
-          name = $2,
-          phone = $3,
-          points = $4,
-          bonuses = $5,
-          status = $6,
-          orders = $7,
-          updated_at = NOW()
-        WHERE id = $1
-        RETURNING *
-        `,
-        [
-          id,
-          newName,
-          newPhone,
-          newPoints,
-          newBonuses,
-          newStatus,
-          newOrders,
-        ]
-      );
-
-      return res.json({
-        success: true,
-        client: formatClient(
-          result.rows[0]
-        ),
-      });
-    } catch (error) {
-      console.error(
-        "UPDATE CLIENT ERROR:",
-        error
-      );
-
-      return res.status(500).json({
-        success: false,
-        message:
-          "Ошибка обновления клиента",
         error: error.message,
       });
     }
@@ -1873,7 +1632,8 @@ app.post(
   "/api/clients/:id/bonus/add",
   async (req, res) => {
     try {
-      const { id } = req.params;
+      const { id } =
+        req.params;
 
       const {
         points,
@@ -1918,22 +1678,16 @@ app.post(
       const client =
         clientResult.rows[0];
 
-      const currentPoints =
-        Number(
-          client.points || 0
-        );
-
-      const currentBonuses =
-        Number(
-          client.bonuses ??
-          currentPoints
-        );
-
       const newPoints =
-        currentPoints + amount;
+        Number(client.points || 0) +
+        amount;
 
       const newBonuses =
-        currentBonuses + amount;
+        Number(
+          client.bonuses ??
+          client.points ??
+          0
+        ) + amount;
 
       await pgQuery(
         `
@@ -1964,16 +1718,15 @@ app.post(
         VALUES (
           $1,
           $2,
+          'add',
           $3,
           $4,
-          $5,
           NOW()
         )
         `,
         [
           crypto.randomUUID(),
           id,
-          "add",
           amount,
           reason ||
             "Начисление бонусов",
@@ -1984,15 +1737,15 @@ app.post(
         success: true,
         message:
           "Бонусы начислены",
-        points: newPoints,
-        bonuses: newBonuses,
-      });
-    } catch (error) {
-      console.error(
-        "ADD BONUS ERROR:",
-        error
-      );
 
+        points:
+          newPoints,
+
+        bonuses:
+          newBonuses,
+      });
+
+    } catch (error) {
       return res.status(500).json({
         success: false,
         message:
@@ -2011,7 +1764,8 @@ app.post(
   "/api/clients/:id/bonus/remove",
   async (req, res) => {
     try {
-      const { id } = req.params;
+      const { id } =
+        req.params;
 
       const {
         points,
@@ -2020,17 +1774,6 @@ app.post(
 
       const amount =
         Number(points);
-
-      if (
-        !Number.isFinite(amount) ||
-        amount <= 0
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Некорректное количество бонусов",
-        });
-      }
 
       const clientResult =
         await pgQuery(
@@ -2056,18 +1799,16 @@ app.post(
       const client =
         clientResult.rows[0];
 
-      const currentPoints =
-        Number(
-          client.points || 0
-        );
-
       const currentBonuses =
         Number(
           client.bonuses ??
-          currentPoints
+          client.points ??
+          0
         );
 
       if (
+        !Number.isFinite(amount) ||
+        amount <= 0 ||
         amount > currentBonuses
       ) {
         return res.status(400).json({
@@ -2077,14 +1818,15 @@ app.post(
         });
       }
 
+      const newBonuses =
+        currentBonuses - amount;
+
       const newPoints =
         Math.max(
           0,
-          currentPoints - amount
+          Number(client.points || 0) -
+          amount
         );
-
-      const newBonuses =
-        currentBonuses - amount;
 
       await pgQuery(
         `
@@ -2115,16 +1857,15 @@ app.post(
         VALUES (
           $1,
           $2,
+          'remove',
           $3,
           $4,
-          $5,
           NOW()
         )
         `,
         [
           crypto.randomUUID(),
           id,
-          "remove",
           amount,
           reason ||
             "Списание бонусов",
@@ -2135,15 +1876,15 @@ app.post(
         success: true,
         message:
           "Бонусы списаны",
-        points: newPoints,
-        bonuses: newBonuses,
-      });
-    } catch (error) {
-      console.error(
-        "REMOVE BONUS ERROR:",
-        error
-      );
 
+        points:
+          newPoints,
+
+        bonuses:
+          newBonuses,
+      });
+
+    } catch (error) {
       return res.status(500).json({
         success: false,
         message:
@@ -2179,12 +1920,8 @@ app.post(
         success: true,
         result,
       });
-    } catch (error) {
-      console.error(
-        "BONUS CALCULATION ERROR:",
-        error
-      );
 
+    } catch (error) {
       return res.status(500).json({
         success: false,
         message:
@@ -2209,6 +1946,7 @@ app.get(
       success: true,
       message:
         "KUSAI MAX API подключен",
+
       serverTime:
         new Date().toISOString(),
     });
@@ -2227,9 +1965,10 @@ app.get(
     }
 
     try {
-      let phone = String(
-        req.query.phone || ""
-      ).trim();
+      let phone =
+        String(
+          req.query.phone || ""
+        ).trim();
 
       if (!phone) {
         return res.status(400).json({
@@ -2277,7 +2016,8 @@ app.get(
         success: true,
 
         client: {
-          id: client.id,
+          id:
+            client.id,
 
           name:
             client.name || "",
@@ -2285,16 +2025,18 @@ app.get(
           phone:
             client.phone || "",
 
-          points: Number(
-            client.bonuses ??
-            client.points ??
-            0
-          ),
+          points:
+            Number(
+              client.bonuses ??
+              client.points ??
+              0
+            ),
 
-          bonuses: Number(
-            client.bonuses ??
-            0
-          ),
+          bonuses:
+            Number(
+              client.bonuses ??
+              0
+            ),
 
           status:
             client.status ||
@@ -2308,6 +2050,7 @@ app.get(
               : null,
         },
       });
+
     } catch (error) {
       console.error(
         "Ошибка поиска клиента:",
@@ -2328,122 +2071,540 @@ app.get(
 );
 
 // =====================================================
-// DATABASE DEBUG
+// PRODUCTS
 // =====================================================
 
-app.get("/api/debug/tables", async (req, res) => {
-  try {
-    const result = await pgQuery(`
-      SELECT table_name
-      FROM information_schema.tables
-      WHERE table_schema = 'public'
-      ORDER BY table_name
-    `);
-
-    return res.json({
-      success: true,
-      tables: result.rows.map(
-        (row) => row.table_name
-      ),
-    });
-  } catch (error) {
-    console.error(
-      "DATABASE TABLES ERROR:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "Ошибка получения таблиц",
-      error: error.message,
-    });
-  }
-});
+// =====================================================
+// GET ALL PRODUCTS
+// ВАЖНО:
+// ТОВАРЫ НЕ ФИЛЬТРУЮТСЯ ПО ГРУППЕ ИЛИ ПОДГРУППЕ
+// =====================================================
 
 app.get(
-  "/api/debug/products-columns",
+  "/api/products",
   async (req, res) => {
     try {
-      const result = await pgQuery(`
+      const {
+        groupId,
+        subgroupId,
+        includeHidden,
+        includeArchived,
+      } = req.query;
+
+      let sql = `
         SELECT
-          column_name,
-          data_type
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-        AND table_name = 'products'
-        ORDER BY ordinal_position
-      `);
+          p.id,
+
+          p.title,
+          p.name,
+          p.price,
+          p.images,
+
+          p.group_id,
+          p.subgroup_id,
+
+          pg.name AS group_name,
+          ps.name AS subgroup_name,
+
+          p.category,
+          p.category_group,
+          p.category_path,
+          p.category_leaf,
+
+          p.badge,
+          p.rating,
+          p.reviews,
+          p.delivery,
+
+          p.in_stock,
+          p.stock,
+          p.reserve,
+          p.in_transit,
+          p.quantity,
+
+          p.description,
+
+          p.memory,
+          p.color,
+          p.warranty,
+
+          p.type,
+          p.product,
+          p.characteristics,
+          p.variants_count,
+
+          p.weight,
+          p.volume,
+
+          p.article,
+          p.code,
+          p.external_code,
+          p.barcode,
+
+          p.archived,
+          p.hidden,
+
+          p.buy_price,
+          p.updated_at,
+          p.synced_at
+
+        FROM products p
+
+        LEFT JOIN product_groups pg
+          ON pg.id = p.group_id
+
+        LEFT JOIN product_subgroups ps
+          ON ps.id = p.subgroup_id
+
+        WHERE 1=1
+      `;
+
+      const values = [];
+
+      // По умолчанию не показываем архив
+
+      if (includeArchived !== "true") {
+        sql += `
+          AND p.archived IS NOT TRUE
+        `;
+      }
+
+      // hidden товары показываем в админке,
+      // если includeHidden=true
+
+      if (includeHidden !== "true") {
+        sql += `
+          AND p.hidden IS NOT TRUE
+        `;
+      }
+
+      // Фильтр по группе
+
+      if (groupId) {
+        values.push(groupId);
+
+        sql += `
+          AND p.group_id = $${values.length}
+        `;
+      }
+
+      // Фильтр по подгруппе
+
+      if (subgroupId) {
+        values.push(subgroupId);
+
+        sql += `
+          AND p.subgroup_id = $${values.length}
+        `;
+      }
+
+      sql += `
+        ORDER BY
+          p.updated_at DESC NULLS LAST,
+          p.title ASC
+      `;
+
+      const result =
+        await pgQuery(
+          sql,
+          values
+        );
+
+      const products =
+        result.rows.map((item) => ({
+          id:
+            item.id,
+
+          // Основное
+
+          title:
+            item.title ||
+            item.name ||
+            "",
+
+          name:
+            item.name ||
+            item.title ||
+            "",
+
+          price:
+            Number(
+              item.price || 0
+            ),
+
+          // Изображения
+
+          images:
+            Array.isArray(item.images)
+              ? item.images
+              : [],
+
+          // =================================================
+          // ГРУППА
+          // =================================================
+
+          groupId:
+            item.group_id ||
+            null,
+
+          groupName:
+            item.group_name ||
+            "",
+
+          // =================================================
+          // ПОДГРУППА
+          // =================================================
+
+          subgroupId:
+            item.subgroup_id ||
+            null,
+
+          subgroupName:
+            item.subgroup_name ||
+            "",
+
+          // Старые категории
+
+          category:
+            item.category || "",
+
+          categoryGroup:
+            item.category_group || "",
+
+          categoryPath:
+            item.category_path || [],
+
+          categoryLeaf:
+            item.category_leaf || "",
+
+          // Дополнительно
+
+          badge:
+            item.badge || "",
+
+          rating:
+            Number(
+              item.rating || 0
+            ),
+
+          reviews:
+            Number(
+              item.reviews || 0
+            ),
+
+          delivery:
+            item.delivery || "",
+
+          // Наличие
+
+          inStock:
+            Boolean(
+              item.in_stock
+            ),
+
+          stock:
+            Number(
+              item.stock || 0
+            ),
+
+          reserve:
+            Number(
+              item.reserve || 0
+            ),
+
+          inTransit:
+            Number(
+              item.in_transit || 0
+            ),
+
+          quantity:
+            Number(
+              item.quantity || 0
+            ),
+
+          // Описание
+
+          description:
+            item.description || "",
+
+          // Характеристики
+
+          memory:
+            item.memory || "",
+
+          color:
+            item.color || "",
+
+          warranty:
+            item.warranty || "",
+
+          type:
+            item.type || "",
+
+          product:
+            item.product || "",
+
+          characteristics:
+            item.characteristics || {},
+
+          variantsCount:
+            Number(
+              item.variants_count || 0
+            ),
+
+          weight:
+            item.weight !== null &&
+            item.weight !== undefined
+              ? Number(item.weight)
+              : null,
+
+          volume:
+            item.volume !== null &&
+            item.volume !== undefined
+              ? Number(item.volume)
+              : null,
+
+          // Артикулы
+
+          article:
+            item.article || "",
+
+          code:
+            item.code || "",
+
+          externalCode:
+            item.external_code || "",
+
+          barcode:
+            item.barcode || "",
+
+          // Статусы
+
+          archived:
+            Boolean(
+              item.archived
+            ),
+
+          hidden:
+            Boolean(
+              item.hidden
+            ),
+
+          buyPrice:
+            item.buy_price !== null &&
+            item.buy_price !== undefined
+              ? Number(item.buy_price)
+              : null,
+
+          updatedAt:
+            item.updated_at,
+
+          syncedAt:
+            item.synced_at,
+        }));
 
       return res.json({
         success: true,
-        columns: result.rows,
+
+        count:
+          products.length,
+
+        products,
       });
+
     } catch (error) {
       console.error(
-        "PRODUCTS COLUMNS ERROR:",
+        "GET PRODUCTS ERROR:",
         error
       );
 
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка получения структуры products",
+          "Ошибка загрузки товаров",
         error: error.message,
       });
     }
   }
 );
 
-app.get("/api/debug/columns", async (req, res) => {
-  try {
-    const { table } = req.query;
+// =====================================================
+// GET PRODUCTS BY GROUP
+// =====================================================
 
-    if (!table) {
-      return res.status(400).json({
+app.get(
+  "/api/product-groups/:id/products",
+  async (req, res) => {
+    try {
+      const { id } =
+        req.params;
+
+      const result =
+        await pgQuery(
+          `
+          SELECT *
+          FROM products
+          WHERE group_id = $1
+          AND archived IS NOT TRUE
+          ORDER BY updated_at DESC
+          `,
+          [id]
+        );
+
+      return res.json({
+        success: true,
+        count:
+          result.rows.length,
+        products:
+          result.rows,
+      });
+
+    } catch (error) {
+      return res.status(500).json({
         success: false,
-        message: "Укажите table",
+        message:
+          "Ошибка загрузки товаров группы",
+        error: error.message,
       });
     }
-
-    const result = await pgQuery(
-      `
-      SELECT
-        column_name,
-        data_type
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-      AND table_name = $1
-      ORDER BY ordinal_position
-      `,
-      [table]
-    );
-
-    return res.json({
-      success: true,
-      table,
-      columns: result.rows,
-    });
-  } catch (error) {
-    console.error(
-      "Ошибка получения колонок:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "Ошибка получения структуры таблицы",
-      error: error.message,
-    });
   }
-});
+);
+
+// =====================================================
+// GET PRODUCTS BY SUBGROUP
+// =====================================================
+
+app.get(
+  "/api/product-subgroups/:id/products",
+  async (req, res) => {
+    try {
+      const { id } =
+        req.params;
+
+      const result =
+        await pgQuery(
+          `
+          SELECT *
+          FROM products
+          WHERE subgroup_id = $1
+          AND archived IS NOT TRUE
+          ORDER BY updated_at DESC
+          `,
+          [id]
+        );
+
+      return res.json({
+        success: true,
+        count:
+          result.rows.length,
+        products:
+          result.rows,
+      });
+
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка загрузки товаров подгруппы",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
+// DEBUG TABLES
+// =====================================================
+
+app.get(
+  "/api/debug/tables",
+  async (req, res) => {
+    try {
+      const result =
+        await pgQuery(`
+          SELECT table_name
+          FROM information_schema.tables
+          WHERE table_schema = 'public'
+          ORDER BY table_name
+        `);
+
+      return res.json({
+        success: true,
+
+        tables:
+          result.rows.map(
+            (row) =>
+              row.table_name
+          ),
+      });
+
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка получения таблиц",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
+// DEBUG COLUMNS
+// =====================================================
+
+app.get(
+  "/api/debug/columns",
+  async (req, res) => {
+    try {
+      const { table } =
+        req.query;
+
+      if (!table) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Укажите table",
+        });
+      }
+
+      const result =
+        await pgQuery(
+          `
+          SELECT
+            column_name,
+            data_type
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+          AND table_name = $1
+          ORDER BY ordinal_position
+          `,
+          [table]
+        );
+
+      return res.json({
+        success: true,
+        table,
+        columns:
+          result.rows,
+      });
+
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка получения структуры таблицы",
+        error: error.message,
+      });
+    }
+  }
+);
 
 // =====================================================
 // ADD GROUP_ID TO PRODUCTS
 // =====================================================
 
-app.post(
+app.get(
   "/api/debug/add-products-group-id",
   async (req, res) => {
     try {
@@ -2455,14 +2616,10 @@ app.post(
       return res.json({
         success: true,
         message:
-          "Колонка group_id успешно добавлена в products",
+          "Колонка group_id добавлена",
       });
-    } catch (error) {
-      console.error(
-        "ADD GROUP_ID ERROR:",
-        error
-      );
 
+    } catch (error) {
       return res.status(500).json({
         success: false,
         message:
@@ -2477,7 +2634,7 @@ app.post(
 // ADD SUBGROUP_ID TO PRODUCTS
 // =====================================================
 
-app.post(
+app.get(
   "/api/debug/add-products-subgroup-id",
   async (req, res) => {
     try {
@@ -2489,8 +2646,9 @@ app.post(
       return res.json({
         success: true,
         message:
-          "Колонка subgroup_id успешно добавлена в products",
+          "Колонка subgroup_id добавлена",
       });
+
     } catch (error) {
       console.error(
         "ADD SUBGROUP_ID ERROR:",
@@ -2508,229 +2666,73 @@ app.post(
 );
 
 // =====================================================
-// PRODUCTS
-// POSTGRESQL
+// CONNECT PRODUCT TO GROUP
 // =====================================================
 
-// =====================================================
-// GET ALL PRODUCTS
-// =====================================================
+app.patch(
+  "/api/products/:id/group",
+  async (req, res) => {
+    try {
+      const { id } =
+        req.params;
 
-app.get("/api/products", async (req, res) => {
-  try {
-    const result = await pgQuery(`
-      SELECT
-        id,
-        title,
-        name,
-        price,
-        images,
+      const {
+        groupId,
+        subgroupId,
+      } = req.body || {};
 
-        group_id,
-        subgroup_id,
+      const result =
+        await pgQuery(
+          `
+          UPDATE products
+          SET
+            group_id = $2,
+            subgroup_id = $3,
+            updated_at = NOW()
+          WHERE id = $1
+          RETURNING *
+          `,
+          [
+            id,
+            groupId || null,
+            subgroupId || null,
+          ]
+        );
 
-        category,
-        category_group,
-        category_path,
-        category_leaf,
+      if (
+        result.rows.length === 0
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Товар не найден",
+        });
+      }
 
-        badge,
-        rating,
-        reviews,
-        delivery,
-
-        in_stock,
-        stock,
-        reserve,
-        in_transit,
-        quantity,
-
-        description,
-        memory,
-        color,
-        warranty,
-        type,
-        product,
-        characteristics,
-        variants_count,
-
-        weight,
-        volume,
-
-        article,
-        code,
-        external_code,
-        barcode,
-
-        archived,
-        updated_at,
-        hidden,
-        buy_price,
-        synced_at
-
-      FROM products
-
-      WHERE archived IS NOT TRUE
-      AND hidden IS NOT TRUE
-
-      ORDER BY updated_at DESC NULLS LAST
-    `);
-
-    const products =
-      result.rows.map((item) => ({
-        id: item.id,
-
-        title:
-          item.title ||
-          item.name ||
-          "",
-
-        name:
-          item.name ||
-          item.title ||
-          "",
-
-        price:
-          Number(item.price || 0),
-
-        images:
-          Array.isArray(item.images)
-            ? item.images
-            : [],
-
-        // Группа
-
-        groupId:
-          item.group_id || null,
-
-        // Подгруппа
-
-        subgroupId:
-          item.subgroup_id || null,
-
-        // Старые категории
-
-        category:
-          item.category || "",
-
-        categoryGroup:
-          item.category_group || "",
-
-        categoryPath:
-          item.category_path || [],
-
-        categoryLeaf:
-          item.category_leaf || "",
-
-        badge:
-          item.badge || "",
-
-        rating:
-          Number(item.rating || 0),
-
-        reviews:
-          Number(item.reviews || 0),
-
-        delivery:
-          item.delivery || "",
-
-        inStock:
-          Boolean(item.in_stock),
-
-        stock:
-          Number(item.stock || 0),
-
-        reserve:
-          Number(item.reserve || 0),
-
-        inTransit:
-          Number(item.in_transit || 0),
-
-        quantity:
-          Number(item.quantity || 0),
-
-        description:
-          item.description || "",
-
-        memory:
-          item.memory || "",
-
-        color:
-          item.color || "",
-
-        warranty:
-          item.warranty || "",
-
-        type:
-          item.type || "",
+      return res.json({
+        success: true,
+        message:
+          "Категория товара обновлена",
 
         product:
-          item.product || "",
+          result.rows[0],
+      });
 
-        characteristics:
-          item.characteristics || {},
+    } catch (error) {
+      console.error(
+        "UPDATE PRODUCT GROUP ERROR:",
+        error
+      );
 
-        variantsCount:
-          Number(
-            item.variants_count || 0
-          ),
-
-        weight: item.weight
-          ? Number(item.weight)
-          : null,
-
-        volume: item.volume
-          ? Number(item.volume)
-          : null,
-
-        article:
-          item.article || "",
-
-        code:
-          item.code || "",
-
-        externalCode:
-          item.external_code || "",
-
-        barcode:
-          item.barcode || "",
-
-        archived:
-          Boolean(item.archived),
-
-        hidden:
-          Boolean(item.hidden),
-
-        buyPrice: item.buy_price
-          ? Number(item.buy_price)
-          : null,
-
-        updatedAt:
-          item.updated_at,
-
-        syncedAt:
-          item.synced_at,
-      }));
-
-    return res.json({
-      success: true,
-      count: products.length,
-      products,
-    });
-  } catch (error) {
-    console.error(
-      "GET PRODUCTS ERROR:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "Ошибка загрузки товаров",
-      error: error.message,
-    });
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка обновления категории товара",
+        error: error.message,
+      });
+    }
   }
-});
+);
 
 // =====================================================
 // UNKNOWN ROUTE
@@ -2739,13 +2741,16 @@ app.get("/api/products", async (req, res) => {
 app.use((req, res) => {
   return res.status(404).json({
     success: false,
-    message: "API route not found",
-    path: req.path,
+    message:
+      "API route not found",
+
+    path:
+      req.path,
   });
 });
 
 // =====================================================
-// START SERVER
+// SERVER
 // =====================================================
 
 const PORT =
