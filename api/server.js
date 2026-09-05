@@ -1891,54 +1891,7 @@ app.post("/api/product-groups/:id/subgroups", async (req, res) => {
 // POSTGRESQL
 // =====================================================
 
-// =====================================================
-// GET ALL PRODUCTS
-// =====================================================
 
-app.get("/api/products", async (req, res) => {
-  try {
-    const result = await pgQuery(`
-      SELECT *
-      FROM products
-      ORDER BY updated_at DESC NULLS LAST
-    `);
-
-    const products = result.rows.map((product) => ({
-      id: product.id,
-      name: product.name,
-      description: product.description || "",
-      price: Number(product.price || 0),
-      oldPrice: product.old_price
-        ? Number(product.old_price)
-        : null,
-      groupId: product.group_id || null,
-      brand: product.brand || "",
-      model: product.model || "",
-      color: product.color || "",
-      memory: product.memory || "",
-      sim: product.sim || "",
-      images: product.images || [],
-      status: product.status || "available",
-      quantity: Number(product.quantity || 0),
-      createdAt: product.created_at,
-      updatedAt: product.updated_at,
-    }));
-
-    return res.json({
-      success: true,
-      count: products.length,
-      products,
-    });
-  } catch (error) {
-    console.error("GET PRODUCTS ERROR:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Ошибка загрузки товаров",
-      error: error.message,
-    });
-  }
-});
 // =====================================================
 // DATABASE TABLES DEBUG
 // =====================================================
@@ -2215,29 +2168,6 @@ app.get("/api/debug/columns", async (req, res) => {
   }
 });
 
-app.get("/api/product-groups", async (req, res) => {
-  try {
-    const result = await query(`
-      SELECT *
-      FROM product_groups
-      WHERE parent_id IS NULL
-      ORDER BY sort_order ASC, name ASC
-    `);
-
-    res.json({
-      success: true,
-      groups: result.rows,
-    });
-  } catch (error) {
-    console.error("Ошибка загрузки групп:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Ошибка загрузки групп",
-      error: error.message,
-    });
-  }
-});
 
 // =====================================================
 // UNKNOWN ROUTE
