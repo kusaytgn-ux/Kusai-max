@@ -1846,7 +1846,7 @@ app.get("/api/products", async (req, res) => {
     const result = await pgQuery(`
       SELECT *
       FROM products
-      ORDER BY created_at DESC
+      ORDER BY updated_at DESC NULLS LAST
     `);
 
     const products = result.rows.map((product) => ({
