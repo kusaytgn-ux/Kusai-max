@@ -4164,6 +4164,159 @@ app.use((req, res) => {
 });
 
 // =====================================================
+// GET CLIENT BY ID
+// =====================================================
+
+app.get("/api/clients/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pgQuery(
+      `
+      SELECT *
+      FROM clients
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Клиент не найден",
+      });
+    }
+
+    return res.json({
+      success: true,
+      client: formatClient(result.rows[0]),
+    });
+
+  } catch (error) {
+
+    console.error(
+      "GET CLIENT ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка получения клиента",
+      error: error.message,
+    });
+  }
+});
+
+// =====================================================
+// DELETE CLIENTS
+// =====================================================
+
+app.delete(
+  "/api/clients/:id",
+  async (req, res) => {
+    const client = await pgQuery(
+      "BEGIN"
+    );
+
+    try {
+      const { id } = req.params;
+
+      const existingResult =
+        await pgQuery(
+          `
+          SELECT
+            id,
+            login
+          FROM clients
+          WHERE id = $1
+          LIMIT 1
+          `,
+          [id]
+        );
+
+      if (
+        existingResult.rows.length === 0
+      ) {
+        await pgQuery("ROLLBACK");
+
+        return res.status(404).json({
+          success: false,
+          message: "Клиент не найден",
+        });
+      }
+
+      const userLogin =
+        existingResult.rows[0].login;
+
+      // Удаляем историю операций
+
+      await pgQuery(
+        `
+        DELETE FROM client_operations
+        WHERE client_id = $1
+        `,
+        [id]
+      );
+
+      // Удаляем сообщения пользователя
+
+      if (userLogin) {
+        await pgQuery(
+          `
+          DELETE FROM messages
+          WHERE user_login = $1
+          `,
+          [userLogin]
+        );
+      }
+
+      // Удаляем самого клиента
+
+      await pgQuery(
+        `
+        DELETE FROM clients
+        WHERE id = $1
+        `,
+        [id]
+      );
+
+      await pgQuery("COMMIT");
+
+      console.log(
+        "CLIENT DELETED:",
+        id
+      );
+
+      return res.json({
+        success: true,
+        message:
+          "Клиент успешно удалён",
+        id,
+      });
+
+    } catch (error) {
+
+      await pgQuery(
+        "ROLLBACK"
+      );
+
+      console.error(
+        "DELETE CLIENT ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Ошибка удаления клиента",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
 // SERVER
 // =====================================================
 
