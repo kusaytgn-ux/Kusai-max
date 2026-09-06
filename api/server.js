@@ -4164,6 +4164,51 @@ app.use((req, res) => {
 });
 
 // =====================================================
+// GET CLIENT BY PHONE
+// =====================================================
+
+app.get("/api/clients/phone/:phone", async (req, res) => {
+  try {
+    const phone = decodeURIComponent(req.params.phone);
+
+    const result = await pgQuery(
+      `
+      SELECT *
+      FROM clients
+      WHERE phone = $1
+      LIMIT 1
+      `,
+      [phone]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Клиент не найден",
+      });
+    }
+
+    return res.json({
+      success: true,
+      client: result.rows[0],
+    });
+
+  } catch (error) {
+
+    console.error(
+      "GET CLIENT BY PHONE ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка получения клиента",
+      error: error.message,
+    });
+  }
+});
+
+// =====================================================
 // GET CLIENT BY ID
 // =====================================================
 
