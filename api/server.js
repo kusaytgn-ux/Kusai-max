@@ -4204,6 +4204,49 @@ app.get("/api/clients/phone/:phone", async (req, res) => {
 });
 
 // =====================================================
+// GET CLIENT OPERATIONS
+// =====================================================
+
+app.get(
+  "/api/clients/:id/operations",
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const result = await pgQuery(
+        `
+        SELECT *
+        FROM client_operations
+        WHERE client_id = $1
+        ORDER BY created_at DESC
+        `,
+        [id]
+      );
+
+      return res.json({
+        success: true,
+        operations: result.rows,
+      });
+
+    } catch (error) {
+
+      console.error(
+        "GET CLIENT OPERATIONS ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Не удалось загрузить историю операций",
+        error:
+          error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
 // GET CLIENT OPERATIONS BY PHONE
 // =====================================================
 
