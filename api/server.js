@@ -10,6 +10,55 @@ import { query as pgQuery } from "./postgres.js";
 const app = express();
 
 // =====================================================
+// TRADE-IN TABLE
+// =====================================================
+
+async function initializeTradeInTable() {
+  try {
+    await pgQuery(`
+      CREATE TABLE IF NOT EXISTS trade_in (
+        id UUID PRIMARY KEY,
+
+        title TEXT NOT NULL,
+
+        description TEXT NOT NULL DEFAULT '',
+
+        price NUMERIC NOT NULL DEFAULT 0,
+
+        memory TEXT NOT NULL DEFAULT '',
+
+        color TEXT NOT NULL DEFAULT '',
+
+        condition TEXT NOT NULL DEFAULT '',
+
+        warranty TEXT NOT NULL DEFAULT '',
+
+        images JSONB NOT NULL DEFAULT '[]'::jsonb,
+
+        status TEXT NOT NULL DEFAULT 'available',
+
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    await pgQuery(`
+      CREATE INDEX IF NOT EXISTS idx_trade_in_created_at
+      ON trade_in(created_at DESC)
+    `);
+
+    console.log("✅ Таблица trade_in готова");
+
+  } catch (error) {
+    console.error(
+      "❌ Ошибка создания таблицы trade_in:",
+      error
+    );
+
+    throw error;
+  }
+}
+
+// =====================================================
 // MIDDLEWARE
 // =====================================================
 
@@ -3791,18 +3840,33 @@ app.use((req, res) => {
 // SERVER
 // =====================================================
 
+
 const PORT =
   process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-  console.log(
-    `🚀 KUSAI MAX API запущен на порту ${PORT}`
-  );
+  initializeTradeInTable()
+  .then(() => {
 
-  console.log(
+    app.listen(PORT, () => {
+      console.log(
+        `🚀 KUSAI MAX API запущен на порту ${PORT}`
+      );
+      console.log(
     `📡 http://localhost:${PORT}`
   );
-});
+    });
+
+  })
+  .catch((error) => {
+
+    console.error(
+      "❌ Не удалось запустить сервер:",
+      error
+    );
+
+    process.exit(1);
+
+  });
 
 export default app; 
 //d
