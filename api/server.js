@@ -1781,58 +1781,63 @@ app.get(
   "/api/clients/:id/operations",
   async (req, res) => {
     try {
-      const { id } =
-        req.params;
-
-      const result =
-        await pgQuery(
-          `
-          SELECT
-            id,
-            type,
-            points,
-            reason,
-            created_at
-          FROM client_operations
-          WHERE client_id = $1
-          ORDER BY created_at DESC
-          `,
-          [id]
-        );
-
-      const operations =
-        result.rows.map(
-          (operation) => ({
-            id:
-              operation.id,
-
-            type:
-              operation.type,
-
-            points:
-              Number(
-                operation.points || 0
-              ),
-
-            reason:
-              operation.reason || "",
-
-            date:
-              operation.created_at,
-          })
-        );
+      const result = await pgQuery(
+        `
+        SELECT
+          id,
+          type,
+          points,
+          reason,
+          created_at
+        FROM client_operations
+        WHERE client_id = $1
+        ORDER BY created_at DESC, id DESC
+        `,
+        [req.params.id]
+      );
 
       return res.json({
         success: true,
-        operations,
+
+        operations: result.rows.map((row) => ({
+          id: row.id,
+
+          type: row.type || "",
+
+          points: Number(row.points || 0),
+
+          amount: Number(row.points || 0),
+
+          bonuses: Number(row.points || 0),
+
+          reason: row.reason || "",
+
+          productName:
+            row.reason || "Операция",
+
+          operationDate:
+            row.created_at,
+
+          createdAt:
+            row.created_at,
+        })),
       });
 
     } catch (error) {
+
+      console.error(
+        "GET CLIENT OPERATIONS ERROR:",
+        error
+      );
+
       return res.status(500).json({
         success: false,
+
         message:
-          "Ошибка получения истории",
-        error: error.message,
+          "Ошибка загрузки истории операций",
+
+        error:
+          error.message,
       });
     }
   }
@@ -4260,41 +4265,39 @@ app.get("/api/clients/:id", async (req, res) => {
 app.delete(
   "/api/clients/:id",
   async (req, res) => {
-    const client = await pgQuery(
-      "BEGIN"
-    );
+
+    const { id } = req.params;
 
     try {
-      const { id } = req.params;
 
-      const existingResult =
-        await pgQuery(
-          `
-          SELECT
-            id,
-            login
-          FROM clients
-          WHERE id = $1
-          LIMIT 1
-          `,
-          [id]
-        );
+      const existing = await pgQuery(
+        `
+        SELECT
+          id,
+          login
+        FROM clients
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [id]
+      );
 
-      if (
-        existingResult.rows.length === 0
-      ) {
-        await pgQuery("ROLLBACK");
+      if (existing.rows.length === 0) {
 
         return res.status(404).json({
           success: false,
           message: "Клиент не найден",
         });
+
       }
 
-      const userLogin =
-        existingResult.rows[0].login;
+      const client = existing.rows[0];
 
-      // Удаляем историю операций
+      /*
+      ==========================================
+      УДАЛЯЕМ ИСТОРИЮ ОПЕРАЦИЙ
+      ==========================================
+      */
 
       await pgQuery(
         `
@@ -4304,47 +4307,50 @@ app.delete(
         [id]
       );
 
-      // Удаляем сообщения пользователя
+      /*
+      ==========================================
+      УДАЛЯЕМ СООБЩЕНИЯ КЛИЕНТА
+      ==========================================
+      */
 
-      if (userLogin) {
+      if (client.login) {
+
         await pgQuery(
           `
           DELETE FROM messages
           WHERE user_login = $1
           `,
-          [userLogin]
+          [client.login]
         );
+
       }
 
-      // Удаляем самого клиента
+      /*
+      ==========================================
+      УДАЛЯЕМ КЛИЕНТА
+      ==========================================
+      */
 
-      await pgQuery(
+      const result = await pgQuery(
         `
         DELETE FROM clients
         WHERE id = $1
+        RETURNING id
         `,
         [id]
       );
 
-      await pgQuery("COMMIT");
-
-      console.log(
-        "CLIENT DELETED:",
-        id
-      );
-
       return res.json({
         success: true,
+
         message:
           "Клиент успешно удалён",
-        id,
+
+        id:
+          result.rows[0].id,
       });
 
     } catch (error) {
-
-      await pgQuery(
-        "ROLLBACK"
-      );
 
       console.error(
         "DELETE CLIENT ERROR:",
@@ -4353,9 +4359,12 @@ app.delete(
 
       return res.status(500).json({
         success: false,
+
         message:
           "Ошибка удаления клиента",
-        error: error.message,
+
+        error:
+          error.message,
       });
     }
   }
