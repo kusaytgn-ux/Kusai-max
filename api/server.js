@@ -4398,8 +4398,7 @@ app.delete(
 app.use((req, res) => {
   return res.status(404).json({
     success: false,
-    message:
-      "API route not found",
+    message: "API route not found",
 
     path:
       req.path,

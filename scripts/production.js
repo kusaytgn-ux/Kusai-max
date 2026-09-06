@@ -727,55 +727,55 @@ app.delete(
 |--------------------------------------------------------------------------
 */
 
-app.get("/api/clients/phone/:phone", async (req, res) => {
-  try {
-    const phone = normalizePhone(req.params.phone);
+app.get(
+  "/api/clients/phone/:phone",
+  async (req, res) => {
+    try {
+      const phone = normalizePhone(
+        decodeURIComponent(req.params.phone)
+      );
 
-    const result = await pgQuery(
-      `
-      SELECT
-        id,
-        name,
-        phone,
-        login,
-        points,
-        bonuses,
-        orders,
-        status,
-        role
-      FROM clients
-      WHERE
-        regexp_replace(phone, '\\D', '', 'g') =
-        regexp_replace($1, '\\D', '', 'g')
-        OR phone = $1
-      LIMIT 1
-      `,
-      [phone]
-    );
+      const result = await pgQuery(
+        `
+        SELECT *
+        FROM clients
+        WHERE phone = $1
+        LIMIT 1
+        `,
+        [phone]
+      );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Клиент не найден",
+        });
+      }
+
+      return res.json({
+        success: true,
+        client: formatClient(
+          result.rows[0]
+        ),
+      });
+
+    } catch (error) {
+
+      console.error(
+        "GET CLIENT BY PHONE ERROR:",
+        error
+      );
+
+      return res.status(500).json({
         success: false,
-        message: "Клиент не найден",
+        message:
+          "Ошибка получения клиента",
+        error:
+          error.message,
       });
     }
-
-    return res.json({
-      success: true,
-      client: serializeClient(result.rows[0]),
-    });
-  } catch (error) {
-    console.error(
-      "GET /api/clients/phone/:phone failed:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message: "Ошибка поиска клиента",
-    });
   }
-});
+);
 
 /*
 |--------------------------------------------------------------------------
