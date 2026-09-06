@@ -49,30 +49,30 @@ const API_URL = (
 ).replace(/\/$/, "");
 
 function AdminClientPage() {
-  const { id } = useParams();
+  const { phone } = useParams();
 
   const [client, setClient] = useState<Client | null>(null);
   const [operations, setOperations] = useState<Operation[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!id) {
+    if (!phone) {
       setLoading(false);
       return;
     }
 
-    const clientId = id;
+    const clientPhone = phone;
 
     async function load() {
       try {
         setLoading(true);
 
         const clientUrl =
-          `${API_URL}/api/clients/${encodeURIComponent(clientId)}`;
+          `${API_URL}/api/clients/phone/${encodeURIComponent(clientPhone)}`;
 
         const operationsUrl =
-          `${API_URL}/api/clients/${encodeURIComponent(
-            clientId
+          `${API_URL}/api/clients/phone/${encodeURIComponent(
+            clientPhone
           )}/operations`;
 
         const [clientResponse, operationsResponse] =
@@ -122,7 +122,7 @@ function AdminClientPage() {
     }
 
     void load();
-  }, [id]);
+  }, [phone]);
 
   const purchases = useMemo(() => {
     return operations.filter((item) => {

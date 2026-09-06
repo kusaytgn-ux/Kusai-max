@@ -46,11 +46,11 @@ async function initializeTradeInTable() {
       ON trade_in(created_at DESC)
     `);
 
-    console.log("✅ Таблица trade_in готова");
+    console.log("вњ… РўР°Р±Р»РёС†Р° trade_in РіРѕС‚РѕРІР°");
 
   } catch (error) {
     console.error(
-      "❌ Ошибка создания таблицы trade_in:",
+      "вќЊ РћС€РёР±РєР° СЃРѕР·РґР°РЅРёСЏ С‚Р°Р±Р»РёС†С‹ trade_in:",
       error
     );
 
@@ -85,7 +85,7 @@ function check1CAccess(req, res) {
   if (apiKey !== ONE_C_API_KEY) {
     res.status(403).json({
       success: false,
-      message: "Нет доступа",
+      message: "РќРµС‚ РґРѕСЃС‚СѓРїР°",
     });
 
     return false;
@@ -148,7 +148,7 @@ function formatClient(client) {
 app.get("/", (req, res) => {
   return res.json({
     success: true,
-    message: "KUSAI MAX API работает",
+    message: "KUSAI MAX API СЂР°Р±РѕС‚Р°РµС‚",
     serverTime: new Date().toISOString(),
   });
 });
@@ -156,7 +156,7 @@ app.get("/", (req, res) => {
 app.get("/api", (req, res) => {
   return res.json({
     success: true,
-    message: "KUSAI MAX API работает",
+    message: "KUSAI MAX API СЂР°Р±РѕС‚Р°РµС‚",
   });
 });
 
@@ -166,14 +166,14 @@ app.get("/api/health", async (req, res) => {
 
     return res.json({
       success: true,
-      message: "KUSAI MAX API подключен",
-      database: "PostgreSQL подключен",
+      message: "KUSAI MAX API РїРѕРґРєР»СЋС‡РµРЅ",
+      database: "PostgreSQL РїРѕРґРєР»СЋС‡РµРЅ",
       serverTime: new Date().toISOString(),
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: "Ошибка подключения к PostgreSQL",
+      message: "РћС€РёР±РєР° РїРѕРґРєР»СЋС‡РµРЅРёСЏ Рє PostgreSQL",
       error: error.message,
     });
   }
@@ -206,13 +206,13 @@ app.post("/api/auth/login", async (req, res) => {
     if (!phone) {
       return res.status(400).json({
         success: false,
-        message: "Введите номер телефона",
+        message: "Р’РІРµРґРёС‚Рµ РЅРѕРјРµСЂ С‚РµР»РµС„РѕРЅР°",
       });
     }
 
     const normalizedPhone = normalizePhone(phone);
 
-    // Ищем существующего клиента
+    // РС‰РµРј СЃСѓС‰РµСЃС‚РІСѓСЋС‰РµРіРѕ РєР»РёРµРЅС‚Р°
     const existingResult = await pgQuery(
       `
       SELECT *
@@ -224,26 +224,26 @@ app.post("/api/auth/login", async (req, res) => {
     );
 
     // ==========================================
-    // КЛИЕНТ НАЙДЕН — ВХОД
+    // РљР›РР•РќРў РќРђР™Р”Р•Рќ вЂ” Р’РҐРћР”
     // ==========================================
 
     if (existingResult.rows.length > 0) {
       return res.status(200).json({
         success: true,
-        message: "Вход выполнен",
+        message: "Р’С…РѕРґ РІС‹РїРѕР»РЅРµРЅ",
         isNewClient: false,
         client: formatClient(existingResult.rows[0]),
       });
     }
 
     // ==========================================
-    // НОВЫЙ КЛИЕНТ
+    // РќРћР’Р«Р™ РљР›РР•РќРў
     // ==========================================
 
     if (!name) {
       return res.status(400).json({
         success: false,
-        message: "Введите имя для регистрации",
+        message: "Р’РІРµРґРёС‚Рµ РёРјСЏ РґР»СЏ СЂРµРіРёСЃС‚СЂР°С†РёРё",
       });
     }
 
@@ -289,7 +289,7 @@ app.post("/api/auth/login", async (req, res) => {
 
     const client = result.rows[0];
 
-    // Записываем приветственные бонусы
+    // Р—Р°РїРёСЃС‹РІР°РµРј РїСЂРёРІРµС‚СЃС‚РІРµРЅРЅС‹Рµ Р±РѕРЅСѓСЃС‹
     try {
       await pgQuery(
         `
@@ -306,7 +306,7 @@ app.post("/api/auth/login", async (req, res) => {
           $2,
           'add',
           $3,
-          'Приветственные бонусы',
+          'РџСЂРёРІРµС‚СЃС‚РІРµРЅРЅС‹Рµ Р±РѕРЅСѓСЃС‹',
           NOW()
         )
         `,
@@ -325,7 +325,7 @@ app.post("/api/auth/login", async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Регистрация успешно завершена",
+      message: "Р РµРіРёСЃС‚СЂР°С†РёСЏ СѓСЃРїРµС€РЅРѕ Р·Р°РІРµСЂС€РµРЅР°",
       isNewClient: true,
       client: formatClient(client),
     });
@@ -338,7 +338,7 @@ app.post("/api/auth/login", async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Ошибка входа или регистрации",
+      message: "РћС€РёР±РєР° РІС…РѕРґР° РёР»Рё СЂРµРіРёСЃС‚СЂР°С†РёРё",
       error: error.message,
     });
   }
@@ -358,7 +358,7 @@ app.post("/api/admin/login", async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          "Введите логин и пароль",
+          "Р’РІРµРґРёС‚Рµ Р»РѕРіРёРЅ Рё РїР°СЂРѕР»СЊ",
       });
     }
 
@@ -376,7 +376,7 @@ app.post("/api/admin/login", async (req, res) => {
       return res.status(401).json({
         success: false,
         message:
-          "Неверный логин или пароль",
+          "РќРµРІРµСЂРЅС‹Р№ Р»РѕРіРёРЅ РёР»Рё РїР°СЂРѕР»СЊ",
       });
     }
 
@@ -390,7 +390,7 @@ app.post("/api/admin/login", async (req, res) => {
       return res.status(500).json({
         success: false,
         message:
-          "У администратора не настроен пароль",
+          "РЈ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР° РЅРµ РЅР°СЃС‚СЂРѕРµРЅ РїР°СЂРѕР»СЊ",
       });
     }
 
@@ -404,13 +404,13 @@ app.post("/api/admin/login", async (req, res) => {
       return res.status(401).json({
         success: false,
         message:
-          "Неверный логин или пароль",
+          "РќРµРІРµСЂРЅС‹Р№ Р»РѕРіРёРЅ РёР»Рё РїР°СЂРѕР»СЊ",
       });
     }
 
     return res.json({
       success: true,
-      message: "Вход выполнен",
+      message: "Р’С…РѕРґ РІС‹РїРѕР»РЅРµРЅ",
 
       admin: {
         id: adminDoc.id,
@@ -433,7 +433,7 @@ app.post("/api/admin/login", async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Ошибка сервера",
+      message: "РћС€РёР±РєР° СЃРµСЂРІРµСЂР°",
     });
   }
 });
@@ -493,7 +493,7 @@ app.get(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка загрузки групп",
+          "РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё РіСЂСѓРїРї",
         error: error.message,
       });
     }
@@ -532,7 +532,7 @@ app.get(
         return res.status(404).json({
           success: false,
           message:
-            "Группа не найдена",
+            "Р“СЂСѓРїРїР° РЅРµ РЅР°Р№РґРµРЅР°",
         });
       }
 
@@ -569,7 +569,7 @@ app.get(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка получения группы",
+          "РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ РіСЂСѓРїРїС‹",
         error: error.message,
       });
     }
@@ -597,7 +597,7 @@ app.post(
         return res.status(400).json({
           success: false,
           message:
-            "Введите название группы",
+            "Р’РІРµРґРёС‚Рµ РЅР°Р·РІР°РЅРёРµ РіСЂСѓРїРїС‹",
         });
       }
 
@@ -621,7 +621,7 @@ app.post(
         return res.status(409).json({
           success: false,
           message:
-            "Такая группа уже существует",
+            "РўР°РєР°СЏ РіСЂСѓРїРїР° СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚",
         });
       }
 
@@ -664,7 +664,7 @@ app.post(
       return res.status(201).json({
         success: true,
         message:
-          "Группа создана",
+          "Р“СЂСѓРїРїР° СЃРѕР·РґР°РЅР°",
 
         group: {
           id: group.id,
@@ -693,7 +693,7 @@ app.post(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка создания группы",
+          "РћС€РёР±РєР° СЃРѕР·РґР°РЅРёСЏ РіСЂСѓРїРїС‹",
         error: error.message,
       });
     }
@@ -734,7 +734,7 @@ app.patch(
         return res.status(404).json({
           success: false,
           message:
-            "Группа не найдена",
+            "Р“СЂСѓРїРїР° РЅРµ РЅР°Р№РґРµРЅР°",
         });
       }
 
@@ -750,7 +750,7 @@ app.patch(
         return res.status(400).json({
           success: false,
           message:
-            "Введите название группы",
+            "Р’РІРµРґРёС‚Рµ РЅР°Р·РІР°РЅРёРµ РіСЂСѓРїРїС‹",
         });
       }
 
@@ -792,7 +792,7 @@ app.patch(
       return res.json({
         success: true,
         message:
-          "Группа обновлена",
+          "Р“СЂСѓРїРїР° РѕР±РЅРѕРІР»РµРЅР°",
 
         group: {
           id: group.id,
@@ -821,7 +821,7 @@ app.patch(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка обновления группы",
+          "РћС€РёР±РєР° РѕР±РЅРѕРІР»РµРЅРёСЏ РіСЂСѓРїРїС‹",
         error: error.message,
       });
     }
@@ -853,14 +853,14 @@ app.delete(
         return res.status(404).json({
           success: false,
           message:
-            "Группа не найдена",
+            "Р“СЂСѓРїРїР° РЅРµ РЅР°Р№РґРµРЅР°",
         });
       }
 
       return res.json({
         success: true,
         message:
-          "Группа удалена",
+          "Р“СЂСѓРїРїР° СѓРґР°Р»РµРЅР°",
       });
 
     } catch (error) {
@@ -872,7 +872,7 @@ app.delete(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка удаления группы",
+          "РћС€РёР±РєР° СѓРґР°Р»РµРЅРёСЏ РіСЂСѓРїРїС‹",
         error: error.message,
       });
     }
@@ -944,7 +944,7 @@ app.get(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка загрузки подгрупп",
+          "РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё РїРѕРґРіСЂСѓРїРї",
         error: error.message,
       });
     }
@@ -1007,7 +1007,7 @@ app.get(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка загрузки подгрупп",
+          "РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё РїРѕРґРіСЂСѓРїРї",
         error: error.message,
       });
     }
@@ -1052,7 +1052,7 @@ app.get(
         return res.status(404).json({
           success: false,
           message:
-            "Подгруппа не найдена",
+            "РџРѕРґРіСЂСѓРїРїР° РЅРµ РЅР°Р№РґРµРЅР°",
         });
       }
 
@@ -1089,7 +1089,7 @@ app.get(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка получения подгруппы",
+          "РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ РїРѕРґРіСЂСѓРїРїС‹",
         error: error.message,
       });
     }
@@ -1117,11 +1117,11 @@ app.post(
         return res.status(400).json({
           success: false,
           message:
-            "Введите название подгруппы",
+            "Р’РІРµРґРёС‚Рµ РЅР°Р·РІР°РЅРёРµ РїРѕРґРіСЂСѓРїРїС‹",
         });
       }
 
-      // Проверяем группу
+      // РџСЂРѕРІРµСЂСЏРµРј РіСЂСѓРїРїСѓ
 
       const groupResult =
         await pgQuery(
@@ -1140,14 +1140,14 @@ app.post(
         return res.status(404).json({
           success: false,
           message:
-            "Группа не найдена",
+            "Р“СЂСѓРїРїР° РЅРµ РЅР°Р№РґРµРЅР°",
         });
       }
 
       const subgroupName =
         String(name).trim();
 
-      // Проверяем дубликат
+      // РџСЂРѕРІРµСЂСЏРµРј РґСѓР±Р»РёРєР°С‚
 
       const duplicateResult =
         await pgQuery(
@@ -1170,11 +1170,11 @@ app.post(
         return res.status(409).json({
           success: false,
           message:
-            "Такая подгруппа уже существует",
+            "РўР°РєР°СЏ РїРѕРґРіСЂСѓРїРїР° СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚",
         });
       }
 
-      // Создаём подгруппу
+      // РЎРѕР·РґР°С‘Рј РїРѕРґРіСЂСѓРїРїСѓ
 
       const result =
         await pgQuery(
@@ -1206,7 +1206,7 @@ app.post(
       return res.status(201).json({
         success: true,
         message:
-          "Подгруппа успешно создана",
+          "РџРѕРґРіСЂСѓРїРїР° СѓСЃРїРµС€РЅРѕ СЃРѕР·РґР°РЅР°",
 
         subgroup: {
           id:
@@ -1232,7 +1232,7 @@ app.post(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка создания подгруппы",
+          "РћС€РёР±РєР° СЃРѕР·РґР°РЅРёСЏ РїРѕРґРіСЂСѓРїРїС‹",
         error: error.message,
       });
     }
@@ -1272,7 +1272,7 @@ app.patch(
         return res.status(404).json({
           success: false,
           message:
-            "Подгруппа не найдена",
+            "РџРѕРґРіСЂСѓРїРїР° РЅРµ РЅР°Р№РґРµРЅР°",
         });
       }
 
@@ -1293,7 +1293,7 @@ app.patch(
         return res.status(400).json({
           success: false,
           message:
-            "Введите название подгруппы",
+            "Р’РІРµРґРёС‚Рµ РЅР°Р·РІР°РЅРёРµ РїРѕРґРіСЂСѓРїРїС‹",
         });
       }
 
@@ -1320,7 +1320,7 @@ app.patch(
       return res.json({
         success: true,
         message:
-          "Подгруппа обновлена",
+          "РџРѕРґРіСЂСѓРїРїР° РѕР±РЅРѕРІР»РµРЅР°",
 
         subgroup: {
           id:
@@ -1346,7 +1346,7 @@ app.patch(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка обновления подгруппы",
+          "РћС€РёР±РєР° РѕР±РЅРѕРІР»РµРЅРёСЏ РїРѕРґРіСЂСѓРїРїС‹",
         error: error.message,
       });
     }
@@ -1364,7 +1364,7 @@ app.delete(
       const { id } =
         req.params;
 
-      // Сначала отвязываем товары
+      // РЎРЅР°С‡Р°Р»Р° РѕС‚РІСЏР·С‹РІР°РµРј С‚РѕРІР°СЂС‹
 
       await pgQuery(
         `
@@ -1391,14 +1391,14 @@ app.delete(
         return res.status(404).json({
           success: false,
           message:
-            "Подгруппа не найдена",
+            "РџРѕРґРіСЂСѓРїРїР° РЅРµ РЅР°Р№РґРµРЅР°",
         });
       }
 
       return res.json({
         success: true,
         message:
-          "Подгруппа удалена",
+          "РџРѕРґРіСЂСѓРїРїР° СѓРґР°Р»РµРЅР°",
       });
 
     } catch (error) {
@@ -1410,7 +1410,7 @@ app.delete(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка удаления подгруппы",
+          "РћС€РёР±РєР° СѓРґР°Р»РµРЅРёСЏ РїРѕРґРіСЂСѓРїРїС‹",
         error: error.message,
       });
     }
@@ -1498,7 +1498,7 @@ app.get(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка загрузки категорий",
+          "РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё РєР°С‚РµРіРѕСЂРёР№",
         error: error.message,
       });
     }
@@ -1555,7 +1555,7 @@ app.get(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка получения клиентов",
+          "РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ РєР»РёРµРЅС‚РѕРІ",
         error: error.message,
       });
     }
@@ -1590,7 +1590,7 @@ app.get(
         return res.status(404).json({
           success: false,
           message:
-            "Клиент не найден",
+            "РљР»РёРµРЅС‚ РЅРµ РЅР°Р№РґРµРЅ",
         });
       }
 
@@ -1612,7 +1612,7 @@ app.get(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка получения клиента",
+          "РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ РєР»РёРµРЅС‚Р°",
         error: error.message,
       });
     }
@@ -1637,7 +1637,7 @@ app.post(
         return res.status(400).json({
           success: false,
           message:
-            "Введите имя",
+            "Р’РІРµРґРёС‚Рµ РёРјСЏ",
         });
       }
 
@@ -1645,7 +1645,7 @@ app.post(
         return res.status(400).json({
           success: false,
           message:
-            "Введите телефон",
+            "Р’РІРµРґРёС‚Рµ С‚РµР»РµС„РѕРЅ",
         });
       }
 
@@ -1669,7 +1669,7 @@ app.post(
         return res.status(409).json({
           success: false,
           message:
-            "Клиент с таким номером уже существует",
+            "РљР»РёРµРЅС‚ СЃ С‚Р°РєРёРј РЅРѕРјРµСЂРѕРј СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚",
         });
       }
 
@@ -1744,7 +1744,7 @@ app.post(
           clientId,
           "add",
           welcomeBonus,
-          "Приветственные бонусы",
+          "РџСЂРёРІРµС‚СЃС‚РІРµРЅРЅС‹Рµ Р±РѕРЅСѓСЃС‹",
         ]
       );
 
@@ -1766,7 +1766,7 @@ app.post(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка создания клиента",
+          "РћС€РёР±РєР° СЃРѕР·РґР°РЅРёСЏ РєР»РёРµРЅС‚Р°",
         error: error.message,
       });
     }
@@ -1813,7 +1813,7 @@ app.get(
           reason: row.reason || "",
 
           productName:
-            row.reason || "Операция",
+            row.reason || "РћРїРµСЂР°С†РёСЏ",
 
           operationDate:
             row.created_at,
@@ -1834,7 +1834,7 @@ app.get(
         success: false,
 
         message:
-          "Ошибка загрузки истории операций",
+          "РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё РёСЃС‚РѕСЂРёРё РѕРїРµСЂР°С†РёР№",
 
         error:
           error.message,
@@ -1869,7 +1869,7 @@ app.post(
         return res.status(400).json({
           success: false,
           message:
-            "Некорректное количество бонусов",
+            "РќРµРєРѕСЂСЂРµРєС‚РЅРѕРµ РєРѕР»РёС‡РµСЃС‚РІРѕ Р±РѕРЅСѓСЃРѕРІ",
         });
       }
 
@@ -1890,7 +1890,7 @@ app.post(
         return res.status(404).json({
           success: false,
           message:
-            "Клиент не найден",
+            "РљР»РёРµРЅС‚ РЅРµ РЅР°Р№РґРµРЅ",
         });
       }
 
@@ -1948,14 +1948,14 @@ app.post(
           id,
           amount,
           reason ||
-            "Начисление бонусов",
+            "РќР°С‡РёСЃР»РµРЅРёРµ Р±РѕРЅСѓСЃРѕРІ",
         ]
       );
 
       return res.json({
         success: true,
         message:
-          "Бонусы начислены",
+          "Р‘РѕРЅСѓСЃС‹ РЅР°С‡РёСЃР»РµРЅС‹",
 
         points:
           newPoints,
@@ -1968,7 +1968,7 @@ app.post(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка начисления бонусов",
+          "РћС€РёР±РєР° РЅР°С‡РёСЃР»РµРЅРёСЏ Р±РѕРЅСѓСЃРѕРІ",
         error: error.message,
       });
     }
@@ -2011,7 +2011,7 @@ app.post(
         return res.status(404).json({
           success: false,
           message:
-            "Клиент не найден",
+            "РљР»РёРµРЅС‚ РЅРµ РЅР°Р№РґРµРЅ",
         });
       }
 
@@ -2033,7 +2033,7 @@ app.post(
         return res.status(400).json({
           success: false,
           message:
-            "Недостаточно бонусов",
+            "РќРµРґРѕСЃС‚Р°С‚РѕС‡РЅРѕ Р±РѕРЅСѓСЃРѕРІ",
         });
       }
 
@@ -2087,14 +2087,14 @@ app.post(
           id,
           amount,
           reason ||
-            "Списание бонусов",
+            "РЎРїРёСЃР°РЅРёРµ Р±РѕРЅСѓСЃРѕРІ",
         ]
       );
 
       return res.json({
         success: true,
         message:
-          "Бонусы списаны",
+          "Р‘РѕРЅСѓСЃС‹ СЃРїРёСЃР°РЅС‹",
 
         points:
           newPoints,
@@ -2107,7 +2107,7 @@ app.post(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка списания бонусов",
+          "РћС€РёР±РєР° СЃРїРёСЃР°РЅРёСЏ Р±РѕРЅСѓСЃРѕРІ",
         error: error.message,
       });
     }
@@ -2144,7 +2144,7 @@ app.post(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка расчёта бонусов",
+          "РћС€РёР±РєР° СЂР°СЃС‡С‘С‚Р° Р±РѕРЅСѓСЃРѕРІ",
       });
     }
   }
@@ -2164,7 +2164,7 @@ app.get(
     return res.json({
       success: true,
       message:
-        "KUSAI MAX API подключен",
+        "KUSAI MAX API РїРѕРґРєР»СЋС‡РµРЅ",
 
       serverTime:
         new Date().toISOString(),
@@ -2193,7 +2193,7 @@ app.get(
         return res.status(400).json({
           success: false,
           message:
-            "Не указан телефон",
+            "РќРµ СѓРєР°Р·Р°РЅ С‚РµР»РµС„РѕРЅ",
         });
       }
 
@@ -2224,7 +2224,7 @@ app.get(
         return res.status(404).json({
           success: false,
           message:
-            "Клиент не найден",
+            "РљР»РёРµРЅС‚ РЅРµ РЅР°Р№РґРµРЅ",
         });
       }
 
@@ -2272,14 +2272,14 @@ app.get(
 
     } catch (error) {
       console.error(
-        "Ошибка поиска клиента:",
+        "РћС€РёР±РєР° РїРѕРёСЃРєР° РєР»РёРµРЅС‚Р°:",
         error
       );
 
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка поиска клиента",
+          "РћС€РёР±РєР° РїРѕРёСЃРєР° РєР»РёРµРЅС‚Р°",
 
         error:
           error?.message ||
@@ -2295,8 +2295,8 @@ app.get(
 
 // =====================================================
 // GET ALL PRODUCTS
-// ВАЖНО:
-// ТОВАРЫ НЕ ФИЛЬТРУЮТСЯ ПО ГРУППЕ ИЛИ ПОДГРУППЕ
+// Р’РђР–РќРћ:
+// РўРћР’РђР Р« РќР• Р¤РР›Р¬РўР РЈР®РўРЎРЇ РџРћ Р“Р РЈРџРџР• РР›Р РџРћР”Р“Р РЈРџРџР•
 // =====================================================
 
 app.get(
@@ -2380,7 +2380,7 @@ app.get(
 
       const values = [];
 
-      // По умолчанию не показываем архив
+      // РџРѕ СѓРјРѕР»С‡Р°РЅРёСЋ РЅРµ РїРѕРєР°Р·С‹РІР°РµРј Р°СЂС…РёРІ
 
       if (includeArchived !== "true") {
         sql += `
@@ -2388,8 +2388,8 @@ app.get(
         `;
       }
 
-      // hidden товары показываем в админке,
-      // если includeHidden=true
+      // hidden С‚РѕРІР°СЂС‹ РїРѕРєР°Р·С‹РІР°РµРј РІ Р°РґРјРёРЅРєРµ,
+      // РµСЃР»Рё includeHidden=true
 
       if (includeHidden !== "true") {
         sql += `
@@ -2397,7 +2397,7 @@ app.get(
         `;
       }
 
-      // Фильтр по группе
+      // Р¤РёР»СЊС‚СЂ РїРѕ РіСЂСѓРїРїРµ
 
       if (groupId) {
         values.push(groupId);
@@ -2407,7 +2407,7 @@ app.get(
         `;
       }
 
-      // Фильтр по подгруппе
+      // Р¤РёР»СЊС‚СЂ РїРѕ РїРѕРґРіСЂСѓРїРїРµ
 
       if (subgroupId) {
         values.push(subgroupId);
@@ -2434,7 +2434,7 @@ app.get(
           id:
             item.id,
 
-          // Основное
+          // РћСЃРЅРѕРІРЅРѕРµ
 
           title:
             item.title ||
@@ -2451,7 +2451,7 @@ app.get(
               item.price || 0
             ),
 
-          // Изображения
+          // РР·РѕР±СЂР°Р¶РµРЅРёСЏ
 
           images:
             Array.isArray(item.images)
@@ -2459,7 +2459,7 @@ app.get(
               : [],
 
           // =================================================
-          // ГРУППА
+          // Р“Р РЈРџРџРђ
           // =================================================
 
           groupId:
@@ -2471,7 +2471,7 @@ app.get(
             "",
 
           // =================================================
-          // ПОДГРУППА
+          // РџРћР”Р“Р РЈРџРџРђ
           // =================================================
 
           subgroupId:
@@ -2482,7 +2482,7 @@ app.get(
             item.subgroup_name ||
             "",
 
-          // Старые категории
+          // РЎС‚Р°СЂС‹Рµ РєР°С‚РµРіРѕСЂРёРё
 
           category:
             item.category || "",
@@ -2496,7 +2496,7 @@ app.get(
           categoryLeaf:
             item.category_leaf || "",
 
-          // Дополнительно
+          // Р”РѕРїРѕР»РЅРёС‚РµР»СЊРЅРѕ
 
           badge:
             item.badge || "",
@@ -2514,7 +2514,7 @@ app.get(
           delivery:
             item.delivery || "",
 
-          // Наличие
+          // РќР°Р»РёС‡РёРµ
 
           inStock:
             Boolean(
@@ -2541,12 +2541,12 @@ app.get(
               item.quantity || 0
             ),
 
-          // Описание
+          // РћРїРёСЃР°РЅРёРµ
 
           description:
             item.description || "",
 
-          // Характеристики
+          // РҐР°СЂР°РєС‚РµСЂРёСЃС‚РёРєРё
 
           memory:
             item.memory || "",
@@ -2583,7 +2583,7 @@ app.get(
               ? Number(item.volume)
               : null,
 
-          // Артикулы
+          // РђСЂС‚РёРєСѓР»С‹
 
           article:
             item.article || "",
@@ -2597,7 +2597,7 @@ app.get(
           barcode:
             item.barcode || "",
 
-          // Статусы
+          // РЎС‚Р°С‚СѓСЃС‹
 
           archived:
             Boolean(
@@ -2640,7 +2640,7 @@ app.get(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка загрузки товаров",
+          "РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё С‚РѕРІР°СЂРѕРІ",
         error: error.message,
       });
     }
@@ -2682,7 +2682,7 @@ app.get(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка загрузки товаров группы",
+          "РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё С‚РѕРІР°СЂРѕРІ РіСЂСѓРїРїС‹",
         error: error.message,
       });
     }
@@ -2724,7 +2724,7 @@ app.get(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка загрузки товаров подгруппы",
+          "РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё С‚РѕРІР°СЂРѕРІ РїРѕРґРіСЂСѓРїРїС‹",
         error: error.message,
       });
     }
@@ -2761,7 +2761,7 @@ app.get(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка получения таблиц",
+          "РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ С‚Р°Р±Р»РёС†",
         error: error.message,
       });
     }
@@ -2783,7 +2783,7 @@ app.get(
         return res.status(400).json({
           success: false,
           message:
-            "Укажите table",
+            "РЈРєР°Р¶РёС‚Рµ table",
         });
       }
 
@@ -2812,7 +2812,7 @@ app.get(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка получения структуры таблицы",
+          "РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ СЃС‚СЂСѓРєС‚СѓСЂС‹ С‚Р°Р±Р»РёС†С‹",
         error: error.message,
       });
     }
@@ -2835,14 +2835,14 @@ app.get(
       return res.json({
         success: true,
         message:
-          "Колонка group_id добавлена",
+          "РљРѕР»РѕРЅРєР° group_id РґРѕР±Р°РІР»РµРЅР°",
       });
 
     } catch (error) {
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка добавления group_id",
+          "РћС€РёР±РєР° РґРѕР±Р°РІР»РµРЅРёСЏ group_id",
         error: error.message,
       });
     }
@@ -2865,7 +2865,7 @@ app.get(
       return res.json({
         success: true,
         message:
-          "Колонка subgroup_id добавлена",
+          "РљРѕР»РѕРЅРєР° subgroup_id РґРѕР±Р°РІР»РµРЅР°",
       });
 
     } catch (error) {
@@ -2877,7 +2877,7 @@ app.get(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка добавления subgroup_id",
+          "РћС€РёР±РєР° РґРѕР±Р°РІР»РµРЅРёСЏ subgroup_id",
         error: error.message,
       });
     }
@@ -2924,14 +2924,14 @@ app.patch(
         return res.status(404).json({
           success: false,
           message:
-            "Товар не найден",
+            "РўРѕРІР°СЂ РЅРµ РЅР°Р№РґРµРЅ",
         });
       }
 
       return res.json({
         success: true,
         message:
-          "Категория товара обновлена",
+          "РљР°С‚РµРіРѕСЂРёСЏ С‚РѕРІР°СЂР° РѕР±РЅРѕРІР»РµРЅР°",
 
         product:
           result.rows[0],
@@ -2946,7 +2946,7 @@ app.patch(
       return res.status(500).json({
         success: false,
         message:
-          "Ошибка обновления категории товара",
+          "РћС€РёР±РєР° РѕР±РЅРѕРІР»РµРЅРёСЏ РєР°С‚РµРіРѕСЂРёРё С‚РѕРІР°СЂР°",
         error: error.message,
       });
     }
@@ -3001,7 +3001,7 @@ app.post("/api/products", async (req, res) => {
     if (!title && !name) {
       return res.status(400).json({
         success: false,
-        message: "Введите название товара",
+        message: "Р’РІРµРґРёС‚Рµ РЅР°Р·РІР°РЅРёРµ С‚РѕРІР°СЂР°",
       });
     }
 
@@ -3100,7 +3100,7 @@ app.post("/api/products", async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Товар создан",
+      message: "РўРѕРІР°СЂ СЃРѕР·РґР°РЅ",
       product: result.rows[0],
     });
 
@@ -3109,7 +3109,7 @@ app.post("/api/products", async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Ошибка создания товара",
+      message: "РћС€РёР±РєР° СЃРѕР·РґР°РЅРёСЏ С‚РѕРІР°СЂР°",
       error: error.message,
     });
   }
@@ -3137,7 +3137,7 @@ app.patch("/api/products/:id", async (req, res) => {
     if (existingResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "Товар не найден",
+        message: "РўРѕРІР°СЂ РЅРµ РЅР°Р№РґРµРЅ",
       });
     }
 
@@ -3371,7 +3371,7 @@ app.patch("/api/products/:id", async (req, res) => {
 
     return res.json({
       success: true,
-      message: "Товар успешно обновлён",
+      message: "РўРѕРІР°СЂ СѓСЃРїРµС€РЅРѕ РѕР±РЅРѕРІР»С‘РЅ",
       product: result.rows[0],
     });
 
@@ -3381,7 +3381,7 @@ app.patch("/api/products/:id", async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Ошибка сохранения товара",
+      message: "РћС€РёР±РєР° СЃРѕС…СЂР°РЅРµРЅРёСЏ С‚РѕРІР°СЂР°",
       error: error.message,
     });
   }
@@ -3408,13 +3408,13 @@ app.delete("/api/products/:id", async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "Товар не найден",
+        message: "РўРѕРІР°СЂ РЅРµ РЅР°Р№РґРµРЅ",
       });
     }
 
     return res.json({
       success: true,
-      message: "Товар удалён",
+      message: "РўРѕРІР°СЂ СѓРґР°Р»С‘РЅ",
     });
 
   } catch (error) {
@@ -3423,7 +3423,7 @@ app.delete("/api/products/:id", async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Ошибка удаления товара",
+      message: "РћС€РёР±РєР° СѓРґР°Р»РµРЅРёСЏ С‚РѕРІР°СЂР°",
       error: error.message,
     });
   }
@@ -3434,7 +3434,7 @@ app.delete("/api/products/:id", async (req, res) => {
 // POSTGRESQL
 // =====================================================
 
-// Создаём таблицу сообщений, если её ещё нет
+// РЎРѕР·РґР°С‘Рј С‚Р°Р±Р»РёС†Сѓ СЃРѕРѕР±С‰РµРЅРёР№, РµСЃР»Рё РµС‘ РµС‰С‘ РЅРµС‚
 await pgQuery(`
   CREATE TABLE IF NOT EXISTS messages (
     id UUID PRIMARY KEY,
@@ -3459,7 +3459,7 @@ await pgQuery(`
   ON messages(created_at)
 `);
 
-console.log("💬 Таблица messages готова");
+console.log("рџ’¬ РўР°Р±Р»РёС†Р° messages РіРѕС‚РѕРІР°");
 
 
 // =====================================================
@@ -3525,7 +3525,7 @@ app.get("/api/messages", async (req, res) => {
     return res.status(500).json({
       success: false,
       message:
-        "Не удалось загрузить сообщения",
+        "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃРѕРѕР±С‰РµРЅРёСЏ",
       error:
         error.message,
     });
@@ -3554,27 +3554,27 @@ app.post("/api/messages", async (req, res) => {
     const cleanText =
       String(text || "").trim();
 
-    // Проверяем пользователя
+    // РџСЂРѕРІРµСЂСЏРµРј РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
 
     if (!cleanUserLogin) {
       return res.status(400).json({
         success: false,
         message:
-          "Не указан пользователь",
+          "РќРµ СѓРєР°Р·Р°РЅ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ",
       });
     }
 
-    // Проверяем текст
+    // РџСЂРѕРІРµСЂСЏРµРј С‚РµРєСЃС‚
 
     if (!cleanText) {
       return res.status(400).json({
         success: false,
         message:
-          "Введите сообщение",
+          "Р’РІРµРґРёС‚Рµ СЃРѕРѕР±С‰РµРЅРёРµ",
       });
     }
 
-    // Проверяем автора
+    // РџСЂРѕРІРµСЂСЏРµРј Р°РІС‚РѕСЂР°
 
     if (
       author !== "user" &&
@@ -3583,7 +3583,7 @@ app.post("/api/messages", async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          "Некорректный автор сообщения",
+          "РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ Р°РІС‚РѕСЂ СЃРѕРѕР±С‰РµРЅРёСЏ",
       });
     }
 
@@ -3628,7 +3628,7 @@ app.post("/api/messages", async (req, res) => {
       result.rows[0];
 
     console.log(
-      `💬 Новое сообщение от ${author}:`,
+      `рџ’¬ РќРѕРІРѕРµ СЃРѕРѕР±С‰РµРЅРёРµ РѕС‚ ${author}:`,
       cleanUserLogin
     );
 
@@ -3673,7 +3673,7 @@ app.post("/api/messages", async (req, res) => {
     return res.status(500).json({
       success: false,
       message:
-        "Не удалось отправить сообщение",
+        "РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РїСЂР°РІРёС‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ",
       error:
         error.message,
     });
@@ -3698,7 +3698,7 @@ app.patch(
 
       let column;
 
-      // Разрешаем менять только эти поля
+      // Р Р°Р·СЂРµС€Р°РµРј РјРµРЅСЏС‚СЊ С‚РѕР»СЊРєРѕ СЌС‚Рё РїРѕР»СЏ
 
       if (
         field === "readByUser"
@@ -3718,7 +3718,7 @@ app.patch(
         return res.status(400).json({
           success: false,
           message:
-            "Некорректное поле",
+            "РќРµРєРѕСЂСЂРµРєС‚РЅРѕРµ РїРѕР»Рµ",
         });
       }
 
@@ -3739,14 +3739,14 @@ app.patch(
         return res.status(404).json({
           success: false,
           message:
-            "Сообщение не найдено",
+            "РЎРѕРѕР±С‰РµРЅРёРµ РЅРµ РЅР°Р№РґРµРЅРѕ",
         });
       }
 
       return res.json({
         success: true,
         message:
-          "Сообщение прочитано",
+          "РЎРѕРѕР±С‰РµРЅРёРµ РїСЂРѕС‡РёС‚Р°РЅРѕ",
       });
 
     } catch (error) {
@@ -3759,7 +3759,7 @@ app.patch(
       return res.status(500).json({
         success: false,
         message:
-          "Не удалось обновить сообщение",
+          "РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±РЅРѕРІРёС‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ",
         error:
           error.message,
       });
@@ -3786,7 +3786,7 @@ app.delete(
         return res.status(400).json({
           success: false,
           message:
-            "Не указан пользователь",
+            "РќРµ СѓРєР°Р·Р°РЅ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ",
         });
       }
 
@@ -3799,14 +3799,14 @@ app.delete(
       );
 
       console.log(
-        "🗑 Чат удалён:",
+        "рџ—‘ Р§Р°С‚ СѓРґР°Р»С‘РЅ:",
         userLogin
       );
 
       return res.json({
         success: true,
         message:
-          "Чат удалён",
+          "Р§Р°С‚ СѓРґР°Р»С‘РЅ",
       });
 
     } catch (error) {
@@ -3819,7 +3819,7 @@ app.delete(
       return res.status(500).json({
         success: false,
         message:
-          "Не удалось удалить чат",
+          "РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ С‡Р°С‚",
         error:
           error.message,
       });
@@ -3832,7 +3832,7 @@ app.delete(
 // POSTGRESQL
 // =====================================================
 
-// Получить все устройства Trade-In
+// РџРѕР»СѓС‡РёС‚СЊ РІСЃРµ СѓСЃС‚СЂРѕР№СЃС‚РІР° Trade-In
 app.get("/api/trade-in", async (req, res) => {
   try {
     const result = await pgQuery(`
@@ -3867,7 +3867,7 @@ app.get("/api/trade-in", async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Не удалось загрузить Trade-In",
+      message: "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ Trade-In",
       error: error.message,
     });
   }
@@ -3895,7 +3895,7 @@ app.get("/api/trade-in/:id", async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "Устройство не найдено",
+        message: "РЈСЃС‚СЂРѕР№СЃС‚РІРѕ РЅРµ РЅР°Р№РґРµРЅРѕ",
       });
     }
 
@@ -3925,7 +3925,7 @@ app.get("/api/trade-in/:id", async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Ошибка получения устройства",
+      message: "РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ СѓСЃС‚СЂРѕР№СЃС‚РІР°",
       error: error.message,
     });
   }
@@ -3953,7 +3953,7 @@ app.post("/api/trade-in", async (req, res) => {
     if (!String(title || "").trim()) {
       return res.status(400).json({
         success: false,
-        message: "Введите название устройства",
+        message: "Р’РІРµРґРёС‚Рµ РЅР°Р·РІР°РЅРёРµ СѓСЃС‚СЂРѕР№СЃС‚РІР°",
       });
     }
 
@@ -4009,7 +4009,7 @@ app.post("/api/trade-in", async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Устройство Trade-In создано",
+      message: "РЈСЃС‚СЂРѕР№СЃС‚РІРѕ Trade-In СЃРѕР·РґР°РЅРѕ",
       product: {
         id: item.id,
         title: item.title,
@@ -4030,7 +4030,7 @@ app.post("/api/trade-in", async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Ошибка создания Trade-In",
+      message: "РћС€РёР±РєР° СЃРѕР·РґР°РЅРёСЏ Trade-In",
       error: error.message,
     });
   }
@@ -4090,7 +4090,7 @@ app.patch("/api/trade-in/:id", async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "Устройство не найдено",
+        message: "РЈСЃС‚СЂРѕР№СЃС‚РІРѕ РЅРµ РЅР°Р№РґРµРЅРѕ",
       });
     }
 
@@ -4098,7 +4098,7 @@ app.patch("/api/trade-in/:id", async (req, res) => {
 
     return res.json({
       success: true,
-      message: "Устройство обновлено",
+      message: "РЈСЃС‚СЂРѕР№СЃС‚РІРѕ РѕР±РЅРѕРІР»РµРЅРѕ",
       product: item,
     });
 
@@ -4107,7 +4107,7 @@ app.patch("/api/trade-in/:id", async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Ошибка обновления устройства",
+      message: "РћС€РёР±РєР° РѕР±РЅРѕРІР»РµРЅРёСЏ СѓСЃС‚СЂРѕР№СЃС‚РІР°",
       error: error.message,
     });
   }
@@ -4134,13 +4134,13 @@ app.delete("/api/trade-in/:id", async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "Устройство не найдено",
+        message: "РЈСЃС‚СЂРѕР№СЃС‚РІРѕ РЅРµ РЅР°Р№РґРµРЅРѕ",
       });
     }
 
     return res.json({
       success: true,
-      message: "Устройство удалено",
+      message: "РЈСЃС‚СЂРѕР№СЃС‚РІРѕ СѓРґР°Р»РµРЅРѕ",
     });
 
   } catch (error) {
@@ -4148,7 +4148,7 @@ app.delete("/api/trade-in/:id", async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Ошибка удаления устройства",
+      message: "РћС€РёР±РєР° СѓРґР°Р»РµРЅРёСЏ СѓСЃС‚СЂРѕР№СЃС‚РІР°",
       error: error.message,
     });
   }
@@ -4162,7 +4162,9 @@ app.delete("/api/trade-in/:id", async (req, res) => {
 
 app.get("/api/clients/phone/:phone", async (req, res) => {
   try {
-    const phone = decodeURIComponent(req.params.phone);
+    const phone = normalizePhone(
+      decodeURIComponent(req.params.phone)
+    );
 
     const result = await pgQuery(
       `
@@ -4177,52 +4179,7 @@ app.get("/api/clients/phone/:phone", async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "Клиент не найден",
-      });
-    }
-
-    return res.json({
-      success: true,
-      client: result.rows[0],
-    });
-
-  } catch (error) {
-
-    console.error(
-      "GET CLIENT BY PHONE ERROR:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message: "Ошибка получения клиента",
-      error: error.message,
-    });
-  }
-});
-
-// =====================================================
-// GET CLIENT BY ID
-// =====================================================
-
-app.get("/api/clients/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const result = await pgQuery(
-      `
-      SELECT *
-      FROM clients
-      WHERE id = $1
-      LIMIT 1
-      `,
-      [id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Клиент не найден",
+        message: "РљР»РёРµРЅС‚ РЅРµ РЅР°Р№РґРµРЅ",
       });
     }
 
@@ -4234,17 +4191,93 @@ app.get("/api/clients/:id", async (req, res) => {
   } catch (error) {
 
     console.error(
-      "GET CLIENT ERROR:",
+      "GET CLIENT BY PHONE ERROR:",
       error
     );
 
     return res.status(500).json({
       success: false,
-      message: "Ошибка получения клиента",
+      message: "РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ РєР»РёРµРЅС‚Р°",
       error: error.message,
     });
   }
 });
+
+// =====================================================
+// GET CLIENT OPERATIONS BY PHONE
+// =====================================================
+
+app.get(
+  "/api/clients/phone/:phone/operations",
+  async (req, res) => {
+    try {
+      const phone = normalizePhone(
+        decodeURIComponent(req.params.phone)
+      );
+
+      const result = await pgQuery(
+        `
+        SELECT
+          co.id,
+          co.type,
+          co.points,
+          co.reason,
+          co.created_at
+        FROM client_operations co
+        INNER JOIN clients c
+          ON c.id = co.client_id
+        WHERE c.phone = $1
+        ORDER BY co.created_at DESC, co.id DESC
+        `,
+        [phone]
+      );
+
+      return res.json({
+        success: true,
+
+        operations: result.rows.map((row) => ({
+          id: row.id,
+
+          type: row.type || "",
+
+          points: Number(row.points || 0),
+
+          amount: Number(row.points || 0),
+
+          bonuses: Number(row.points || 0),
+
+          reason: row.reason || "",
+
+          productName:
+            row.reason || "РћРїРµСЂР°С†РёСЏ",
+
+          operationDate:
+            row.created_at,
+
+          createdAt:
+            row.created_at,
+        })),
+      });
+
+    } catch (error) {
+
+      console.error(
+        "GET CLIENT OPERATIONS BY PHONE ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё РёСЃС‚РѕСЂРёРё РѕРїРµСЂР°С†РёР№",
+        error:
+          error.message,
+      });
+    }
+  }
+);
+
+
 
 // =====================================================
 // DELETE CLIENTS
@@ -4274,7 +4307,7 @@ app.delete(
 
         return res.status(404).json({
           success: false,
-          message: "Клиент не найден",
+          message: "РљР»РёРµРЅС‚ РЅРµ РЅР°Р№РґРµРЅ",
         });
 
       }
@@ -4283,7 +4316,7 @@ app.delete(
 
       /*
       ==========================================
-      УДАЛЯЕМ ИСТОРИЮ ОПЕРАЦИЙ
+      РЈР”РђР›РЇР•Рњ РРЎРўРћР РР® РћРџР•Р РђР¦РР™
       ==========================================
       */
 
@@ -4297,7 +4330,7 @@ app.delete(
 
       /*
       ==========================================
-      УДАЛЯЕМ СООБЩЕНИЯ КЛИЕНТА
+      РЈР”РђР›РЇР•Рњ РЎРћРћР‘Р©Р•РќРРЇ РљР›РР•РќРўРђ
       ==========================================
       */
 
@@ -4315,7 +4348,7 @@ app.delete(
 
       /*
       ==========================================
-      УДАЛЯЕМ КЛИЕНТА
+      РЈР”РђР›РЇР•Рњ РљР›РР•РќРўРђ
       ==========================================
       */
 
@@ -4332,7 +4365,7 @@ app.delete(
         success: true,
 
         message:
-          "Клиент успешно удалён",
+          "РљР»РёРµРЅС‚ СѓСЃРїРµС€РЅРѕ СѓРґР°Р»С‘РЅ",
 
         id:
           result.rows[0].id,
@@ -4349,7 +4382,7 @@ app.delete(
         success: false,
 
         message:
-          "Ошибка удаления клиента",
+          "РћС€РёР±РєР° СѓРґР°Р»РµРЅРёСЏ РєР»РёРµРЅС‚Р°",
 
         error:
           error.message,
@@ -4386,10 +4419,10 @@ const PORT =
 
     app.listen(PORT, () => {
       console.log(
-        `🚀 KUSAI MAX API запущен на порту ${PORT}`
+        `рџљЂ KUSAI MAX API Р·Р°РїСѓС‰РµРЅ РЅР° РїРѕСЂС‚Сѓ ${PORT}`
       );
       console.log(
-    `📡 http://localhost:${PORT}`
+    `рџ“Ў http://localhost:${PORT}`
   );
     });
 
@@ -4397,7 +4430,7 @@ const PORT =
   .catch((error) => {
 
     console.error(
-      "❌ Не удалось запустить сервер:",
+      "вќЊ РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РїСѓСЃС‚РёС‚СЊ СЃРµСЂРІРµСЂ:",
       error
     );
 

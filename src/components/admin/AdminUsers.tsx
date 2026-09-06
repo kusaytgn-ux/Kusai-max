@@ -613,7 +613,7 @@ function AdminUsers() {
                         disabled={isDeleting}
                         onClick={() =>
                           navigate(
-                            `/admin/users/${user.id}`
+                            `/admin/users/${encodeURIComponent(user.phone)}`
                           )
                         }
                         className="

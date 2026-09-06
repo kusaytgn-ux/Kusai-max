@@ -177,7 +177,7 @@ function AppRouter() {
       {/* ========================= */}
 
       <Route
-        path="/admin/users/:id"
+        path="/admin/users/:phone"
         element={
           user?.role === "admin" ? (
             <AdminClientPage />
