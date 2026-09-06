@@ -3375,6 +3375,404 @@ app.delete("/api/products/:id", async (req, res) => {
 });
 
 // =====================================================
+// MESSAGES / CONCIERGE
+// POSTGRESQL
+// =====================================================
+
+// Создаём таблицу сообщений, если её ещё нет
+await pgQuery(`
+  CREATE TABLE IF NOT EXISTS messages (
+    id UUID PRIMARY KEY,
+    user_login TEXT NOT NULL,
+    author TEXT NOT NULL CHECK (
+      author IN ('user', 'admin')
+    ),
+    text TEXT NOT NULL,
+    read_by_user BOOLEAN NOT NULL DEFAULT FALSE,
+    read_by_admin BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )
+`);
+
+await pgQuery(`
+  CREATE INDEX IF NOT EXISTS idx_messages_user_login
+  ON messages(user_login)
+`);
+
+await pgQuery(`
+  CREATE INDEX IF NOT EXISTS idx_messages_created_at
+  ON messages(created_at)
+`);
+
+console.log("💬 Таблица messages готова");
+
+
+// =====================================================
+// GET ALL MESSAGES
+// =====================================================
+
+app.get("/api/messages", async (req, res) => {
+  try {
+
+    const result = await pgQuery(`
+      SELECT
+        id,
+        user_login,
+        author,
+        text,
+        read_by_user,
+        read_by_admin,
+        created_at
+      FROM messages
+      ORDER BY created_at ASC
+    `);
+
+    const messages = result.rows.map(
+      (message) => ({
+        id: message.id,
+
+        userLogin:
+          message.user_login,
+
+        author:
+          message.author,
+
+        text:
+          message.text,
+
+        readByUser:
+          Boolean(
+            message.read_by_user
+          ),
+
+        readByAdmin:
+          Boolean(
+            message.read_by_admin
+          ),
+
+        createdAt:
+          message.created_at,
+      })
+    );
+
+    return res.json({
+      success: true,
+      messages,
+    });
+
+  } catch (error) {
+
+    console.error(
+      "GET MESSAGES ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Не удалось загрузить сообщения",
+      error:
+        error.message,
+    });
+  }
+});
+
+
+// =====================================================
+// SEND MESSAGE
+// =====================================================
+
+app.post("/api/messages", async (req, res) => {
+  try {
+
+    const {
+      userLogin,
+      author,
+      text,
+      readByUser,
+      readByAdmin,
+    } = req.body || {};
+
+    const cleanUserLogin =
+      String(userLogin || "").trim();
+
+    const cleanText =
+      String(text || "").trim();
+
+    // Проверяем пользователя
+
+    if (!cleanUserLogin) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Не указан пользователь",
+      });
+    }
+
+    // Проверяем текст
+
+    if (!cleanText) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Введите сообщение",
+      });
+    }
+
+    // Проверяем автора
+
+    if (
+      author !== "user" &&
+      author !== "admin"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Некорректный автор сообщения",
+      });
+    }
+
+    const messageId =
+      crypto.randomUUID();
+
+    const result = await pgQuery(
+      `
+      INSERT INTO messages (
+        id,
+        user_login,
+        author,
+        text,
+        read_by_user,
+        read_by_admin,
+        created_at
+      )
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        NOW()
+      )
+      RETURNING *
+      `,
+      [
+        messageId,
+        cleanUserLogin,
+        author,
+        cleanText,
+
+        Boolean(readByUser),
+
+        Boolean(readByAdmin),
+      ]
+    );
+
+    const message =
+      result.rows[0];
+
+    console.log(
+      `💬 Новое сообщение от ${author}:`,
+      cleanUserLogin
+    );
+
+    return res.status(201).json({
+      success: true,
+
+      message: {
+        id:
+          message.id,
+
+        userLogin:
+          message.user_login,
+
+        author:
+          message.author,
+
+        text:
+          message.text,
+
+        readByUser:
+          Boolean(
+            message.read_by_user
+          ),
+
+        readByAdmin:
+          Boolean(
+            message.read_by_admin
+          ),
+
+        createdAt:
+          message.created_at,
+      },
+    });
+
+  } catch (error) {
+
+    console.error(
+      "SEND MESSAGE ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Не удалось отправить сообщение",
+      error:
+        error.message,
+    });
+  }
+});
+
+
+// =====================================================
+// MARK MESSAGE AS READ
+// =====================================================
+
+app.patch(
+  "/api/messages/:id/read",
+  async (req, res) => {
+    try {
+
+      const { id } =
+        req.params;
+
+      const { field } =
+        req.body || {};
+
+      let column;
+
+      // Разрешаем менять только эти поля
+
+      if (
+        field === "readByUser"
+      ) {
+        column =
+          "read_by_user";
+      }
+
+      if (
+        field === "readByAdmin"
+      ) {
+        column =
+          "read_by_admin";
+      }
+
+      if (!column) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Некорректное поле",
+        });
+      }
+
+      const result =
+        await pgQuery(
+          `
+          UPDATE messages
+          SET ${column} = TRUE
+          WHERE id = $1
+          RETURNING *
+          `,
+          [id]
+        );
+
+      if (
+        result.rows.length === 0
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Сообщение не найдено",
+        });
+      }
+
+      return res.json({
+        success: true,
+        message:
+          "Сообщение прочитано",
+      });
+
+    } catch (error) {
+
+      console.error(
+        "MARK MESSAGE READ ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Не удалось обновить сообщение",
+        error:
+          error.message,
+      });
+    }
+  }
+);
+
+
+// =====================================================
+// DELETE USER CHAT
+// =====================================================
+
+app.delete(
+  "/api/messages/chat/:userLogin",
+  async (req, res) => {
+    try {
+
+      const userLogin =
+        String(
+          req.params.userLogin || ""
+        ).trim();
+
+      if (!userLogin) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Не указан пользователь",
+        });
+      }
+
+      await pgQuery(
+        `
+        DELETE FROM messages
+        WHERE user_login = $1
+        `,
+        [userLogin]
+      );
+
+      console.log(
+        "🗑 Чат удалён:",
+        userLogin
+      );
+
+      return res.json({
+        success: true,
+        message:
+          "Чат удалён",
+      });
+
+    } catch (error) {
+
+      console.error(
+        "DELETE CHAT ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Не удалось удалить чат",
+        error:
+          error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
 // UNKNOWN ROUTE
 // =====================================================
 
