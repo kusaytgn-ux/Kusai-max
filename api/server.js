@@ -3822,6 +3822,333 @@ app.delete(
 );
 
 // =====================================================
+// TRADE-IN
+// POSTGRESQL
+// =====================================================
+
+// Получить все устройства Trade-In
+app.get("/api/trade-in", async (req, res) => {
+  try {
+    const result = await pgQuery(`
+      SELECT *
+      FROM trade_in
+      ORDER BY created_at DESC
+    `);
+
+    const products = result.rows.map((item) => ({
+      id: item.id,
+      title: item.title,
+      description: item.description || "",
+      price: Number(item.price || 0),
+      memory: item.memory || "",
+      color: item.color || "",
+      condition: item.condition || "",
+      warranty: item.warranty || "",
+      images: Array.isArray(item.images)
+        ? item.images
+        : [],
+      status: item.status || "available",
+      createdAt: item.created_at,
+    }));
+
+    return res.json({
+      success: true,
+      products,
+    });
+
+  } catch (error) {
+    console.error("GET TRADE-IN ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Не удалось загрузить Trade-In",
+      error: error.message,
+    });
+  }
+});
+
+
+// =====================================================
+// GET ONE TRADE-IN DEVICE
+// =====================================================
+
+app.get("/api/trade-in/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pgQuery(
+      `
+      SELECT *
+      FROM trade_in
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Устройство не найдено",
+      });
+    }
+
+    const item = result.rows[0];
+
+    return res.json({
+      success: true,
+      product: {
+        id: item.id,
+        title: item.title,
+        description: item.description || "",
+        price: Number(item.price || 0),
+        memory: item.memory || "",
+        color: item.color || "",
+        condition: item.condition || "",
+        warranty: item.warranty || "",
+        images: Array.isArray(item.images)
+          ? item.images
+          : [],
+        status: item.status || "available",
+        createdAt: item.created_at,
+      },
+    });
+
+  } catch (error) {
+    console.error("GET TRADE-IN PRODUCT ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка получения устройства",
+      error: error.message,
+    });
+  }
+});
+
+
+// =====================================================
+// CREATE TRADE-IN DEVICE
+// =====================================================
+
+app.post("/api/trade-in", async (req, res) => {
+  try {
+    const {
+      title,
+      description = "",
+      price = 0,
+      memory = "",
+      color = "",
+      condition = "",
+      warranty = "",
+      images = [],
+      status = "available",
+    } = req.body || {};
+
+    if (!String(title || "").trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Введите название устройства",
+      });
+    }
+
+    const id = crypto.randomUUID();
+
+    const result = await pgQuery(
+      `
+      INSERT INTO trade_in (
+        id,
+        title,
+        description,
+        price,
+        memory,
+        color,
+        condition,
+        warranty,
+        images,
+        status,
+        created_at
+      )
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9::jsonb,
+        $10,
+        NOW()
+      )
+      RETURNING *
+      `,
+      [
+        id,
+        String(title).trim(),
+        String(description || ""),
+        Number(price) || 0,
+        String(memory || ""),
+        String(color || ""),
+        String(condition || ""),
+        String(warranty || ""),
+        JSON.stringify(Array.isArray(images) ? images : []),
+        status === "sold" ? "sold" : "available",
+      ]
+    );
+
+    const item = result.rows[0];
+
+    console.log("TRADE-IN CREATED:", item.id);
+
+    return res.status(201).json({
+      success: true,
+      message: "Устройство Trade-In создано",
+      product: {
+        id: item.id,
+        title: item.title,
+        description: item.description,
+        price: Number(item.price),
+        memory: item.memory,
+        color: item.color,
+        condition: item.condition,
+        warranty: item.warranty,
+        images: item.images,
+        status: item.status,
+        createdAt: item.created_at,
+      },
+    });
+
+  } catch (error) {
+    console.error("CREATE TRADE-IN ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка создания Trade-In",
+      error: error.message,
+    });
+  }
+});
+
+
+// =====================================================
+// UPDATE TRADE-IN DEVICE
+// =====================================================
+
+app.patch("/api/trade-in/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const {
+      title,
+      description = "",
+      price = 0,
+      memory = "",
+      color = "",
+      condition = "",
+      warranty = "",
+      images = [],
+      status = "available",
+    } = req.body || {};
+
+    const result = await pgQuery(
+      `
+      UPDATE trade_in
+      SET
+        title = $2,
+        description = $3,
+        price = $4,
+        memory = $5,
+        color = $6,
+        condition = $7,
+        warranty = $8,
+        images = $9::jsonb,
+        status = $10
+      WHERE id = $1
+      RETURNING *
+      `,
+      [
+        id,
+        String(title || "").trim(),
+        String(description || ""),
+        Number(price) || 0,
+        String(memory || ""),
+        String(color || ""),
+        String(condition || ""),
+        String(warranty || ""),
+        JSON.stringify(Array.isArray(images) ? images : []),
+        status === "sold" ? "sold" : "available",
+      ]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Устройство не найдено",
+      });
+    }
+
+    const item = result.rows[0];
+
+    return res.json({
+      success: true,
+      message: "Устройство обновлено",
+      product: item,
+    });
+
+  } catch (error) {
+    console.error("UPDATE TRADE-IN ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка обновления устройства",
+      error: error.message,
+    });
+  }
+});
+
+
+// =====================================================
+// DELETE TRADE-IN DEVICE
+// =====================================================
+
+app.delete("/api/trade-in/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pgQuery(
+      `
+      DELETE FROM trade_in
+      WHERE id = $1
+      RETURNING id
+      `,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Устройство не найдено",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Устройство удалено",
+    });
+
+  } catch (error) {
+    console.error("DELETE TRADE-IN ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка удаления устройства",
+      error: error.message,
+    });
+  }
+});
+
+// =====================================================
 // UNKNOWN ROUTE
 // =====================================================
 
