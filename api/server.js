@@ -3046,6 +3046,7 @@ app.post("/api/products", async (req, res) => {
         hidden,
         buy_price,
         group_id,
+        subgroup_id,
         updated_at
       )
       VALUES (
@@ -3053,7 +3054,7 @@ app.post("/api/products", async (req, res) => {
         $11,$12,$13,$14,$15,$16,$17,$18,
         $19,$20,$21,$22,$23,$24,$25,$26,
         $27,$28,$29,$30,$31,$32,$33,$34,
-        $35,$36,NOW()
+        $35,$36,$37,NOW()
       )
       RETURNING *
       `,
@@ -4153,20 +4154,7 @@ app.delete("/api/trade-in/:id", async (req, res) => {
   }
 });
 
-// =====================================================
-// UNKNOWN ROUTE
-// =====================================================
 
-app.use((req, res) => {
-  return res.status(404).json({
-    success: false,
-    message:
-      "API route not found",
-
-    path:
-      req.path,
-  });
-});
 
 // =====================================================
 // GET CLIENT BY PHONE
@@ -4369,6 +4357,21 @@ app.delete(
     }
   }
 );
+
+// =====================================================
+// UNKNOWN ROUTE
+// =====================================================
+
+app.use((req, res) => {
+  return res.status(404).json({
+    success: false,
+    message:
+      "API route not found",
+
+    path:
+      req.path,
+  });
+});
 
 // =====================================================
 // SERVER
