@@ -131,6 +131,171 @@ app.get("/api/health", async (req, res) => {
 });
 
 // =====================================================
+// CLIENT LOGIN / REGISTRATION
+// POSTGRESQL
+// =====================================================
+
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const body = req.body || {};
+
+    const name = String(
+      body.name ||
+      body.firstName ||
+      body.first_name ||
+      body.username ||
+      ""
+    ).trim();
+
+    const phone = String(
+      body.phone ||
+      body.phoneNumber ||
+      body.phone_number ||
+      ""
+    ).trim();
+
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        message: "Введите номер телефона",
+      });
+    }
+
+    const normalizedPhone = normalizePhone(phone);
+
+    // Ищем существующего клиента
+    const existingResult = await pgQuery(
+      `
+      SELECT *
+      FROM clients
+      WHERE phone = $1
+      LIMIT 1
+      `,
+      [normalizedPhone]
+    );
+
+    // ==========================================
+    // КЛИЕНТ НАЙДЕН — ВХОД
+    // ==========================================
+
+    if (existingResult.rows.length > 0) {
+      return res.status(200).json({
+        success: true,
+        message: "Вход выполнен",
+        isNewClient: false,
+        client: formatClient(existingResult.rows[0]),
+      });
+    }
+
+    // ==========================================
+    // НОВЫЙ КЛИЕНТ
+    // ==========================================
+
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        message: "Введите имя для регистрации",
+      });
+    }
+
+    const clientId = crypto.randomUUID();
+    const welcomeBonus = 100000;
+
+    const result = await pgQuery(
+      `
+      INSERT INTO clients (
+        id,
+        name,
+        phone,
+        points,
+        bonuses,
+        orders,
+        status,
+        role,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        0,
+        'NEW CLIENT',
+        'user',
+        NOW(),
+        NOW()
+      )
+      RETURNING *
+      `,
+      [
+        clientId,
+        name,
+        normalizedPhone,
+        welcomeBonus,
+        welcomeBonus,
+      ]
+    );
+
+    const client = result.rows[0];
+
+    // Записываем приветственные бонусы
+    try {
+      await pgQuery(
+        `
+        INSERT INTO client_operations (
+          id,
+          client_id,
+          type,
+          points,
+          reason,
+          created_at
+        )
+        VALUES (
+          $1,
+          $2,
+          'add',
+          $3,
+          'Приветственные бонусы',
+          NOW()
+        )
+        `,
+        [
+          crypto.randomUUID(),
+          clientId,
+          welcomeBonus,
+        ]
+      );
+    } catch (operationError) {
+      console.error(
+        "WELCOME BONUS OPERATION ERROR:",
+        operationError
+      );
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: "Регистрация успешно завершена",
+      isNewClient: true,
+      client: formatClient(client),
+    });
+
+  } catch (error) {
+    console.error(
+      "CLIENT LOGIN ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка входа или регистрации",
+      error: error.message,
+    });
+  }
+});
+
+// =====================================================
 // ADMIN LOGIN
 // FIREBASE
 // =====================================================
