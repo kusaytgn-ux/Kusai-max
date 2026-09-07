@@ -380,13 +380,25 @@ export async function getOneCCustomer(phone) {
     }
   }
   
+
+
+  console.log("");
+  console.log(
+    "1С: КЛИЕНТ НЕ НАЙДЕН НИ В ОДНОМ ФОРМАТЕ"
+  );
+  console.log("======================================");
+  
+
+  return null;
+}
+
   /*
 |--------------------------------------------------------------------------
 | Получение истории продаж клиента из 1С
 |--------------------------------------------------------------------------
 */
 
-async function getOneCSalesHistory(phone) {
+export async function getOneCSalesHistory(phone) {
   const variants = getOneCPhoneVariants(phone);
 
   console.log("");
@@ -476,13 +488,3 @@ async function getOneCSalesHistory(phone) {
 
   return [];
 } 
-
-  console.log("");
-  console.log(
-    "1С: КЛИЕНТ НЕ НАЙДЕН НИ В ОДНОМ ФОРМАТЕ"
-  );
-  console.log("======================================");
-  
-
-  return null;
-}

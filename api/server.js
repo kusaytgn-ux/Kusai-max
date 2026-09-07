@@ -8,7 +8,6 @@ import { calculateBonusDiscount } from "./bonus.js";
 import { query as pgQuery } from "./postgres.js";
 
 import {
-  getOneCCustomer,
   getOneCSalesHistory,
 } from "./oneC.js";
 
