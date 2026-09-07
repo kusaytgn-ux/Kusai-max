@@ -4273,11 +4273,7 @@ await pgQuery(`
   ON client_operations(client_id)
 `);
 
-await pgQuery(`
-  CREATE INDEX IF NOT EXISTS
-  idx_client_operations_created_at
-  ON client_operations(created_at DESC)
-`);
+
 
 console.log("📊 Таблица client_operations готова");
 
