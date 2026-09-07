@@ -8,7 +8,6 @@ import {
   type ReactNode,
 } from "react";
 
-
 import {
   getProducts,
   getNextProducts,
@@ -35,14 +34,15 @@ interface ProductProviderProps {
 
 const PAGE_SIZE = 50;
 
-export function ProductProvider({ children }: ProductProviderProps) {
+export function ProductProvider({
+  children,
+}: ProductProviderProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadingMore, setLoadingMore] =
+    useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const [, setLastDoc] =
+  const [error, setError] =
     useState<string | null>(null);
 
   const loadingMoreRef = useRef(false);
@@ -50,121 +50,188 @@ export function ProductProvider({ children }: ProductProviderProps) {
   const lastDocRef =
     useRef<string | null>(null);
 
-  const loadInitialProducts = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const loadInitialProducts = useCallback(
+    async (): Promise<void> => {
+      setLoading(true);
+      setError(null);
 
-    try {
-      const page = await getProducts(PAGE_SIZE);
+      try {
+        const page = await getProducts(PAGE_SIZE);
 
-      setProducts(page.products);
-      setLastDoc(page.lastDoc);
-      setHasMore(page.hasMore);
+        setProducts(page.products);
 
-      lastDocRef.current = page.lastDoc;
-      hasMoreRef.current = page.hasMore;
-    } catch (err) {
-      console.error("Ошибка первой загрузки товаров:", err);
-      setError("Не удалось загрузить товары");
-      setProducts([]);
-      setLastDoc(null);
-      setHasMore(false);
-      lastDocRef.current = null;
-      hasMoreRef.current = false;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const loadMore = useCallback(async (): Promise<void> => {
-    if (
-      loadingMoreRef.current ||
-      !hasMoreRef.current ||
-      !lastDocRef.current
-    ) {
-      return;
-    }
-
-    loadingMoreRef.current = true;
-    setLoadingMore(true);
-
-    try {
-      const page = await getNextProducts(
-        lastDocRef.current,
-        PAGE_SIZE
-      );
-
-      setProducts((current) => {
-        const existingIds = new Set(
-          current.map((product: Product) => product.id)
-        );
-
-        const newProducts = page.products.filter(
-          (product: Product) => !existingIds.has(product.id)
-        );
-
-        return [...current, ...newProducts];
-      });
-
-      if (page.products.length > 0) {
         lastDocRef.current = page.lastDoc;
-        setLastDoc(page.lastDoc);
+        hasMoreRef.current = page.hasMore;
+
+        setHasMore(page.hasMore);
+      } catch (err) {
+        console.error(
+          "Ошибка первой загрузки товаров:",
+          err
+        );
+
+        setError("Не удалось загрузить товары");
+        setProducts([]);
+
+        lastDocRef.current = null;
+        hasMoreRef.current = false;
+
+        setHasMore(false);
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
+  const loadMore = useCallback(
+    async (): Promise<void> => {
+      if (
+        loadingMoreRef.current ||
+        !hasMoreRef.current ||
+        !lastDocRef.current
+      ) {
+        return;
       }
 
-      hasMoreRef.current = page.hasMore;
-      setHasMore(page.hasMore);
-    } catch (err) {
-      console.error("Ошибка загрузки следующей страницы:", err);
-      setError("Не удалось загрузить следующие товары");
-    } finally {
+      loadingMoreRef.current = true;
+      setLoadingMore(true);
+
+      try {
+        const page = await getNextProducts(
+          lastDocRef.current,
+          PAGE_SIZE
+        );
+
+        setProducts((current) => {
+          const existingIds = new Set(
+            current.map(
+              (product: Product) => product.id
+            )
+          );
+
+          const newProducts =
+            page.products.filter(
+              (product: Product) =>
+                !existingIds.has(product.id)
+            );
+
+          return [
+            ...current,
+            ...newProducts,
+          ];
+        });
+
+        lastDocRef.current = page.lastDoc;
+        hasMoreRef.current = page.hasMore;
+
+        setHasMore(page.hasMore);
+      } catch (err) {
+        console.error(
+          "Ошибка загрузки следующей страницы:",
+          err
+        );
+
+        setError(
+          "Не удалось загрузить следующие товары"
+        );
+      } finally {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      }
+    },
+    []
+  );
+
+  const refreshProducts = useCallback(
+    async (): Promise<void> => {
       loadingMoreRef.current = false;
-      setLoadingMore(false);
-    }
-  }, []);
+      hasMoreRef.current = true;
+      lastDocRef.current = null;
 
-  const refreshProducts = useCallback(async () => {
-    setProducts([]);
-    setLastDoc(null);
-    setHasMore(true);
-    setError(null);
+      setProducts([]);
+      setHasMore(true);
+      setError(null);
 
-    lastDocRef.current = null;
-    hasMoreRef.current = true;
-    loadingMoreRef.current = false;
+      await loadInitialProducts();
+    },
+    [loadInitialProducts]
+  );
 
-    await loadInitialProducts();
-  }, [loadInitialProducts]);
+  /*
+  ==========================================
+  ПЕРВАЯ ЗАГРУЗКА ТОВАРОВ
+  ==========================================
+
+  Запускаем загрузку асинхронно через таймер.
+
+  Это предотвращает ошибку React ESLint:
+  set-state-in-effect
+  */
 
   useEffect(() => {
-    void loadInitialProducts();
+    const timer = window.setTimeout(() => {
+      void loadInitialProducts();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [loadInitialProducts]);
 
-  // Быстрая автозагрузка
+  /*
+  ==========================================
+  БЫСТРАЯ АВТОЗАГРУЗКА ТОВАРОВ
+  ==========================================
+  */
+
   useEffect(() => {
     if (loading) return;
+
     if (!hasMore) return;
 
     let stopped = false;
+    let timer: number | null = null;
 
     const loadNext = async () => {
-      if (stopped || !hasMoreRef.current || loadingMoreRef.current) {
+      if (
+        stopped ||
+        !hasMoreRef.current ||
+        loadingMoreRef.current
+      ) {
         return;
       }
 
       await loadMore();
 
-      if (!stopped && hasMoreRef.current) {
-        setTimeout(loadNext, 400);
+      if (
+        !stopped &&
+        hasMoreRef.current
+      ) {
+        timer = window.setTimeout(
+          loadNext,
+          400
+        );
       }
     };
 
-    const timer = setTimeout(loadNext, 300);
+    timer = window.setTimeout(
+      loadNext,
+      300
+    );
 
     return () => {
       stopped = true;
-      clearTimeout(timer);
+
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
     };
-  }, [loading, hasMore, loadMore]);
+  }, [
+    loading,
+    hasMore,
+    loadMore,
+  ]);
 
   return (
     <ProductContext.Provider
@@ -183,8 +250,16 @@ export function ProductProvider({ children }: ProductProviderProps) {
   );
 }
 
+/*
+==========================================
+HOOK ДЛЯ ПОЛУЧЕНИЯ ТОВАРОВ
+==========================================
+*/
+
+// eslint-disable-next-line react-refresh/only-export-components
 export function useProducts() {
-  const context = useContext(ProductContext);
+  const context =
+    useContext(ProductContext);
 
   if (!context) {
     throw new Error(
