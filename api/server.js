@@ -4254,26 +4254,47 @@ app.get(
 await pgQuery(`
   CREATE TABLE IF NOT EXISTS client_operations (
     id UUID PRIMARY KEY,
-
-    client_id UUID NOT NULL,
-
-    type TEXT NOT NULL,
-
-    points NUMERIC NOT NULL DEFAULT 0,
-
+    client_id UUID,
+    type TEXT,
+    points NUMERIC DEFAULT 0,
     reason TEXT DEFAULT '',
-
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
   )
 `);
 
+// Если таблица уже существовала — добавляем недостающие поля
+
 await pgQuery(`
-  CREATE INDEX IF NOT EXISTS
-  idx_client_operations_client_id
-  ON client_operations(client_id)
+  ALTER TABLE client_operations
+  ADD COLUMN IF NOT EXISTS client_id UUID
 `);
 
+await pgQuery(`
+  ALTER TABLE client_operations
+  ADD COLUMN IF NOT EXISTS type TEXT
+`);
 
+await pgQuery(`
+  ALTER TABLE client_operations
+  ADD COLUMN IF NOT EXISTS points NUMERIC DEFAULT 0
+`);
+
+await pgQuery(`
+  ALTER TABLE client_operations
+  ADD COLUMN IF NOT EXISTS reason TEXT DEFAULT ''
+`);
+
+await pgQuery(`
+  ALTER TABLE client_operations
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()
+`);
+
+// Создаём индекс только после гарантированного создания client_id
+
+await pgQuery(`
+  CREATE INDEX IF NOT EXISTS idx_client_operations_client_id
+  ON client_operations(client_id)
+`);
 
 console.log("📊 Таблица client_operations готова");
 
