@@ -7,6 +7,11 @@ import { db } from "./firebaseAdmin.js";
 import { calculateBonusDiscount } from "./bonus.js";
 import { query as pgQuery } from "./postgres.js";
 
+import {
+  getOneCCustomer,
+  getOneCSalesHistory,
+} from "./oneC.js";
+
 const app = express();
 
 // =====================================================
@@ -4478,6 +4483,73 @@ app.delete(
 
         message:
           "РћС€РёР±РєР° СѓРґР°Р»РµРЅРёСЏ РєР»РёРµРЅС‚Р°",
+
+        error:
+          error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
+// GET CLIENT SALES HISTORY FROM 1C
+// =====================================================
+
+app.get(
+  "/api/clients/phone/:phone/sales-history",
+  async (req, res) => {
+    try {
+      const phone = decodeURIComponent(
+        req.params.phone
+      );
+
+      console.log("");
+      console.log(
+        "======================================"
+      );
+      console.log(
+        "ЗАПРОС ИСТОРИИ ПРОДАЖ КЛИЕНТА"
+      );
+      console.log(
+        "======================================"
+      );
+
+      console.log(
+        "Телефон клиента:",
+        phone
+      );
+
+      const sales =
+        await getOneCSalesHistory(phone);
+
+      return res.json({
+        success: true,
+
+        phone,
+
+        count:
+          Array.isArray(sales)
+            ? sales.length
+            : 0,
+
+        sales:
+          Array.isArray(sales)
+            ? sales
+            : [],
+      });
+
+    } catch (error) {
+
+      console.error(
+        "GET CLIENT SALES HISTORY ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+
+        message:
+          "Не удалось получить историю продаж из 1С",
 
         error:
           error.message,

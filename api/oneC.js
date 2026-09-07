@@ -379,12 +379,110 @@ export async function getOneCCustomer(phone) {
       }
     }
   }
+  
+  /*
+|--------------------------------------------------------------------------
+| Получение истории продаж клиента из 1С
+|--------------------------------------------------------------------------
+*/
+
+async function getOneCSalesHistory(phone) {
+  const variants = getOneCPhoneVariants(phone);
+
+  console.log("");
+  console.log("======================================");
+  console.log("1С: ПОЛУЧЕНИЕ ИСТОРИИ ПРОДАЖ");
+  console.log("======================================");
+
+  console.log("Исходный телефон:", phone);
+
+  for (const phoneVariant of variants) {
+    const url =
+      `${ONE_C_URL}/salesHistory?phone=` +
+      encodeURIComponent(phoneVariant);
+
+    console.log(
+      "1С salesHistory:",
+      phoneVariant
+    );
+
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+
+        headers: {
+          Authorization: ONE_C_AUTH,
+          Accept: "application/json",
+        },
+
+        dispatcher: oneCAgent,
+      });
+
+      const text = await response.text();
+
+      console.log(
+        `1С salesHistory HTTP ${response.status}`
+      );
+
+      if (response.status === 404) {
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          `1С salesHistory HTTP ${response.status}: ${text}`
+        );
+      }
+
+      const data = JSON.parse(text);
+
+      if (Array.isArray(data)) {
+        console.log(
+          `1С: получено продаж: ${data.length}`
+        );
+
+        return data;
+      }
+
+      if (Array.isArray(data?.salesHistory)) {
+        console.log(
+          `1С: получено продаж: ${data.salesHistory.length}`
+        );
+
+        return data.salesHistory;
+      }
+
+      console.log(
+        "1С вернула пустую историю продаж"
+      );
+
+      return [];
+
+    } catch (error) {
+
+      console.error(
+        `Ошибка salesHistory для ${phoneVariant}:`,
+        error?.message || error
+      );
+
+      if (
+        phoneVariant ===
+        variants[variants.length - 1]
+      ) {
+        throw error;
+      }
+    }
+  }
+
+  return [];
+} 
 
   console.log("");
   console.log(
     "1С: КЛИЕНТ НЕ НАЙДЕН НИ В ОДНОМ ФОРМАТЕ"
   );
   console.log("======================================");
+  
 
   return null;
 }
