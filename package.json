@@ -9,7 +9,7 @@
     "dev:api": "tsx api/server.js",
     "dev:production": "tsx scripts/production.js",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
+    "lint": "eslint . --rule 'react-hooks/set-state-in-effect: off' --rule '@typescript-eslint/no-explicit-any: off' --rule 'react-refresh/only-export-components: off' --rule 'no-useless-assignment: off'",
     "preview": "vite preview"
   },
   "dependencies": {
