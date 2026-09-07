@@ -4247,6 +4247,41 @@ app.get(
 );
 
 // =====================================================
+// CLIENT OPERATIONS
+// POSTGRESQL
+// =====================================================
+
+await pgQuery(`
+  CREATE TABLE IF NOT EXISTS client_operations (
+    id UUID PRIMARY KEY,
+
+    client_id UUID NOT NULL,
+
+    type TEXT NOT NULL,
+
+    points NUMERIC NOT NULL DEFAULT 0,
+
+    reason TEXT DEFAULT '',
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )
+`);
+
+await pgQuery(`
+  CREATE INDEX IF NOT EXISTS
+  idx_client_operations_client_id
+  ON client_operations(client_id)
+`);
+
+await pgQuery(`
+  CREATE INDEX IF NOT EXISTS
+  idx_client_operations_created_at
+  ON client_operations(created_at DESC)
+`);
+
+console.log("📊 Таблица client_operations готова");
+
+// =====================================================
 // GET CLIENT OPERATIONS BY PHONE
 // =====================================================
 
