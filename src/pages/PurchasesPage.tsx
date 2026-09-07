@@ -12,10 +12,8 @@ import { useAuth } from "../auth/AuthContext";
 
 type Purchase = {
   id: string;
-  type: string;
   productName: string;
   amount: number;
-  bonuses: number;
   operationDate: string | null;
 };
 
@@ -39,101 +37,178 @@ function PurchasesPage() {
     useState("");
 
   useEffect(() => {
-    if (!user?.id) {
+
+    if (!user?.phone) {
       setLoading(false);
+
+      setError(
+        "Не удалось определить номер телефона клиента"
+      );
+
       return;
     }
 
-    const clientId: string = user.id;
+    const clientPhone =
+      user.phone;
 
     async function loadPurchases() {
+
       try {
+
         setLoading(true);
         setError("");
 
-        const response = await fetch(
-          `${API_URL}/api/clients/${encodeURIComponent(
-            clientId
-          )}/operations`
+        console.log("");
+        console.log(
+          "======================================"
+        );
+        console.log(
+          "ЗАГРУЗКА ИСТОРИИ ПОКУПОК"
+        );
+        console.log(
+          "======================================"
         );
 
-        const data = await response.json();
+        console.log(
+          "Телефон клиента:",
+          clientPhone
+        );
 
-        if (!response.ok || !data.success) {
+        /*
+        ======================================
+        ПОЛУЧАЕМ АКТУАЛЬНЫЕ ПОКУПКИ ИЗ 1С
+        ======================================
+        */
+
+        const response =
+          await fetch(
+            `${API_URL}/api/clients/phone/${encodeURIComponent(
+              clientPhone
+            )}/sales-history`,
+            {
+              method: "GET",
+            }
+          );
+
+        const data =
+          await response.json();
+
+        console.log(
+          "Ответ истории покупок:",
+          data
+        );
+
+        if (
+          !response.ok ||
+          !data.success
+        ) {
           throw new Error(
             data.message ||
-              "Не удалось загрузить покупки"
+            "Не удалось загрузить покупки"
           );
         }
 
-        const operations = Array.isArray(
-          data.operations
-        )
-          ? data.operations
-          : [];
+        const sales =
+          Array.isArray(data.sales)
+            ? data.sales
+            : [];
 
-        const mappedPurchases: Purchase[] =
-          operations.map((operation: any) => {
-            const amount = Number(
-              operation.amount ??
-                operation.points ??
-                0
-            );
+        /*
+        ======================================
+        ПРЕОБРАЗУЕМ ДАННЫЕ 1С
+        ======================================
+
+        1С возвращает:
+
+        {
+          id,
+          date,
+          goods,
+          sum
+        }
+        */
+
+        const mappedPurchases:
+          Purchase[] =
+          sales.map((sale: any) => {
 
             return {
-              id: String(operation.id),
 
-              type: String(
-                operation.type || "sale"
-              ),
+              id:
+                String(
+                  sale.id ||
+                  `${sale.date}-${sale.goods}`
+                ),
 
               productName:
-                operation.productName ||
-                operation.reason ||
-                "Покупка",
+                String(
+                  sale.goods ||
+                  "Покупка"
+                ),
 
-              amount,
-
-              bonuses: Number(
-                operation.bonuses ??
-                  Math.ceil(amount * 0.01)
-              ),
+              amount:
+                Number(
+                  sale.sum || 0
+                ),
 
               operationDate:
-                operation.operationDate ||
+                sale.date ||
                 null,
             };
           });
 
-        setPurchases(mappedPurchases);
+        console.log(
+          "Получено покупок:",
+          mappedPurchases.length
+        );
+
+        setPurchases(
+          mappedPurchases
+        );
+
       } catch (error) {
+
         console.error(
           "Ошибка загрузки покупок:",
           error
         );
 
+        setPurchases([]);
+
         setError(
-          "Не удалось загрузить историю покупок"
+          error instanceof Error
+            ? error.message
+            : "Не удалось загрузить историю покупок"
         );
+
       } finally {
+
         setLoading(false);
+
       }
     }
 
     void loadPurchases();
-  }, [user?.id]);
+
+  }, [user?.phone]);
 
   function formatDate(
     value: string | null
   ) {
+
     if (!value) {
       return "Дата не указана";
     }
 
-    const date = new Date(value);
+    const date =
+      new Date(value);
 
-    if (Number.isNaN(date.getTime())) {
-      return "Дата не указана";
+    if (
+      Number.isNaN(
+        date.getTime()
+      )
+    ) {
+      return value;
     }
 
     return date.toLocaleDateString(
@@ -146,13 +221,19 @@ function PurchasesPage() {
     );
   }
 
-  function formatPrice(value: number) {
+  function formatPrice(
+    value: number
+  ) {
+
     return `${Number(
       value || 0
-    ).toLocaleString("ru-RU")} ₽`;
+    ).toLocaleString(
+      "ru-RU"
+    )} ₽`;
   }
 
   if (!user) {
+
     return (
       <div className="flex min-h-screen items-center justify-center bg-black text-white">
         Авторизуйтесь
@@ -161,15 +242,18 @@ function PurchasesPage() {
   }
 
   return (
+
     <div className="min-h-screen bg-black pb-28 text-white">
 
-      {/* Верхняя панель */}
+      {/* ВЕРХНЯЯ ПАНЕЛЬ */}
 
       <header className="mx-auto flex max-w-md items-center px-5 py-5">
 
         <button
           type="button"
-          onClick={() => navigate("/")}
+          onClick={() =>
+            navigate("/")
+          }
           className="
             flex
             h-11
@@ -185,7 +269,9 @@ function PurchasesPage() {
           "
           aria-label="Назад"
         >
+
           <ArrowLeft size={22} />
+
         </button>
 
         <div className="ml-4">
@@ -195,7 +281,7 @@ function PurchasesPage() {
           </h1>
 
           <p className="mt-1 text-xs text-zinc-500">
-            История покупок
+            Актуальная история из 1С
           </p>
 
         </div>
@@ -204,9 +290,10 @@ function PurchasesPage() {
 
       <main className="mx-auto max-w-md px-5">
 
-        {/* Загрузка */}
+        {/* ЗАГРУЗКА */}
 
         {loading && (
+
           <div
             className="
               mt-4
@@ -219,18 +306,22 @@ function PurchasesPage() {
               text-zinc-400
             "
           >
+
             <Loader2
               size={22}
               className="mr-3 animate-spin"
             />
 
-            Загружаем покупки...
+            Получаем актуальные покупки...
+
           </div>
+
         )}
 
-        {/* Ошибка */}
+        {/* ОШИБКА */}
 
         {!loading && error && (
+
           <div
             className="
               mt-4
@@ -240,17 +331,21 @@ function PurchasesPage() {
               text-center
             "
           >
+
             <p className="text-red-400">
               {error}
             </p>
+
           </div>
+
         )}
 
-        {/* Пусто */}
+        {/* ПОКУПОК НЕТ */}
 
         {!loading &&
           !error &&
           purchases.length === 0 && (
+
             <div
               className="
                 mt-4
@@ -275,10 +370,12 @@ function PurchasesPage() {
                   bg-yellow-400
                 "
               >
+
                 <ShoppingBag
                   size={30}
                   className="text-black"
                 />
+
               </div>
 
               <h2 className="mt-5 text-xl font-black">
@@ -286,89 +383,90 @@ function PurchasesPage() {
               </h2>
 
               <p className="mt-2 text-sm leading-6 text-zinc-500">
-                Здесь появится история ваших покупок.
+                Здесь появится актуальная история ваших покупок из 1С.
               </p>
 
             </div>
+
           )}
 
-        {/* Покупки */}
+        {/* СПИСОК ПОКУПОК */}
 
         {!loading &&
           !error &&
           purchases.length > 0 && (
+
             <div className="space-y-4">
 
-              {purchases.map((purchase) => (
+              {purchases.map(
+                (purchase) => (
 
-                <div
-                  key={purchase.id}
-                  className="
-                    rounded-3xl
-                    border
-                    border-zinc-800
-                    bg-zinc-900
-                    p-5
-                  "
-                >
+                  <div
+                    key={purchase.id}
+                    className="
+                      rounded-3xl
+                      border
+                      border-zinc-800
+                      bg-zinc-900
+                      p-5
+                    "
+                  >
 
-                  <div className="flex items-start gap-4">
+                    <div className="flex items-start gap-4">
 
-                    {/* Иконка */}
+                      {/* ИКОНКА */}
 
-                    <div
-                      className="
-                        flex
-                        h-12
-                        w-12
-                        shrink-0
-                        items-center
-                        justify-center
-                        rounded-2xl
-                        bg-yellow-400
-                      "
-                    >
-                      <ShoppingBag
-                        size={21}
-                        className="text-black"
-                      />
-                    </div>
+                      <div
+                        className="
+                          flex
+                          h-12
+                          w-12
+                          shrink-0
+                          items-center
+                          justify-center
+                          rounded-2xl
+                          bg-yellow-400
+                        "
+                      >
 
-                    {/* Информация */}
+                        <ShoppingBag
+                          size={21}
+                          className="text-black"
+                        />
 
-                    <div className="min-w-0 flex-1">
+                      </div>
 
-                      <p className="font-bold text-white">
-                        {purchase.productName}
-                      </p>
+                      {/* ИНФОРМАЦИЯ */}
 
-                      <p className="mt-1 text-xs text-zinc-500">
-                        {formatDate(
-                          purchase.operationDate
-                        )}
-                      </p>
+                      <div className="min-w-0 flex-1">
 
-                      <p className="mt-2 text-lg font-black text-yellow-400">
-                        {formatPrice(
-                          purchase.amount
-                        )}
-                      </p>
+                        <p className="font-bold text-white">
+                          {purchase.productName}
+                        </p>
 
-                      <p className="mt-1 text-xs font-medium text-yellow-400/70">
-                        +{purchase.bonuses.toLocaleString(
-                          "ru-RU"
-                        )} бонусов
-                      </p>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          {formatDate(
+                            purchase.operationDate
+                          )}
+                        </p>
+
+                        <p className="mt-2 text-lg font-black text-yellow-400">
+                          {formatPrice(
+                            purchase.amount
+                          )}
+                        </p>
+
+                      </div>
 
                     </div>
 
                   </div>
 
-                </div>
-
-              ))}
+                )
+              )}
 
             </div>
+
           )}
 
       </main>

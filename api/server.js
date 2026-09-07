@@ -8,6 +8,7 @@ import { calculateBonusDiscount } from "./bonus.js";
 import { query as pgQuery } from "./postgres.js";
 
 import {
+  getOneCCustomer,
   getOneCSalesHistory,
 } from "./oneC.js";
 
@@ -146,6 +147,99 @@ function formatClient(client) {
 }
 
 // =====================================================
+// ОБОГАЩЕНИЕ КЛИЕНТА АКТУАЛЬНЫМИ ДАННЫМИ ИЗ 1С
+// =====================================================
+
+async function enrichClientWithOneC(client) {
+
+  const formattedClient =
+    formatClient(client);
+
+  try {
+
+    console.log("");
+    console.log(
+      "======================================"
+    );
+    console.log(
+      "1С: ПОЛУЧЕНИЕ АКТУАЛЬНЫХ ДАННЫХ КЛИЕНТА"
+    );
+    console.log(
+      "======================================"
+    );
+
+    console.log(
+      "Телефон:",
+      formattedClient.phone
+    );
+
+    const oneCClient =
+      await getOneCCustomer(
+        formattedClient.phone
+      );
+
+    if (!oneCClient) {
+
+      console.log(
+        "1С не вернула дополнительные данные клиента"
+      );
+
+      return formattedClient;
+    }
+
+    console.log(
+      "1С: данные клиента успешно получены"
+    );
+
+    return {
+      ...formattedClient,
+
+      // QR-код приходит только из 1С
+      customerQR:
+        oneCClient.customerQR ??
+        formattedClient.customerQR ??
+        null,
+
+      // Обновляем имя, если 1С его передала
+      name:
+        oneCClient.name ||
+        formattedClient.name,
+
+      // Актуальные бонусы из 1С
+      bonuses:
+        oneCClient.bonusBalance ??
+        oneCClient.bonuses ??
+        formattedClient.bonuses,
+
+      points:
+        oneCClient.bonusBalance ??
+        oneCClient.points ??
+        formattedClient.points,
+
+      // Передаем дополнительные данные 1С
+      oneCData:
+        oneCClient,
+    };
+
+  } catch (error) {
+
+    console.error(
+      "Ошибка получения данных клиента из 1С:",
+      error?.message || error
+    );
+
+    /*
+    ВАЖНО:
+
+    Если 1С временно недоступна,
+    клиент всё равно сможет пользоваться приложением.
+    */
+
+    return formattedClient;
+  }
+}
+
+// =====================================================
 // HEALTH
 // =====================================================
 
@@ -228,17 +322,23 @@ app.post("/api/auth/login", async (req, res) => {
     );
 
     // ==========================================
-    // РљР›РР•РќРў РќРђР™Р”Р•Рќ вЂ” Р’РҐРћР”
+    // /api/auth/login
     // ==========================================
 
     if (existingResult.rows.length > 0) {
-      return res.status(200).json({
-        success: true,
-        message: "Р’С…РѕРґ РІС‹РїРѕР»РЅРµРЅ",
-        isNewClient: false,
-        client: formatClient(existingResult.rows[0]),
-      });
-    }
+
+    const client =
+      await enrichClientWithOneC(
+        existingResult.rows[0]
+      );
+
+    return res.status(200).json({
+      success: true,
+      message: "Вход выполнен",
+      isNewClient: false,
+      client,
+    });
+  }
 
     // ==========================================
     // РќРћР’Р«Р™ РљР›РР•РќРў
@@ -4187,9 +4287,14 @@ app.get("/api/clients/phone/:phone", async (req, res) => {
       });
     }
 
+    const client =
+      await enrichClientWithOneC(
+        result.rows[0]
+      );
+
     return res.json({
       success: true,
-      client: formatClient(result.rows[0]),
+      client,
     });
 
   } catch (error) {
