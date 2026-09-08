@@ -185,6 +185,29 @@ async function enrichClientWithOneC(client) {
         formattedClient.phone
       );
 
+      console.log(
+  "======================================"
+);
+
+console.log(
+  "1С ПОЛНЫЙ ОТВЕТ:",
+  JSON.stringify(oneCClient, null, 2)
+);
+
+console.log(
+  "1С CUSTOMER QR:",
+  oneCClient?.customerQR
+);
+
+console.log(
+  "1С ВСЕ ПОЛЯ:",
+  oneCClient ? Object.keys(oneCClient) : null
+);
+
+console.log(
+  "======================================"
+);
+
     if (!oneCClient) {
 
       console.log(
@@ -204,6 +227,11 @@ async function enrichClientWithOneC(client) {
       // QR-РєРѕРґ РїСЂРёС…РѕРґРёС‚ С‚РѕР»СЊРєРѕ РёР· 1РЎ
       customerQR:
         oneCClient.customerQR ??
+        oneCClient.customer_qr ??
+        oneCClient.qrCode ??
+        oneCClient.qrcode ??
+        oneCClient.qr ??
+        oneCClient.QR ??
         formattedClient.customerQR ??
         null,
 
