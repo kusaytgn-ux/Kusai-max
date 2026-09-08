@@ -118,6 +118,7 @@ function formatClient(client) {
     id: client.id,
     name: client.name || "",
     phone: client.phone || "",
+
     points: Number(client.points || 0),
 
     bonuses: Number(
@@ -135,6 +136,14 @@ function formatClient(client) {
     role:
       client.role ||
       "user",
+
+    // QR-КОД КЛИЕНТА
+    customerQR:
+      client.customerQR ??
+      client.customer_qr ??
+      client.qr_code ??
+      client.qr ??
+      null,
 
     createdAt:
       client.created_at ||
