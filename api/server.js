@@ -136,6 +136,11 @@ function formatClient(client) {
       client.role ||
       "user",
 
+    customerQR:
+      client.customerQR ??
+      client.customer_qr ??
+      null,
+
     createdAt:
       client.created_at ||
       null,
@@ -427,11 +432,24 @@ app.post("/api/auth/login", async (req, res) => {
       );
     }
 
+    const enrichedClient =
+      await enrichClientWithOneC(client);
+
+    console.log(
+      "НОВЫЙ КЛИЕНТ ПОСЛЕ 1С:",
+      enrichedClient
+    );
+
+    console.log(
+      "QR НОВОГО КЛИЕНТА:",
+      enrichedClient.customerQR
+    );
+
     return res.status(201).json({
       success: true,
-      message: "Р  Р ВµР С–Р С‘РЎРѓРЎвЂљРЎР‚Р В°РЎвЂ Р С‘РЎРЏ РЎС“РЎРѓР С—Р ВµРЎв‚¬Р Р…Р С• Р В·Р В°Р Р†Р ВµРЎР‚РЎв‚¬Р ВµР Р…Р В°",
+      message: "Регистрация успешно завершена",
       isNewClient: true,
-      client: formatClient(client),
+      client: enrichedClient,
     });
 
   } catch (error) {
