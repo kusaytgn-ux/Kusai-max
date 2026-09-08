@@ -113,6 +113,7 @@ function normalizePhone(phone) {
   return "+" + value;
 }
 
+
 function formatClient(client) {
   return {
     id: client.id,
@@ -135,13 +136,6 @@ function formatClient(client) {
     role:
       client.role ||
       "user",
-
-    // QR-КОД КЛИЕНТА
-    customerQR:
-      client.customerQR ??
-      client.customer_qr ??
-      client.qrCode ??
-      null,
 
     createdAt:
       client.created_at ||

@@ -156,10 +156,6 @@ export function AuthProvider({
 
       const client = data.client;
 
-      console.log("Клиент от сервера:", client);
-      console.log("QR клиента:", client.customerQR);
-      
-
       const currentUser: User = {
         id: client.id,
 
