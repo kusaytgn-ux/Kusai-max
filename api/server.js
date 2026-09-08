@@ -122,9 +122,7 @@ function formatClient(client) {
 
     phone: client.phone || "",
 
-    points: Number(
-      client.points || 0
-    ),
+    points: Number(client.points || 0),
 
     bonuses: Number(
       client.bonuses ??
@@ -132,9 +130,7 @@ function formatClient(client) {
       0
     ),
 
-    orders: Number(
-      client.orders || 0
-    ),
+    orders: Number(client.orders || 0),
 
     status:
       client.status ||
@@ -144,10 +140,7 @@ function formatClient(client) {
       client.role ||
       "user",
 
-    // ================================
-    // QR-КОД КЛИЕНТА
-    // ================================
-
+    // QR-код клиента
     customerQR:
       client.customerQR ??
       client.customer_qr ??
@@ -451,8 +444,7 @@ app.post("/api/auth/login", async (req, res) => {
     return res.status(201).json({
       success: true,
 
-      message:
-        "Регистрация успешно завершена",
+      message: "Регистрация успешно завершена",
 
       isNewClient: true,
 
