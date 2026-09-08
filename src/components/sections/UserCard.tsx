@@ -60,6 +60,11 @@ function UserCard() {
   const customerQR = user?.customerQR;
   const qrImageSrc = getQRImageSrc(customerQR);
 
+  console.log("=== ПРОВЕРКА QR ===");
+  console.log("USER:", user);
+  console.log("CUSTOMER QR:", customerQR);
+  console.log("QR IMAGE SRC:", qrImageSrc);
+
   const points = user?.points ?? 0;
 
   const kusaiLevel =
