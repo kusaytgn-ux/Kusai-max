@@ -156,8 +156,9 @@ export function AuthProvider({
 
       const client = data.client;
 
-      console.log("CLIENT FROM API:", client);
-      console.log("CUSTOMER QR:", client.customerQR);
+      console.log("Клиент от сервера:", client);
+      console.log("QR клиента:", client.customerQR);
+      
 
       const currentUser: User = {
         id: client.id,
@@ -203,9 +204,6 @@ export function AuthProvider({
 
         role: "user",
       };
-
-      console.log("CURRENT USER:", currentUser);
-      console.log("SAVED QR:", currentUser.customerQR);
 
       localStorage.setItem(
         "currentUser",

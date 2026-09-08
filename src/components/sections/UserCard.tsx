@@ -50,6 +50,8 @@ function getQRImageSrc(qr: unknown): string | null {
 
 function UserCard() {
   const { user } = useAuth();
+  console.log("USER В UserCard:", user);
+  console.log("QR В UserCard:", user?.customerQR);
   const { favorites } = useFavorites();
   const { totalItems } = useCart();
 

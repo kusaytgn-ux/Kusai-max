@@ -118,7 +118,6 @@ function formatClient(client) {
     id: client.id,
     name: client.name || "",
     phone: client.phone || "",
-
     points: Number(client.points || 0),
 
     bonuses: Number(
@@ -129,16 +128,28 @@ function formatClient(client) {
 
     orders: Number(client.orders || 0),
 
-    status: client.status || "NEW CLIENT",
+    status:
+      client.status ||
+      "NEW CLIENT",
 
-    role: client.role || "user",
+    role:
+      client.role ||
+      "user",
 
-    // QR-код из 1С
-    customerQR: client.customerQR ?? null,
+    // QR-КОД КЛИЕНТА
+    customerQR:
+      client.customerQR ??
+      client.customer_qr ??
+      client.qrCode ??
+      null,
 
-    createdAt: client.created_at || null,
+    createdAt:
+      client.created_at ||
+      null,
 
-    updatedAt: client.updated_at || null,
+    updatedAt:
+      client.updated_at ||
+      null,
   };
 }
 
