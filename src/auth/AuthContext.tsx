@@ -156,6 +156,13 @@ export function AuthProvider({
 
       const client = data.client;
 
+      console.log("=== LOGIN RESPONSE ===");
+      console.log("FULL DATA:", data);
+      console.log("CLIENT:", client);
+      console.log("CUSTOMER QR:", client.customerQR);
+      console.log("CUSTOMER_QR:", client.customer_qr);
+      console.log("QR:", client.qr);
+
       const currentUser: User = {
         id: client.id,
 
@@ -196,7 +203,10 @@ export function AuthProvider({
 
         customerQR:
           client.customerQR ??
-          undefined,
+          client.customer_qr ??
+          client.qr ??
+          client.qrCode ??
+          null,
 
         role: "user",
       };
