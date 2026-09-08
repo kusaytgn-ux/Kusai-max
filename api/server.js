@@ -129,29 +129,16 @@ function formatClient(client) {
 
     orders: Number(client.orders || 0),
 
-    status:
-      client.status ||
-      "NEW CLIENT",
+    status: client.status || "NEW CLIENT",
 
-    role:
-      client.role ||
-      "user",
+    role: client.role || "user",
 
-    // QR-КОД КЛИЕНТА
-    customerQR:
-      client.customerQR ??
-      client.customer_qr ??
-      client.qr_code ??
-      client.qr ??
-      null,
+    // QR-код из 1С
+    customerQR: client.customerQR ?? null,
 
-    createdAt:
-      client.created_at ||
-      null,
+    createdAt: client.created_at || null,
 
-    updatedAt:
-      client.updated_at ||
-      null,
+    updatedAt: client.updated_at || null,
   };
 }
 
