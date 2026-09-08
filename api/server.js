@@ -136,9 +136,11 @@ function formatClient(client) {
       client.role ||
       "user",
 
+    // QR-КОД КЛИЕНТА
     customerQR:
       client.customerQR ??
       client.customer_qr ??
+      client.CustomerQR ??
       null,
 
     createdAt:
