@@ -185,28 +185,16 @@ async function enrichClientWithOneC(client) {
         formattedClient.phone
       );
 
-      console.log(
-  "======================================"
-);
+    console.log("======================================");
+console.log("ПОЛНЫЙ ОТВЕТ ИЗ 1С:");
+console.log(JSON.stringify(oneCClient, null, 2));
+console.log("======================================");
 
-console.log(
-  "1С ПОЛНЫЙ ОТВЕТ:",
-  JSON.stringify(oneCClient, null, 2)
-);
-
-console.log(
-  "1С CUSTOMER QR:",
-  oneCClient?.customerQR
-);
-
-console.log(
-  "1С ВСЕ ПОЛЯ:",
-  oneCClient ? Object.keys(oneCClient) : null
-);
-
-console.log(
-  "======================================"
-);
+console.log("QR ИЗ 1С customerQR:", oneCClient?.customerQR);
+console.log("QR ИЗ 1С customer_qr:", oneCClient?.customer_qr);
+console.log("QR ИЗ 1С qr:", oneCClient?.qr);
+console.log("QR ИЗ 1С qrCode:", oneCClient?.qrCode);
+console.log("QR ИЗ 1С QRCode:", oneCClient?.QRCode);
 
     if (!oneCClient) {
 
