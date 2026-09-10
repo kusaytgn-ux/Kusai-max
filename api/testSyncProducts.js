@@ -1,22 +1,24 @@
 import "dotenv/config";
 
-import {
-  syncProducts,
-} from "./imageParser.js";
+import { syncProducts } from "./imageParser.js";
 
 try {
-  await syncProducts(1900);
+  const result = await syncProducts(10);
 
   console.log("");
-  console.log("✅ Тест завершён");
+
+  console.log("========== ИТОГ ==========");
+
+  console.dir(result, {
+    depth: 10,
+  });
 
   process.exit(0);
+
 } catch (error) {
   console.error("");
-  console.error(
-    "❌ Ошибка синхронизации:",
-    error
-  );
+
+  console.error("❌ ОШИБКА:", error);
 
   process.exit(1);
 }

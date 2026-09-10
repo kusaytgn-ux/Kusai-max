@@ -542,67 +542,27 @@ async function getProductImages(item) {
     );
 
     const rows = response.data?.rows || [];
-    if (rows.length > 0) {
-  console.log(
-    "MOYSKLAD IMAGE KEYS:",
-    Object.keys(rows[0])
-  );
-
-  console.log(
-    "MOYSKLAD IMAGE FIRST:",
-    JSON.stringify(rows[0], null, 2)
-  );
-}
-
 
     console.log(
       `MOYSKLAD: ${item.name || id} — фотографий: ${rows.length}`
     );
 
     return rows
-      .map((image) => {console.log(
-  "MOYSKLAD IMAGE LINKS:",
-  JSON.stringify({
-    href: image?.href,
-    downloadHref: image?.downloadHref,
-    miniatureHref: image?.miniature?.href,
-    miniatureDownloadHref: image?.miniature?.downloadHref,
-    tinyHref: image?.tiny?.href,
-    tinyDownloadHref: image?.tiny?.downloadHref,
-    metaHref: image?.meta?.href,
-    metaDownloadHref: image?.meta?.downloadHref,
-  })
-);
-        // ОРИГИНАЛ — используем в первую очередь
-        if (image?.downloadHref) {
-          return image.downloadHref;
+      .map((image) => {
+        const imageId = image?.meta?.href?.split("/").pop();
+
+        if (!imageId) {
+          return null;
         }
 
-        // Оригинал через meta
-        if (image?.meta?.href) {
-          return image.meta.href;
-        }
-
-        // Если оригинал недоступен — fallback
-        if (image?.miniature?.downloadHref) {
-          return image.miniature.downloadHref;
-        }
-
-        if (image?.tiny?.href) {
-          return image.tiny.href;
-        }
-
-        return null;
+        return `/api/moysklad/image/${imageId}`;
       })
       .filter(Boolean);
-
   } catch (error) {
     console.error(
-      `MOYSKLAD: ошибка получения фотографий товара ${item?.id}`
-    );
-
-    console.error(
-      error.response?.data || error.message
+      `MOYSKLAD: ошибка загрузки фотографий ${item?.name || item?.id}:`,
+      error.response?.status,
+      error.message
     );
 
     return [];

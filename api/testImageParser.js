@@ -1,8 +1,8 @@
 import "dotenv/config";
+
 import { parseOneProduct } from "./imageParser.js";
 
-const PRODUCT_ID =
-  "8405f76e-d5a8-11f0-0a80-0f140009748e";
+const PRODUCT_ID = "8405f76e-d5a8-11f0-0a80-0f140009748e";
 
 try {
   const result = await parseOneProduct(PRODUCT_ID);

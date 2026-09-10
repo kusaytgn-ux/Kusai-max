@@ -19,6 +19,48 @@ import {
 
 const app = express();
 
+app.get("/api/moysklad/image/:imageId", async (req, res) => {
+  try {
+    const { imageId } = req.params;
+
+    if (!imageId) {
+      return res.status(400).json({
+        success: false,
+        message: "Не указан imageId",
+      });
+    }
+
+    const imageUrl =
+      `${process.env.MOYSKLAD_API_URL || "https://api.moysklad.ru/api/remap/1.2"}` +
+      `/download/${imageId}`;
+
+    const response = await axios.get(imageUrl, {
+      auth: {
+        username: process.env.MOYSKLAD_LOGIN,
+        password: process.env.MOYSKLAD_PASSWORD,
+      },
+      responseType: "arraybuffer",
+      timeout: 120000,
+    });
+
+    res.set("Content-Type", response.headers["content-type"] || "image/png");
+    res.set("Cache-Control", "public, max-age=86400");
+
+    return res.send(response.data);
+  } catch (error) {
+    console.error(
+      "MOYSKLAD IMAGE PROXY ERROR:",
+      error.response?.status,
+      error.message
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка загрузки изображения",
+    });
+  }
+});
+
 // =====================================================
 // TRADE-IN TABLE
 // =====================================================

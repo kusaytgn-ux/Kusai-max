@@ -5,154 +5,53 @@ import * as cheerio from "cheerio";
 
 import { query } from "./postgres.js";
 
-/**
- * ============================================================
- * CONFIG
- * ============================================================
- */
+// ============================================================
+// CONFIG
+// ============================================================
 
-const STILTV_BASE = "https://stiltv.ru";
+const BASE_URL = "https://gallery-mobile.ru";
 
 const USER_AGENT =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/139 Safari/537.36";
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
+  "AppleWebKit/537.36 (KHTML, like Gecko) " +
+  "Chrome/139 Safari/537.36";
 
-/**
- * ============================================================
- * CATEGORY MAP
- * ============================================================
- */
+// ============================================================
+// REQUEST
+// ============================================================
 
-const CATEGORY_MAP = {
-  // =========================
-  // IPHONE
-  // =========================
+async function requestPage(url) {
+  console.log(`🌐 GET: ${url}`);
 
-  "iphone 17 pro max":
-    "https://stiltv.ru/apple-iphone/iphone-17-pro-max",
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": USER_AGENT,
 
-  "iphone 17 pro":
-    "https://stiltv.ru/apple-iphone/iphone-17-pro",
+      Accept:
+        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 
-  "iphone air":
-    "https://stiltv.ru/apple-iphone/iphone-air",
+      "Accept-Language":
+        "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+    },
+  });
 
-  "iphone 17":
-    "https://stiltv.ru/apple-iphone/apple-iphone-17",
+  if (!response.ok) {
+    throw new Error(
+      `Ошибка загрузки страницы: HTTP ${response.status}`
+    );
+  }
 
-  "iphone 16":
-    "https://stiltv.ru/apple-iphone/apple-iphone-16",
-
-  "iphone 15 plus":
-    "https://stiltv.ru/apple-iphone/apple-iphone-15-plus",
-
-  "iphone 15":
-    "https://stiltv.ru/apple-iphone/apple-iphone-15",
-
-  // =========================
-  // AIRPODS
-  // =========================
-
-  "airpods 4":
-    "https://stiltv.ru/apple/apple-airpods/apple-airpods-4-2024",
-
-  "airpods pro 3":
-    "https://stiltv.ru/apple/apple-airpods/airpods-pro-3",
-
-  "airpods max":
-    "https://stiltv.ru/apple/apple-airpods/apple-airpods-max",
-
-  // =========================
-  // APPLE WATCH
-  // =========================
-
-  "apple watch ultra 3":
-    "https://stiltv.ru/apple-watch/apple-watch-ultra-3",
-
-  "apple watch series 11":
-    "https://stiltv.ru/apple-watch/apple-watch-series-11-aluminum",
-
-  "apple watch ultra 2":
-    "https://stiltv.ru/apple-watch/apple-watch-ultra-2",
-
-  // =========================
-  // MAC
-  // =========================
-
-  macbook:
-    "https://stiltv.ru/apple/apple-macbook",
-
-  "imac 24 2024":
-    "https://stiltv.ru/apple/kompyutery-apple/imac-24-2024",
-
-  "imac 24 2023":
-    "https://stiltv.ru/apple/kompyutery-apple/imac-24-2023",
-
-  // =========================
-  // IPAD
-  // =========================
-
-  "ipad 11":
-    "https://stiltv.ru/apple/apple-ipad/apple-ipad-11-2025",
-
-  ipad_accessories:
-    "https://stiltv.ru/apple/apple-ipad/apple-stilusy-klaviatury-dlya-ipad",
-
-  // =========================
-  // DYSON
-  // =========================
-
-  dyson:
-    "https://stiltv.ru/dyson-catalog",
-
-  // =========================
-  // SAMSUNG
-  // =========================
-
-  samsung:
-    "https://stiltv.ru/telefonyi/samsung-smarfoni",
-
-  // =========================
-  // PLAYSTATION
-  // =========================
-
-  playstation:
-    "https://stiltv.ru/igrovye-pristavki",
-
-  // =========================
-  // YANDEX
-  // =========================
-
-  yandex:
-    "https://stiltv.ru/audiotehnika/besprovodnye-akusticheskie-sistemy/?page=4",
-};
-
-/**
- * ============================================================
- * TEXT HELPERS
- * ============================================================
- */
-
-function normalizeText(value) {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/ё/g, "е")
-    .replace(/iphone/g, "iphone")
-    .replace(/гбайт/g, "gb")
-    .replace(/гигабайт/g, "gb")
-    .replace(/гб/g, "gb")
-    .replace(/терабайт/g, "tb")
-    .replace(/тб/g, "tb")
-    .replace(/[()]/g, " ")
-    .replace(/[,+]/g, " ")
-    .replace(/[-_/]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return await response.text();
 }
+
+// ============================================================
+// URL NORMALIZATION
+// ============================================================
 
 function normalizeUrl(url) {
   if (!url) return null;
 
-  const value = String(url).trim();
+  let value = String(url).trim();
 
   if (!value) return null;
 
@@ -161,7 +60,7 @@ function normalizeUrl(url) {
   }
 
   if (value.startsWith("/")) {
-    return `${STILTV_BASE}${value}`;
+    return `${BASE_URL}${value}`;
   }
 
   if (
@@ -174,11 +73,64 @@ function normalizeUrl(url) {
   return null;
 }
 
-/**
- * ============================================================
- * COLORS
- * ============================================================
- */
+// ============================================================
+// TEXT NORMALIZATION
+// ============================================================
+
+function normalizeText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[®™]/g, "")
+    .replace(/[()]/g, " ")
+    .replace(/[,+]/g, " ")
+    .replace(/[-_/]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// ============================================================
+// TECHNICAL WORDS
+// ============================================================
+
+const STOP_WORDS = new Set([
+  "apple",
+  "samsung",
+  "xiaomi",
+  "sony",
+  "dyson",
+  "yandex",
+  "google",
+  "gb",
+  "tb",
+  "esim",
+  "sim",
+  "dual",
+  "nano",
+]);
+
+// ============================================================
+// MEMORY
+// ============================================================
+
+function detectMemory(text) {
+  const value = String(text || "");
+
+  const match = value.match(
+    /\b(32|64|128|256|512|1024|2048)\s*(GB|TB|ГБ|ТБ)\b/i
+  );
+
+  if (!match) return "";
+
+  return `${match[1]}${match[2]
+    .toLowerCase()
+    .replace("гб", "gb")
+    .replace("тб", "tb")}`;
+}
+
+// ============================================================
+// COLOR
+// ============================================================
 
 const COLOR_ALIASES = {
   black: [
@@ -188,24 +140,12 @@ const COLOR_ALIASES = {
     "space black",
     "jet black",
     "midnight",
-    "titanium black",
   ],
 
   white: [
     "white",
     "белый",
-    "белая",
-    "cloud white",
     "starlight",
-  ],
-
-  blue: [
-    "blue",
-    "синий",
-    "голубой",
-    "sky blue",
-    "deep blue",
-    "navy",
   ],
 
   silver: [
@@ -214,14 +154,19 @@ const COLOR_ALIASES = {
     "серебро",
   ],
 
+  blue: [
+    "blue",
+    "синий",
+    "голубой",
+    "sky blue",
+  ],
+
   gray: [
     "gray",
     "grey",
     "серый",
     "space gray",
-    "space grey",
     "graphite",
-    "natural titanium",
   ],
 
   green: [
@@ -245,8 +190,6 @@ const COLOR_ALIASES = {
     "gold",
     "golden",
     "золотой",
-    "золотая",
-    "light gold",
   ],
 
   yellow: [
@@ -267,11 +210,15 @@ const COLOR_ALIASES = {
 };
 
 function detectColor(text) {
-  const normalized = normalizeText(text);
+  const value = normalizeText(text);
 
-  for (const [color, aliases] of Object.entries(COLOR_ALIASES)) {
+  for (const [color, aliases] of Object.entries(
+    COLOR_ALIASES
+  )) {
     for (const alias of aliases) {
-      if (normalized.includes(normalizeText(alias))) {
+      if (
+        value.includes(normalizeText(alias))
+      ) {
         return color;
       }
     }
@@ -284,369 +231,260 @@ function getColorAliases(color) {
   return COLOR_ALIASES[color] || [];
 }
 
-/**
- * ============================================================
- * MEMORY
- * ============================================================
- */
+// ============================================================
+// REMOVE MEMORY
+// ============================================================
 
-function detectMemory(text) {
-  const normalized = normalizeText(text);
-
-  const slashMatch = normalized.match(
-    /\b\d+\s*\/\s*(64|128|256|512|1024|2048)\b/i
-  );
-
-  if (slashMatch) {
-    return `${slashMatch[1]}gb`;
-  }
-
-  const match = normalized.match(
-    /\b(64|128|256|512|1024|2048)\s*(gb|tb)\b/i
-  );
-
-  if (match) {
-    return `${match[1]}${match[2].toLowerCase()}`;
-  }
-
-  return "";
-}
-
-/**
- * ============================================================
- * REMOVE TECHNICAL WORDS
- * ============================================================
- */
-
-function removeTechnicalWords(text) {
-  return normalizeText(text)
-    .replace(/\besim\b/gi, " ")
-    .replace(/\be sim\b/gi, " ")
-    .replace(/\be-sim\b/gi, " ")
-
-    .replace(/\bsim\s*\+\s*esim\b/gi, " ")
-    .replace(/\bsim\s*\+\s*e sim\b/gi, " ")
-    .replace(/\bsim\s*\+\s*e-sim\b/gi, " ")
-
-    .replace(/\b1sim\b/gi, " ")
-    .replace(/\b2sim\b/gi, " ")
-
-    .replace(/\bdual sim\b/gi, " ")
-    .replace(/\bnano sim\b/gi, " ")
-    .replace(/\bsim\b/gi, " ")
-
-    .replace(/\b64\s*gb\b/gi, " ")
-    .replace(/\b128\s*gb\b/gi, " ")
-    .replace(/\b256\s*gb\b/gi, " ")
-    .replace(/\b512\s*gb\b/gi, " ")
-    .replace(/\b1024\s*gb\b/gi, " ")
-
-    .replace(/\b64\b/g, " ")
-    .replace(/\b128\b/g, " ")
-    .replace(/\b256\b/g, " ")
-    .replace(/\b512\b/g, " ")
-
+function removeMemory(text) {
+  return String(text || "")
+    .replace(
+      /\b(32|64|128|256|512|1024|2048)\s*(GB|TB|ГБ|ТБ)\b/gi,
+      " "
+    )
     .replace(/\s+/g, " ")
     .trim();
 }
 
-/**
- * ============================================================
- * PRODUCT INFO
- * ============================================================
- */
+// ============================================================
+// REMOVE SIM
+// ============================================================
 
-export function getProductInfo(product) {
-  const originalTitle = String(
-    product.title || product.name || ""
-  ).trim();
+function removeSim(text) {
+  return String(text || "")
+    .replace(/\beSIM\b/gi, " ")
+    .replace(/\be-SIM\b/gi, " ")
+    .replace(/\bDual SIM\b/gi, " ")
+    .replace(/\bNano SIM\b/gi, " ")
+    .replace(/\b1 SIM\b/gi, " ")
+    .replace(/\b2 SIM\b/gi, " ")
+    .replace(/\bSIM\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  let normalized = normalizeText(originalTitle);
+// ============================================================
+// CREATE SEARCH QUERIES
+// ============================================================
 
-  const memory = detectMemory(originalTitle);
-  const color = detectColor(originalTitle);
+function createSearchQueries(title) {
+  const original = String(title || "").trim();
 
-  let categoryKey = "";
-  let brand = "";
-  let model = "";
+  const memory = detectMemory(original);
+  const color = detectColor(original);
 
-  /**
-   * ==========================================================
-   * IPHONE
-   * ==========================================================
-   */
+  const queries = [];
+
+  // ==========================================================
+  // 1. ОРИГИНАЛ
+  // ==========================================================
+
+  queries.push(original);
+
+  // ==========================================================
+  // 2. БЕЗ APPLE
+  // ==========================================================
+
+  let withoutBrand = original
+    .replace(/^Apple\s+/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (withoutBrand) {
+    queries.push(withoutBrand);
+  }
+
+  // ==========================================================
+  // 3. БЕЗ SIM, НО С ПАМЯТЬЮ
+  // ==========================================================
+
+  let withoutSim = removeSim(withoutBrand);
+
+  withoutSim = withoutSim
+    .replace(/[()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (withoutSim) {
+    queries.push(withoutSim);
+  }
+
+  // ==========================================================
+  // 4. ЧИСТОЕ НАЗВАНИЕ БЕЗ ПАМЯТИ И SIM
+  // ==========================================================
+
+  let clean = withoutSim;
+
+  clean = removeMemory(clean);
+
+  clean = clean
+    .replace(/[()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (clean) {
+    queries.push(clean);
+  }
+
+  // ==========================================================
+  // 5. БЕЗ ЦВЕТА
+  // ==========================================================
+
+  let withoutColor = clean;
+
+  if (color) {
+    for (const alias of getColorAliases(color)) {
+      const escapedAlias = alias.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
+
+      const regex = new RegExp(
+        `\\b${escapedAlias}\\b`,
+        "gi"
+      );
+
+      withoutColor = withoutColor.replace(
+        regex,
+        " "
+      );
+    }
+
+    withoutColor = withoutColor
+      .replace(/\s+/g, " ")
+      .trim();
+  }
 
   if (
-    /\biphone\b/i.test(originalTitle) ||
-    /^(15|16|17|18)\b/.test(originalTitle)
+    withoutColor &&
+    withoutColor !== clean
   ) {
-    brand = "apple";
-
-    if (/17\s+pro\s+max/i.test(normalized)) {
-      categoryKey = "iphone 17 pro max";
-      model = "iphone 17 pro max";
-    } else if (/17\s+pro/i.test(normalized)) {
-      categoryKey = "iphone 17 pro";
-      model = "iphone 17 pro";
-    } else if (
-      /\b17\s+air\b/i.test(normalized) ||
-      /\biphone\s+air\b/i.test(normalized)
-    ) {
-      categoryKey = "iphone air";
-      model = "iphone air";
-    } else if (/\b17\b/.test(normalized)) {
-      categoryKey = "iphone 17";
-      model = "iphone 17";
-    } else if (/\b16\b/.test(normalized)) {
-      categoryKey = "iphone 16";
-      model = "iphone 16";
-    } else if (/15\s+plus/i.test(normalized)) {
-      categoryKey = "iphone 15 plus";
-      model = "iphone 15 plus";
-    } else if (/\b15\b/.test(normalized)) {
-      categoryKey = "iphone 15";
-      model = "iphone 15";
-    }
-  }
-
-  /**
-   * ==========================================================
-   * AIRPODS
-   * ==========================================================
-   */
-
-  else if (/airpods/i.test(originalTitle)) {
-    brand = "apple";
-
-    if (/pro\s*3/i.test(normalized)) {
-      categoryKey = "airpods pro 3";
-      model = "airpods pro 3";
-    } else if (/max/i.test(normalized)) {
-      categoryKey = "airpods max";
-      model = "airpods max";
-    } else if (/\b4\b/.test(normalized)) {
-      categoryKey = "airpods 4";
-      model = "airpods 4";
-    }
-  }
-
-  /**
-   * ==========================================================
-   * APPLE WATCH
-   * ==========================================================
-   */
-
-  else if (
-    /apple watch/i.test(originalTitle) ||
-    /\bwatch ultra\b/i.test(originalTitle)
-  ) {
-    brand = "apple";
-
-    if (/ultra\s*3/i.test(normalized)) {
-      categoryKey = "apple watch ultra 3";
-      model = "apple watch ultra 3";
-    } else if (/ultra\s*2/i.test(normalized)) {
-      categoryKey = "apple watch ultra 2";
-      model = "apple watch ultra 2";
-    } else if (
-      /series\s*11/i.test(normalized) ||
-      /\b11\b/.test(normalized)
-    ) {
-      categoryKey = "apple watch series 11";
-      model = "apple watch series 11";
-    }
-  }
-
-  /**
-   * ==========================================================
-   * MACBOOK
-   * ==========================================================
-   */
-
-  else if (/macbook/i.test(normalized)) {
-    brand = "apple";
-    categoryKey = "macbook";
-
-    model = removeTechnicalWords(normalized)
-      .replace(/\bapple\b/g, "")
-      .trim();
-  }
-
-  /**
-   * ==========================================================
-   * IMAC
-   * ==========================================================
-   */
-
-  else if (/imac/i.test(normalized)) {
-    brand = "apple";
-
-    if (/2024/.test(normalized)) {
-      categoryKey = "imac 24 2024";
-      model = "imac 24";
-    } else if (/2023/.test(normalized)) {
-      categoryKey = "imac 24 2023";
-      model = "imac 24";
-    }
-  }
-
-  /**
-   * ==========================================================
-   * IPAD
-   * ==========================================================
-   */
-
-  else if (/ipad/i.test(normalized)) {
-    brand = "apple";
-
-    if (
-      /стилус|клавиатур|keyboard|pencil/i.test(
-        originalTitle
-      )
-    ) {
-      categoryKey = "ipad_accessories";
-      model = removeTechnicalWords(normalized);
-    } else if (/\b11\b/.test(normalized)) {
-      categoryKey = "ipad 11";
-      model = "ipad 11";
-    }
-  }
-
-  /**
-   * ==========================================================
-   * DYSON
-   * ==========================================================
-   */
-
-  else if (/dyson/i.test(normalized)) {
-    brand = "dyson";
-    categoryKey = "dyson";
-
-    model = removeTechnicalWords(normalized)
-      .replace(/\bdyson\b/g, "")
-      .trim();
-  }
-
-  /**
-   * ==========================================================
-   * SAMSUNG
-   * ==========================================================
-   */
-
-  else if (
-    /samsung/i.test(normalized) ||
-    /galaxy/i.test(normalized)
-  ) {
-    brand = "samsung";
-    categoryKey = "samsung";
-
-    model = removeTechnicalWords(normalized)
-      .replace(/\bsamsung\b/g, "")
-      .replace(/\bgalaxy\b/g, "galaxy")
-      .trim();
-  }
-
-  /**
-   * ==========================================================
-   * PLAYSTATION
-   * ==========================================================
-   */
-
-  else if (
-    /playstation/i.test(normalized) ||
-    /\bps[45]\b/i.test(normalized)
-  ) {
-    brand = "sony";
-    categoryKey = "playstation";
-
-    model = removeTechnicalWords(normalized)
-      .replace(/\bsony\b/g, "")
-      .replace(/\bplaystation\b/g, "playstation")
-      .trim();
-  }
-
-  /**
-   * ==========================================================
-   * YANDEX
-   * ==========================================================
-   */
-
-  else if (
-    /яндекс/i.test(originalTitle) ||
-    /yandex/i.test(normalized) ||
-    /станция/i.test(originalTitle)
-  ) {
-    brand = "yandex";
-    categoryKey = "yandex";
-
-    model = removeTechnicalWords(normalized)
-      .replace(/\bяндекс\b/g, "")
-      .replace(/\byandex\b/g, "")
-      .trim();
+    queries.push(withoutColor);
   }
 
   return {
-    originalTitle,
-    normalized,
-    brand,
-    categoryKey,
-    categoryUrl:
-      CATEGORY_MAP[categoryKey] || "",
-    model,
+    original,
+    clean,
     memory,
     color,
+
+    queries: [
+      ...new Set(
+        queries.filter(Boolean)
+      ),
+    ],
   };
 }
 
-/**
- * ============================================================
- * EXTRACT PRODUCT LINKS
- * ============================================================
- */
+// ============================================================
+// PRODUCT TITLE ANALYSIS
+// ============================================================
 
-async function extractProductLinksFromCategory(url) {
-  console.log(`📂 Открываем категорию: ${url}`);
+function getProductInfo(product) {
+  const title = String(
+    product.title ||
+      product.name ||
+      ""
+  ).trim();
 
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": USER_AGENT,
-      Accept: "text/html,application/xhtml+xml",
-    },
-  });
+  const search = createSearchQueries(title);
 
-  if (!response.ok) {
-    throw new Error(
-      `Ошибка категории STILTV: HTTP ${response.status}`
-    );
+  return {
+    originalTitle: title,
+
+    normalizedTitle:
+      normalizeText(title),
+
+    searchTitle:
+      search.clean,
+
+    memory:
+      search.memory,
+
+    color:
+      search.color,
+
+    queries:
+      search.queries,
+  };
+}
+
+// ============================================================
+// PRODUCT URL CHECK
+// ============================================================
+
+function isProductUrl(url) {
+  if (!url) return false;
+
+  try {
+    const parsed = new URL(url);
+
+    if (!parsed.hostname.includes("gallery-mobile.ru")) {
+      return false;
+    }
+
+    const path = parsed.pathname
+      .replace(/\/+$/, "")
+      .toLowerCase();
+
+    if (!path.includes("/catalog/")) {
+      return false;
+    }
+
+    const badPaths = [
+      "/cart",
+      "/login",
+      "/search",
+      "/contacts",
+      "/compare",
+      "/favorite",
+    ];
+
+    if (
+      badPaths.some((badPath) =>
+        path.includes(badPath)
+      )
+    ) {
+      return false;
+    }
+
+    const parts = path
+      .split("/")
+      .filter(Boolean);
+
+    const catalogIndex = parts.indexOf("catalog");
+
+    if (catalogIndex === -1) {
+      return false;
+    }
+
+    // После catalog должно быть хотя бы несколько частей
+    return parts.length > catalogIndex + 2;
+
+  } catch {
+    return false;
   }
+}
 
-  const html = await response.text();
+// ============================================================
+// EXTRACT LINKS
+// ============================================================
 
+function extractLinks(html) {
   const $ = cheerio.load(html);
 
   const links = [];
 
   $("a").each((_, element) => {
-    const href = $(element).attr("href");
+    const href =
+      $(element).attr("href");
 
     if (!href) return;
 
-    const productUrl = normalizeUrl(href);
+    const url = normalizeUrl(href);
 
-    if (!productUrl) return;
+    if (!url) return;
 
-    if (!productUrl.startsWith(STILTV_BASE)) return;
-
-    if (!productUrl.includes(".html")) return;
-
-    const lowerUrl = productUrl.toLowerCase();
-
-    if (
-      lowerUrl.includes("/cart") ||
-      lowerUrl.includes("/login") ||
-      lowerUrl.includes("/search") ||
-      lowerUrl.includes("/contacts")
-    ) {
+    if (!isProductUrl(url)) {
       return;
     }
 
@@ -655,17 +493,28 @@ async function extractProductLinksFromCategory(url) {
       .replace(/\s+/g, " ")
       .trim();
 
+    // Убираем пустые ссылки
+
+    if (!title) return;
+
+    // Убираем SVG/CSS мусор
+
+    if (
+      title.includes(".cls-") ||
+      title.includes("{fill:") ||
+      title.includes("fill-rule") ||
+      title.length < 2
+    ) {
+      return;
+    }
+
     links.push({
-      url: productUrl,
+      url,
       title,
-      normalizedUrl: normalizeText(
-        decodeURIComponent(productUrl)
-      ),
-      normalizedTitle: normalizeText(title),
     });
   });
 
-  const unique = Array.from(
+  return Array.from(
     new Map(
       links.map((item) => [
         item.url,
@@ -673,374 +522,662 @@ async function extractProductLinksFromCategory(url) {
       ])
     ).values()
   );
-
-  console.log(`🔗 Найдено ссылок: ${unique.length}`);
-
-  return unique;
 }
 
-/**
- * ============================================================
- * SCORE PRODUCT LINK
- * ============================================================
- */
+// ============================================================
+// SEARCH URL VARIANTS
+// ============================================================
 
-function calculateLinkScore(productInfo, candidate) {
-  const candidateText = normalizeText(
-    `${candidate.title} ${decodeURIComponent(candidate.url)}`
+function createSearchUrls(queryText) {
+  const encoded =
+    encodeURIComponent(queryText);
+
+  return [
+    `${BASE_URL}/search/?q=${encoded}`,
+    `${BASE_URL}/search/?query=${encoded}`,
+    `${BASE_URL}/catalog/?q=${encoded}`,
+    `${BASE_URL}/catalog/?search=${encoded}`,
+  ];
+}
+
+// ============================================================
+// SEARCH PRODUCTS
+// ============================================================
+
+async function searchProductsOnSite(
+  searchQuery
+) {
+  console.log("");
+
+  console.log(
+    `🔎 ИЩЕМ: ${searchQuery}`
   );
 
-  let score = 0;
+  const urls =
+    createSearchUrls(searchQuery);
 
-  /**
-   * MODEL
-   */
+  const results = [];
 
-  const modelWords = normalizeText(
-    productInfo.model
-  )
-    .split(" ")
-    .filter(
-      (word) =>
-        word.length >= 2 &&
-        ![
-          "iphone",
-          "apple",
-          "samsung",
-          "sony",
-          "dyson",
-        ].includes(word)
-    );
+  for (const url of urls) {
+    try {
+      console.log(
+        `➡️ Проверяем поиск: ${url}`
+      );
 
-  let matchedModelWords = 0;
+      const html =
+        await requestPage(url);
 
-  for (const word of modelWords) {
-    if (candidateText.includes(word)) {
-      matchedModelWords++;
+      const links =
+        extractLinks(html);
+
+      console.log(
+        `🔗 Найдено товаров: ${links.length}`
+      );
+
+      results.push(...links);
+
+      if (links.length > 0) {
+        break;
+      }
+
+    } catch (error) {
+      console.log(
+        `⚠️ Не удалось: ${error.message}`
+      );
     }
   }
 
-  if (
-    modelWords.length > 0 &&
-    matchedModelWords === modelWords.length
-  ) {
-    score += 70;
-  } else if (
-    modelWords.length > 0 &&
-    matchedModelWords >=
-      Math.max(1, modelWords.length - 1)
-  ) {
-    score += 30;
-  } else {
-    return {
-      score: 0,
-      modelMatched: false,
-      colorMatched: false,
-      memoryMatched: false,
-    };
+  return Array.from(
+    new Map(
+      results.map((item) => [
+        item.url,
+        item,
+      ])
+    ).values()
+  );
+}
+
+// ============================================================
+// SCORE PRODUCT
+// ============================================================
+
+function calculateProductScore(
+  productInfo,
+  candidate
+) {
+  const candidateText =
+    normalizeText(
+      `${candidate.title} ${candidate.url}`
+    );
+
+  const sourceText =
+    normalizeText(
+      productInfo.originalTitle
+    );
+
+  const words =
+    sourceText
+      .split(" ")
+      .filter(
+        (word) =>
+          word.length > 1 &&
+          !STOP_WORDS.has(word) &&
+          !/^\d+$/.test(word)
+      );
+
+  let score = 0;
+  let matchedWords = 0;
+
+  for (const word of words) {
+    if (
+      candidateText.includes(word)
+    ) {
+      matchedWords++;
+      score += 10;
+    }
   }
 
-  /**
-   * COLOR
-   */
+  // Процент совпадения
+
+  if (words.length > 0) {
+    const ratio =
+      matchedWords / words.length;
+
+    score += Math.round(
+      ratio * 50
+    );
+  }
+
+  // ==========================================================
+  // COLOR
+  // ==========================================================
 
   let colorMatched = false;
 
   if (productInfo.color) {
-    const aliases = getColorAliases(
-      productInfo.color
-    );
+    const aliases =
+      getColorAliases(
+        productInfo.color
+      );
 
-    colorMatched = aliases.some((alias) =>
-      candidateText.includes(normalizeText(alias))
-    );
+    colorMatched =
+      aliases.some((alias) =>
+        candidateText.includes(
+          normalizeText(alias)
+        )
+      );
 
     if (colorMatched) {
-      score += 25;
+      score += 30;
     }
   }
 
-  /**
-   * MEMORY
-   */
+  // ==========================================================
+  // MEMORY
+  // ==========================================================
 
   let memoryMatched = false;
 
   if (productInfo.memory) {
-    const memoryText = productInfo.memory;
+    const memoryNumber =
+      productInfo.memory.replace(
+        /(gb|tb)/gi,
+        ""
+      );
 
-    if (
-      candidateText.includes(memoryText) ||
-      candidateText.includes(
-        memoryText.replace("gb", " gb")
-      )
-    ) {
-      memoryMatched = true;
-      score += 5;
+    const memoryUnit =
+      productInfo.memory
+        .match(/(gb|tb)/i)?.[1]
+        ?.toLowerCase();
+
+    const variants = [
+      productInfo.memory,
+
+      productInfo.memory.replace(
+        "gb",
+        " gb"
+      ),
+
+      productInfo.memory.replace(
+        "tb",
+        " tb"
+      ),
+
+      `${memoryNumber}${memoryUnit}`,
+
+      `${memoryNumber} ${memoryUnit}`,
+    ];
+
+    memoryMatched =
+      variants.some((memory) =>
+        candidateText.includes(
+          normalizeText(memory)
+        )
+      );
+
+    if (memoryMatched) {
+      score += 40;
     }
   }
 
   return {
     score,
-    modelMatched:
-      matchedModelWords > 0,
+    matchedWords,
     colorMatched,
     memoryMatched,
   };
 }
 
-/**
- * ============================================================
- * FIND PRODUCT PAGE
- * ============================================================
- */
+// ============================================================
+// FIND BEST PRODUCT
+// ============================================================
 
 async function findProductPage(product) {
-  const info = getProductInfo(product);
+  const info =
+    getProductInfo(product);
 
   console.log("");
-  console.log("🔎 АНАЛИЗ ТОВАРА");
-  console.log(`📦 ${info.originalTitle}`);
-  console.log(`🏷 Бренд: ${info.brand || "не определён"}`);
-  console.log(`📱 Модель: ${info.model || "не определена"}`);
-  console.log(`🎨 Цвет: ${info.color || "не указан"}`);
-  console.log(`💾 Память: ${info.memory || "не указана"}`);
-  console.log(`📂 Категория: ${info.categoryKey || "не определена"}`);
 
-  if (!info.categoryUrl) {
-    console.log("❌ Для товара нет категории STILTV");
+  console.log(
+    "===================================="
+  );
 
-    return null;
-  }
+  console.log(
+    "🔎 ПОИСК ТОВАРА"
+  );
 
-  const links =
-    await extractProductLinksFromCategory(
-      info.categoryUrl
-    );
+  console.log(
+    "===================================="
+  );
 
-  if (!links.length) {
-    return null;
-  }
+  console.log(
+    `📦 Оригинал: ${info.originalTitle}`
+  );
+
+  console.log(
+    `🔍 Поиск: ${info.searchTitle}`
+  );
+
+  console.log(
+    `🎨 Цвет: ${info.color || "нет"}`
+  );
+
+  console.log(
+    `💾 Память: ${info.memory || "нет"}`
+  );
+
+  console.log("");
+
+  console.log(
+    "📝 Варианты поиска:"
+  );
+
+  info.queries.forEach((item) => {
+    console.log(`• ${item}`);
+  });
 
   const candidates = [];
 
-  for (const link of links) {
-    const result =
-      calculateLinkScore(info, link);
+  // ==========================================================
+  // SEARCH
+  // ==========================================================
 
-    if (result.score > 0) {
-      candidates.push({
-        ...link,
-        ...result,
-      });
+  for (
+    const searchQuery of info.queries
+  ) {
+    const links =
+      await searchProductsOnSite(
+        searchQuery
+      );
+
+    for (const link of links) {
+      const score =
+        calculateProductScore(
+          info,
+          link
+        );
+
+      if (score.score > 0) {
+        candidates.push({
+          ...link,
+          ...score,
+        });
+      }
     }
+
+    if (candidates.length > 0) {
+      break;
+    }
+
+    await new Promise(
+      (resolve) =>
+        setTimeout(resolve, 700)
+    );
   }
 
-  candidates.sort(
-    (a, b) => b.score - a.score
+  // ==========================================================
+  // UNIQUE
+  // ==========================================================
+
+  const uniqueCandidates =
+    Array.from(
+      new Map(
+        candidates.map((item) => [
+          item.url,
+          item,
+        ])
+      ).values()
+    );
+
+  uniqueCandidates.sort(
+    (a, b) =>
+      b.score - a.score
   );
 
   console.log("");
+
   console.log(
-    `🎯 Подходящих ссылок: ${candidates.length}`
+    `🎯 Кандидатов: ${uniqueCandidates.length}`
   );
 
-  for (const candidate of candidates.slice(0, 10)) {
-    console.log(
-      `⭐ ${candidate.score} — ${candidate.title || candidate.url}`
-    );
+  uniqueCandidates
+    .slice(0, 10)
+    .forEach((item) => {
+      console.log(
+        `⭐ ${item.score} | ${item.title}`
+      );
 
-    console.log(candidate.url);
-  }
+      console.log(item.url);
 
-  if (!candidates.length) {
+      console.log(
+        `🎨 Цвет: ${item.colorMatched}`
+      );
+
+      console.log(
+        `💾 Память: ${item.memoryMatched}`
+      );
+    });
+
+  if (!uniqueCandidates.length) {
     return null;
   }
 
-  /**
-   * Сначала ищем модель + цвет
-   */
+  const best =
+    uniqueCandidates[0];
 
-  const exactColorMatch =
-    candidates.find(
-      (item) =>
-        item.modelMatched &&
-        item.colorMatched
+  // Минимальная защита от неправильного товара
+
+  if (best.score < 40) {
+    console.log("");
+
+    console.log(
+      "❌ Нет достаточно точного совпадения"
     );
 
-  if (exactColorMatch) {
-    console.log("");
-    console.log("✅ Найдена ссылка с нужным цветом");
+    console.log(
+      `Лучший результат: ${best.title}`
+    );
 
-    return exactColorMatch;
+    console.log(
+      `Score: ${best.score}`
+    );
+
+    return null;
   }
 
-  /**
-   * Если цвет не найден — берём лучшую модель
-   */
-
   console.log("");
+
   console.log(
-    "⚠️ Точный цвет не найден, используем лучшее совпадение модели"
+    "🏆 ВЫБРАН ТОВАР:"
   );
 
-  return candidates[0];
+  console.log(best.title);
+
+  console.log(best.url);
+
+  return best;
 }
 
-/**
- * ============================================================
- * EXTRACT IMAGES
- * ============================================================
- */
+// ============================================================
+// IMAGE URL
+// ============================================================
+
+function isImageUrl(url) {
+  if (!url) return false;
+
+  const value =
+    url.toLowerCase();
+
+  return (
+    value.includes(".jpg") ||
+    value.includes(".jpeg") ||
+    value.includes(".png") ||
+    value.includes(".webp") ||
+    value.includes(".avif")
+  );
+}
+
+// ============================================================
+// BAD IMAGES
+// ============================================================
+
+function isBadImage(url) {
+  const value =
+    url.toLowerCase();
+
+  const badWords = [
+    "logo",
+    "icon",
+    "favicon",
+    "sprite",
+    "banner",
+    "payment",
+    "delivery",
+    "placeholder",
+    "loader",
+    "instagram",
+    "telegram",
+    "whatsapp",
+  ];
+
+  return badWords.some(
+    (word) =>
+      value.includes(word)
+  );
+}
+
+// ============================================================
+// EXTRACT IMAGES
+// ============================================================
 
 async function extractImagesFromPage(url) {
+
   console.log("");
-  console.log(`🌐 Открываем страницу товара: ${url}`);
 
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": USER_AGENT,
-      Accept: "text/html,application/xhtml+xml",
-    },
-  });
+  console.log(
+    "🖼 ПОЛУЧАЕМ ИЗОБРАЖЕНИЯ"
+  );
 
-  if (!response.ok) {
-    throw new Error(
-      `Ошибка страницы товара: HTTP ${response.status}`
-    );
-  }
-
-  const html = await response.text();
+  const html = await requestPage(url);
 
   const $ = cheerio.load(html);
 
   const images = [];
 
-  function addImage(src) {
-    if (!src) return;
+  // ============================================================
+  // ПРОВЕРКА ИЗОБРАЖЕНИЯ
+  // ============================================================
 
-    const imageUrl =
-      normalizeUrl(src);
+  function isGoodProductImage(imageUrl) {
+
+    if (!imageUrl) return false;
+
+    const value = imageUrl.toLowerCase();
+
+    // Только изображения
+
+    if (!isImageUrl(value)) {
+      return false;
+    }
+
+    // Логотипы, иконки и мусор
+
+    if (isBadImage(value)) {
+      return false;
+    }
+
+    // Маленькие превью
+
+    if (
+      value.includes("/60_60_") ||
+      value.includes("/100_100_") ||
+      value.includes("/150_150_") ||
+      value.includes("/200_200_")
+    ) {
+      return false;
+    }
+
+    // Нам нужны оригиналы товаров.
+    // Игнорируем resize_cache — оригинал обычно
+    // лежит в /upload/iblock/
+
+    if (
+      value.includes("/upload/resize_cache/")
+    ) {
+      return false;
+    }
+
+    // Исключаем технические изображения сайта
+
+    const badPaths = [
+      "/upload/cmax/",
+      "/template/",
+      "/assets/",
+      "/bitrix/",
+    ];
+
+    if (
+      badPaths.some((path) =>
+        value.includes(path)
+      )
+    ) {
+      return false;
+    }
+
+    return true;
+
+  }
+
+  // ============================================================
+  // ДОБАВЛЕНИЕ ИЗОБРАЖЕНИЯ
+  // ============================================================
+
+  function addImage(value) {
+
+    if (!value) return;
+
+    const imageUrl = normalizeUrl(value);
 
     if (!imageUrl) return;
 
-    const lower =
-      imageUrl.toLowerCase();
-
     if (
-      !/\.(jpg|jpeg|png|webp)(\?|$)/i.test(
-        lower
-      )
-    ) {
-      return;
-    }
-
-    if (
-      lower.includes("logo") ||
-      lower.includes("icon") ||
-      lower.includes("favicon") ||
-      lower.includes("banner") ||
-      lower.includes("sprite") ||
-      lower.includes("placeholder") ||
-      lower.includes("payment") ||
-      lower.includes("delivery")
+      !isGoodProductImage(imageUrl)
     ) {
       return;
     }
 
     images.push(imageUrl);
+
   }
 
-  $("img").each((_, element) => {
-    const src =
-      $(element).attr("data-original") ||
-      $(element).attr("data-src") ||
-      $(element).attr("data-lazy-src") ||
-      $(element).attr("src");
+  // ============================================================
+  // IMG
+  // ============================================================
 
-    addImage(src);
+  $("img").each(
+    (_, element) => {
 
-    const srcset =
-      $(element).attr("srcset");
+      const sources = [
 
-    if (srcset) {
-      const variants =
-        srcset.split(",");
+        $(element).attr("src"),
 
-      for (const variant of variants) {
-        const image =
-          variant.trim().split(/\s+/)[0];
+        $(element).attr("data-src"),
 
-        addImage(image);
+        $(element).attr("data-original"),
+
+        $(element).attr("data-lazy-src"),
+
+        $(element).attr("data-image"),
+
+      ];
+
+      for (const source of sources) {
+
+        addImage(source);
+
       }
+
     }
-  });
-
-  /**
-   * UNIQUE
-   */
-
-  const unique =
-    Array.from(new Set(images));
-
-  console.log(
-    `🖼 Найдено изображений: ${unique.length}`
   );
 
-  return unique.slice(0, 10);
+  // ============================================================
+  // ССЫЛКИ НА ИЗОБРАЖЕНИЯ
+  // ============================================================
+
+  $("a").each(
+    (_, element) => {
+
+      const href =
+        $(element).attr("href");
+
+      addImage(href);
+
+    }
+  );
+
+  // ============================================================
+  // УБИРАЕМ ДУБЛИКАТЫ
+  // ============================================================
+
+  const unique = [
+    ...new Set(images)
+  ];
+
+  console.log("");
+
+  console.log(
+    `🖼 Найдено качественных фото: ${unique.length}`
+  );
+
+  unique.forEach(
+    (image, index) => {
+
+      console.log(
+        `${index + 1}. ${image}`
+      );
+
+    }
+  );
+
+  return unique;
+
 }
 
-/**
- * ============================================================
- * EXTRACT DESCRIPTION
- * ============================================================
- */
+// ============================================================
+// EXTRACT DESCRIPTION
+// ============================================================
 
-async function extractDescriptionFromPage(url) {
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": USER_AGENT,
-      Accept: "text/html,application/xhtml+xml",
-    },
-  });
+async function extractDescriptionFromPage(
+  url
+) {
+  const html =
+    await requestPage(url);
 
-  if (!response.ok) {
-    return null;
-  }
+  const $ =
+    cheerio.load(html);
 
-  const html = await response.text();
-
-  const $ = cheerio.load(html);
-
-  const block =
-    $("#tab-description");
-
-  if (!block.length) {
-    return null;
-  }
-
-  const clone =
-    block.clone();
-
-  clone.find(
-    "script, style, iframe"
+  $(
+    "script, style, noscript, iframe, svg"
   ).remove();
 
-  const description =
-    clone
-      .text()
-      .replace(/\u00a0/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
+  const selectors = [
+    "[itemprop='description']",
+    ".product-description",
+    ".product__description",
+    ".description",
+    "#description",
+  ];
 
-  return description || null;
+  for (
+    const selector of selectors
+  ) {
+    const block =
+      $(selector).first();
+
+    if (block.length) {
+      const text =
+        block
+          .text()
+          .replace(/\u00a0/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+
+      if (text.length > 30) {
+        console.log(
+          "📝 Описание найдено"
+        );
+
+        return text;
+      }
+    }
+  }
+
+  return null;
 }
 
-/**
- * ============================================================
- * SAVE PRODUCT
- * ============================================================
- */
+// ============================================================
+// SAVE PRODUCT
+// ============================================================
 
 async function saveProductData(
   productId,
@@ -1050,11 +1187,11 @@ async function saveProductData(
   if (images.length > 0) {
     await query(
       `
-        UPDATE products
-        SET
-          images = $1::jsonb,
-          updated_at = NOW()
-        WHERE id = $2
+      UPDATE products
+      SET
+        images = $1::jsonb,
+        updated_at = NOW()
+      WHERE id = $2
       `,
       [
         JSON.stringify(images),
@@ -1063,18 +1200,18 @@ async function saveProductData(
     );
 
     console.log(
-      `💾 Сохранено изображений: ${images.length}`
+      `💾 Сохранено фото: ${images.length}`
     );
   }
 
   if (description) {
     await query(
       `
-        UPDATE products
-        SET
-          description = $1,
-          updated_at = NOW()
-        WHERE id = $2
+      UPDATE products
+      SET
+        description = $1,
+        updated_at = NOW()
+      WHERE id = $2
       `,
       [
         description,
@@ -1082,28 +1219,35 @@ async function saveProductData(
       ]
     );
 
-    console.log("💾 Описание сохранено");
+    console.log(
+      "💾 Описание сохранено"
+    );
   }
 }
 
-/**
- * ============================================================
- * FIND PRODUCT IMAGES
- * ============================================================
- */
+// ============================================================
+// MAIN
+// ============================================================
 
-export async function findProductImages(product) {
+export async function findProductImages(
+  product
+) {
   console.log("");
-  console.log(
-    "===================================="
-  );
-  console.log("🖼 IMAGE PARSER");
+
   console.log(
     "===================================="
   );
 
   console.log(
-    `📦 ${product.title || product.name}`
+    "🚀 GALLERY MOBILE PARSER"
+  );
+
+  console.log(
+    "===================================="
+  );
+
+  console.log(
+    `📦 ${product.title}`
   );
 
   const page =
@@ -1111,7 +1255,7 @@ export async function findProductImages(product) {
 
   if (!page) {
     console.log(
-      "❌ Страница товара не найдена"
+      "❌ Товар не найден"
     );
 
     return {
@@ -1122,7 +1266,11 @@ export async function findProductImages(product) {
   }
 
   console.log("");
-  console.log("🎯 НАЙДЕН ТОВАР");
+
+  console.log(
+    "🌐 СТРАНИЦА ТОВАРА:"
+  );
+
   console.log(page.url);
 
   const images =
@@ -1130,12 +1278,25 @@ export async function findProductImages(product) {
       page.url
     );
 
-  const description =
-    await extractDescriptionFromPage(
-      page.url
-    );
+  let description = null;
 
-  if (images.length > 0 || description) {
+  try {
+    description =
+      await extractDescriptionFromPage(
+        page.url
+      );
+
+  } catch (error) {
+    console.log(
+      "⚠️ Описание получить не удалось:",
+      error.message
+    );
+  }
+
+  if (
+    images.length > 0 ||
+    description
+  ) {
     await saveProductData(
       product.id,
       images,
@@ -1144,7 +1305,8 @@ export async function findProductImages(product) {
   }
 
   return {
-    success: images.length > 0,
+    success:
+      images.length > 0,
 
     productId:
       product.id,
@@ -1157,6 +1319,8 @@ export async function findProductImages(product) {
 
     images,
 
+    description,
+
     matches: [
       {
         url: page.url,
@@ -1167,11 +1331,9 @@ export async function findProductImages(product) {
   };
 }
 
-/**
- * ============================================================
- * PARSE ONE PRODUCT
- * ============================================================
- */
+// ============================================================
+// PARSE ONE PRODUCT
+// ============================================================
 
 export async function parseOneProduct(
   productId
@@ -1183,10 +1345,10 @@ export async function parseOneProduct(
   const result =
     await query(
       `
-        SELECT *
-        FROM products
-        WHERE id = $1
-        LIMIT 1
+      SELECT *
+      FROM products
+      WHERE id = $1
+      LIMIT 1
       `,
       [productId]
     );
@@ -1197,27 +1359,28 @@ export async function parseOneProduct(
     );
   }
 
-  return findProductImages(
+  return await findProductImages(
     result.rows[0]
   );
 }
 
-/**
- * ============================================================
- * SYNC PRODUCTS
- * ============================================================
- */
+// ============================================================
+// SYNC PRODUCTS
+// ============================================================
 
 export async function syncProducts(
   limit = 10
 ) {
   console.log("");
+
   console.log(
     "===================================="
   );
+
   console.log(
-    "🔄 СИНХРОНИЗАЦИЯ ТОВАРОВ"
+    "🔄 СИНХРОНИЗАЦИЯ GALLERY MOBILE"
   );
+
   console.log(
     "===================================="
   );
@@ -1225,16 +1388,16 @@ export async function syncProducts(
   const result =
     await query(
       `
-        SELECT *
-        FROM products
-        ORDER BY title
-        LIMIT $1
+      SELECT *
+      FROM products
+      ORDER BY title
+      LIMIT $1
       `,
       [limit]
     );
 
   console.log(
-    `📦 Найдено товаров: ${result.rows.length}`
+    `📦 Товаров: ${result.rows.length}`
   );
 
   let success = 0;
@@ -1249,20 +1412,13 @@ export async function syncProducts(
       result.rows[i];
 
     console.log("");
+
     console.log(
-      "===================================="
+      `📦 ${i + 1}/${result.rows.length}`
     );
 
     console.log(
-      `📦 ТОВАР ${i + 1} / ${result.rows.length}`
-    );
-
-    console.log(
-      "===================================="
-    );
-
-    console.log(
-      `📱 ${product.title}`
+      `➡️ ${product.title}`
     );
 
     try {
@@ -1271,33 +1427,35 @@ export async function syncProducts(
           product
         );
 
-      if (
-        parsed.success &&
-        parsed.images.length > 0
-      ) {
+      if (parsed.success) {
         success++;
 
         console.log(
-          `✅ Успешно: ${product.title}`
+          "✅ УСПЕШНО"
         );
+
       } else {
         failed++;
 
         console.log(
-          `⚠️ Не найден: ${product.title}`
+          "❌ НЕ НАЙДЕН"
         );
       }
+
     } catch (error) {
       failed++;
 
       console.error(
-        `❌ Ошибка ${product.title}:`,
+        "❌ ОШИБКА:",
         error.message
       );
     }
 
+    // Пауза между товарами
+
     if (
-      i < result.rows.length - 1
+      i <
+      result.rows.length - 1
     ) {
       await new Promise(
         (resolve) =>
@@ -1307,14 +1465,13 @@ export async function syncProducts(
   }
 
   console.log("");
+
   console.log(
     "===================================="
   );
+
   console.log(
-    "🏁 СИНХРОНИЗАЦИЯ ЗАВЕРШЕНА"
-  );
-  console.log(
-    "===================================="
+    "🏁 ГОТОВО"
   );
 
   console.log(
@@ -1326,7 +1483,7 @@ export async function syncProducts(
   );
 
   console.log(
-    `❌ Не найдено: ${failed}`
+    `❌ Ошибки: ${failed}`
   );
 
   return {
