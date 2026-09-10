@@ -544,6 +544,11 @@ async function getProductImages(item) {
     const rows = response.data?.rows || [];
 
     console.log(
+  "MOYSKLAD IMAGE DEBUG:",
+  JSON.stringify(rows[0], null, 2)
+);
+
+    console.log(
       `MOYSKLAD: ${item.name || id} — фотографий: ${rows.length}`
     );
 
