@@ -2488,9 +2488,11 @@ app.post(
               product.name || "",
               product.name || "",
               Number(product.price) || 0,
-              Array.isArray(product.images)
-                ? product.images
-                : [],
+              JSON.stringify(
+                Array.isArray(product.images)
+                  ? product.images
+                  : []
+              ),
               product.description || "",
               product.article || "",
               product.code || "",
@@ -2537,9 +2539,11 @@ app.post(
               product.name || "",
               product.name || "",
               Number(product.price) || 0,
-              Array.isArray(product.images)
-                ? product.images
-                : [],
+              JSON.stringify(
+                Array.isArray(product.images)
+                  ? product.images
+                  : []
+              ),
               product.description || "",
               product.article || "",
               product.code || "",
