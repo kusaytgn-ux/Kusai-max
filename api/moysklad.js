@@ -542,11 +542,18 @@ async function getProductImages(item) {
     );
 
     const rows = response.data?.rows || [];
+    if (rows.length > 0) {
+  console.log(
+    "MOYSKLAD IMAGE KEYS:",
+    Object.keys(rows[0])
+  );
 
-    console.log(
-  "MOYSKLAD IMAGE DEBUG:",
-  JSON.stringify(rows[0], null, 2)
-);
+  console.log(
+    "MOYSKLAD IMAGE FIRST:",
+    JSON.stringify(rows[0], null, 2)
+  );
+}
+
 
     console.log(
       `MOYSKLAD: ${item.name || id} — фотографий: ${rows.length}`
