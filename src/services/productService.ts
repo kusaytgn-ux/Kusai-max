@@ -5,6 +5,16 @@ const API_URL = (
   "http://localhost:3001"
 ).replace(/\/$/, "");
 
+function resolveImageUrl(url: string): string {
+  if (!url) return "";
+
+  if (url.startsWith("/api/")) {
+    return `${API_URL}${url}`;
+  }
+
+  return url;
+}
+
 export interface ProductsPage {
   products: Product[];
   lastDoc: string | null;
@@ -89,11 +99,12 @@ function normalizeApiProduct(
       data.hidden
     ),
     images:
-      Array.isArray(
-        data.images
-      )
-        ? data.images.map(String)
-        : [],
+  Array.isArray(data.images)
+    ? data.images
+        .map(String)
+        .map(resolveImageUrl)
+        .filter(Boolean)
+    : [],
     characteristics:
       Array.isArray(
         data.characteristics
