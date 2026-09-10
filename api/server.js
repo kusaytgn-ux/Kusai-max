@@ -3,6 +3,11 @@ import cors from "cors";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
+import {
+  getAirPods,
+} from "./moysklad.js";
+
+
 import { db } from "./firebaseAdmin.js";
 import { calculateBonusDiscount } from "./bonus.js";
 import { query as pgQuery } from "./postgres.js";
@@ -2424,6 +2429,160 @@ app.get(
         error:
           error?.message ||
           String(error),
+      });
+    }
+  }
+);
+
+// =====================================================
+// СИНХРОНИЗАЦИЯ AIRPODS ИЗ МОЙСКЛАД В POSTGRESQL
+// =====================================================
+
+app.post(
+  "/api/moysklad/sync-airpods",
+  async (req, res) => {
+    try {
+      console.log("");
+      console.log("======================================");
+      console.log("MOYSKLAD → POSTGRES: СИНХРОНИЗАЦИЯ AIRPODS");
+      console.log("======================================");
+
+      const products = await getAirPods();
+
+      let created = 0;
+      let updated = 0;
+
+      for (const product of products) {
+        const existing = await pgQuery(
+          `
+          SELECT id
+          FROM products
+          WHERE id = $1
+          LIMIT 1
+          `,
+          [product.id]
+        );
+
+        if (existing.rows.length > 0) {
+          await pgQuery(
+            `
+            UPDATE products
+            SET
+              title = $2,
+              name = $3,
+              price = $4,
+              images = $5,
+              description = $6,
+              article = $7,
+              code = $8,
+              external_code = $9,
+              barcode = $10,
+              archived = $11,
+              buy_price = $12,
+              updated_at = NOW(),
+              synced_at = NOW()
+            WHERE id = $1
+            `,
+            [
+              product.id,
+              product.name || "",
+              product.name || "",
+              Number(product.price) || 0,
+              Array.isArray(product.images)
+                ? product.images
+                : [],
+              product.description || "",
+              product.article || "",
+              product.code || "",
+              product.externalCode || "",
+              product.barcode || "",
+              Boolean(product.archived),
+              product.buyPrice != null
+                ? Number(product.buyPrice)
+                : null,
+            ]
+          );
+
+          updated++;
+
+          console.log(
+            `UPDATED: ${product.name} — ${product.images?.length || 0} фото`
+          );
+        } else {
+          await pgQuery(
+            `
+            INSERT INTO products (
+              id,
+              title,
+              name,
+              price,
+              images,
+              description,
+              article,
+              code,
+              external_code,
+              barcode,
+              archived,
+              buy_price,
+              updated_at,
+              synced_at
+            )
+            VALUES (
+              $1,$2,$3,$4,$5,$6,$7,$8,
+              $9,$10,$11,$12,NOW(),NOW()
+            )
+            `,
+            [
+              product.id,
+              product.name || "",
+              product.name || "",
+              Number(product.price) || 0,
+              Array.isArray(product.images)
+                ? product.images
+                : [],
+              product.description || "",
+              product.article || "",
+              product.code || "",
+              product.externalCode || "",
+              product.barcode || "",
+              Boolean(product.archived),
+              product.buyPrice != null
+                ? Number(product.buyPrice)
+                : null,
+            ]
+          );
+
+          created++;
+
+          console.log(
+            `CREATED: ${product.name} — ${product.images?.length || 0} фото`
+          );
+        }
+      }
+
+      console.log("======================================");
+      console.log(
+        `СИНХРОНИЗАЦИЯ ЗАВЕРШЕНА: создано ${created}, обновлено ${updated}`
+      );
+      console.log("======================================");
+
+      return res.json({
+        success: true,
+        count: products.length,
+        created,
+        updated,
+      });
+
+    } catch (error) {
+      console.error(
+        "MOYSKLAD SYNC AIRPODS ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: "Ошибка синхронизации AirPods",
+        error: error.message,
       });
     }
   }

@@ -22,7 +22,7 @@ function getAuth() {
 
 const moysklad = axios.create({
   baseURL: MOYSKLAD_API_URL,
-  timeout: 30000,
+  timeout: 120000,
   headers: {
     Accept: "application/json;charset=utf-8",
     "Accept-Encoding": "gzip",
@@ -42,7 +42,7 @@ export async function getAssortment() {
 
   const allRows = [];
 
-  const limit = 1000;
+  const limit = 100;
   let offset = 0;
 
   while (true) {
@@ -522,6 +522,68 @@ function getItemType(item) {
 }
 
 // ============================================================
+// ПОЛУЧИТЬ ФОТОГРАФИИ ТОВАРА
+// ============================================================
+
+async function getProductImages(item) {
+  try {
+    const type = item?.meta?.type;
+    const id = item?.id;
+
+    if (!type || !id) {
+      return [];
+    }
+
+    const response = await moysklad.get(
+      `/entity/${type}/${id}/images`,
+      {
+        auth: getAuth(),
+      }
+    );
+
+    const rows = response.data?.rows || [];
+
+    console.log(
+      `MOYSKLAD: ${item.name || id} — фотографий: ${rows.length}`
+    );
+
+    // Превращаем ответ МойСклад
+    // в обычный массив URL фотографий
+    return rows
+      .map((image) => {
+        // Предпочитаем miniature.downloadHref —
+        // это готовая публичная ссылка на изображение
+        if (image?.miniature?.downloadHref) {
+          return image.miniature.downloadHref;
+        }
+
+        // Запасной вариант
+        if (image?.tiny?.href) {
+          return image.tiny.href;
+        }
+
+        // Ещё один запасной вариант
+        if (image?.meta?.downloadHref) {
+          return image.meta.downloadHref;
+        }
+
+        return null;
+      })
+      .filter(Boolean);
+  } catch (error) {
+    console.error(
+      `MOYSKLAD: ошибка получения фотографий товара ${item?.id}`
+    );
+
+    console.error(
+      error.response?.data || error.message
+    );
+
+    return [];
+  }
+}
+
+// ============================================================
 // НОРМАЛИЗАЦИЯ ТОВАРА
 // ============================================================
 
@@ -550,12 +612,17 @@ function normalizeProduct(
   const salePrice =
     getSalePrice(item);
 
+  const images =
+    item.images || [];
+
   return {
     // Постоянный ID МойСклад
     id,
 
     // Основная информация
     name,
+    images:
+      item._moyskladImages || [],
 
     description:
       item.description ||
@@ -754,14 +821,36 @@ export async function getProducts() {
     "6. Обрабатываем товары..."
   );
 
-  const products =
-    rows.map(
-      (item) =>
-        normalizeProduct(
-          item,
-          stockMaps
-        )
+  const products = [];
+
+for (const item of rows) {
+  try {
+    console.log(
+      `MOYSKLAD: получаем фото — ${item.name}`
     );
+
+    const images = await getProductImages(item);
+
+    const product = normalizeProduct(
+      {
+        ...item,
+        _moyskladImages: images,
+      },
+      stockMaps
+    );
+
+    products.push(product);
+
+    console.log(
+      `MOYSKLAD: ${item.name} — фото: ${images.length}`
+    );
+  } catch (error) {
+    console.error(
+      `MOYSKLAD: ошибка обработки ${item.name}:`,
+      error.message
+    );
+  }
+}
 
   console.log(
     `7. Товары полностью обработаны: ${products.length}`
@@ -896,4 +985,74 @@ export async function testMoySklad() {
 
     throw error;
   }
+}
+
+// ============================================================
+// AIRPODS — ТЕСТОВЫЙ СПИСОК ИЗ МОЙСКЛАД
+// ============================================================
+
+export async function getAirPods() {
+  console.log("");
+  console.log("======================================");
+  console.log("MOYSKLAD: ПОИСК AIRPODS");
+  console.log("======================================");
+
+  const assortment = await getAssortment();
+
+  const rows = assortment?.rows || [];
+
+  const airpods = rows.filter((item) =>
+    String(item.name || "")
+      .toLowerCase()
+      .includes("airpods")
+  );
+
+  console.log(
+    `MOYSKLAD: найдено AirPods: ${airpods.length}`
+  );
+
+  const result = [];
+
+  for (const item of airpods) {
+    try {
+      const images = await getProductImages(item);
+
+      const price =
+        item.salePrices?.[0]?.value !== undefined
+          ? Number(item.salePrices[0].value) / 100
+          : 0;
+
+      result.push({
+        id: item.id,
+
+        name: item.name || "",
+
+        price,
+
+        article: item.article || null,
+
+        code: item.code || null,
+
+        images,
+      });
+
+      console.log(
+        `MOYSKLAD: ${item.name} — цена ${price} — фото ${images.length}`
+      );
+    } catch (error) {
+      console.error(
+        `MOYSKLAD: ошибка товара ${item.name}`
+      );
+
+      console.error(
+        error.response?.data || error.message
+      );
+    }
+  }
+
+  console.log(
+    `MOYSKLAD: готово, товаров: ${result.length}`
+  );
+
+  return result;
 }
