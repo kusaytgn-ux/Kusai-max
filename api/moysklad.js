@@ -547,29 +547,31 @@ async function getProductImages(item) {
       `MOYSKLAD: ${item.name || id} — фотографий: ${rows.length}`
     );
 
-    // Превращаем ответ МойСклад
-    // в обычный массив URL фотографий
     return rows
       .map((image) => {
-        // Предпочитаем miniature.downloadHref —
-        // это готовая публичная ссылка на изображение
+        // ОРИГИНАЛ — используем в первую очередь
+        if (image?.downloadHref) {
+          return image.downloadHref;
+        }
+
+        // Оригинал через meta
+        if (image?.meta?.href) {
+          return image.meta.href;
+        }
+
+        // Если оригинал недоступен — fallback
         if (image?.miniature?.downloadHref) {
           return image.miniature.downloadHref;
         }
 
-        // Запасной вариант
         if (image?.tiny?.href) {
           return image.tiny.href;
-        }
-
-        // Ещё один запасной вариант
-        if (image?.meta?.downloadHref) {
-          return image.meta.downloadHref;
         }
 
         return null;
       })
       .filter(Boolean);
+
   } catch (error) {
     console.error(
       `MOYSKLAD: ошибка получения фотографий товара ${item?.id}`
