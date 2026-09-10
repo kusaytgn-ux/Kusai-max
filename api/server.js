@@ -55,9 +55,13 @@ app.get("/api/moysklad/image/:imageId", async (req, res) => {
     );
 
     return res.status(500).json({
-      success: false,
-      message: "Ошибка загрузки изображения",
-    });
+  success: false,
+  message: "Ошибка загрузки изображения",
+  error: error.response?.data
+    ? Buffer.from(error.response.data).toString("utf8").slice(0, 1000)
+    : error.message,
+  status: error.response?.status || null,
+});
   }
 });
 
