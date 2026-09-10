@@ -553,7 +553,10 @@ async function getProductImages(item) {
     );
 
     return rows
-      .map((image) => {
+      .map((image) => {console.log(
+  "MOYSKLAD IMAGE OBJECT:",
+  JSON.stringify(image, null, 2)
+);
         // ОРИГИНАЛ — используем в первую очередь
         if (image?.downloadHref) {
           return image.downloadHref;
