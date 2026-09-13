@@ -3784,6 +3784,18 @@ app.delete("/api/products/:id", async (req, res) => {
 // POSTGRESQL
 // =====================================================
 
+await pgQuery(`
+  CREATE TABLE IF NOT EXISTS admin_users (
+    id UUID PRIMARY KEY,
+    login TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT 'Administrator',
+    role TEXT NOT NULL DEFAULT 'admin',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )
+`);
+
 // Р РЋР С•Р В·Р Т‘Р В°РЎвЂР С РЎвЂљР В°Р В±Р В»Р С‘РЎвЂ РЎС“ РЎРѓР С•Р С•Р В±РЎвЂ°Р ВµР Р…Р С‘Р в„–, Р ВµРЎРѓР В»Р С‘ Р ВµРЎвЂ Р ВµРЎвЂ°РЎвЂ Р Р…Р ВµРЎвЂљ
 await pgQuery(`
   CREATE TABLE IF NOT EXISTS messages (
