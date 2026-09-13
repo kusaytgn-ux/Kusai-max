@@ -7,19 +7,11 @@ import {
   type ReactNode,
 } from "react";
 
-import {
-  signInWithEmailAndPassword,
-  signOut,
-} from "firebase/auth";
-
-import { auth } from "../firebase/firebase";
-
 type User = {
   id: string;
   name: string;
   login?: string;
   phone: string;
-
   points: number;
   bonuses?: number;
   status?: string;
@@ -67,10 +59,15 @@ const AuthContext =
   createContext<AuthContextType | null>(null);
 
 // =====================================================
-// EMAIL АДМИНИСТРАТОРА
+// API URL
 // =====================================================
 
-const ADMIN_EMAIL = "kusay.tgn@gmail.com";
+const getApiUrl = () => {
+  return (
+    import.meta.env.VITE_API_URL ||
+    "http://localhost:3001"
+  ).replace(/\/$/, "");
+};
 
 // =====================================================
 // PROVIDER
@@ -116,10 +113,7 @@ export function AuthProvider({
     phone: string
   ): Promise<Result> {
     try {
-      const apiUrl = (
-        import.meta.env.VITE_API_URL ||
-        "http://localhost:3001"
-      ).replace(/\/$/, "");
+      const apiUrl = getApiUrl();
 
       const response = await fetch(
         `${apiUrl}/api/auth/login`,
@@ -147,7 +141,6 @@ export function AuthProvider({
       ) {
         return {
           success: false,
-
           message:
             data.message ||
             "Ошибка входа",
@@ -156,12 +149,34 @@ export function AuthProvider({
 
       const client = data.client;
 
-      console.log("=== LOGIN RESPONSE ===");
-      console.log("FULL DATA:", data);
-      console.log("CLIENT:", client);
-      console.log("CUSTOMER QR:", client.customerQR);
-      console.log("CUSTOMER_QR:", client.customer_qr);
-      console.log("QR:", client.qr);
+      console.log(
+        "=== LOGIN RESPONSE ==="
+      );
+
+      console.log(
+        "FULL DATA:",
+        data
+      );
+
+      console.log(
+        "CLIENT:",
+        client
+      );
+
+      console.log(
+        "CUSTOMER QR:",
+        client.customerQR
+      );
+
+      console.log(
+        "CUSTOMER_QR:",
+        client.customer_qr
+      );
+
+      console.log(
+        "QR:",
+        client.qr
+      );
 
       const currentUser: User = {
         id: client.id,
@@ -206,7 +221,7 @@ export function AuthProvider({
           client.customer_qr ??
           client.qr ??
           client.qrCode ??
-          null,
+          undefined,
 
         role: "user",
       };
@@ -230,7 +245,6 @@ export function AuthProvider({
 
       return {
         success: false,
-
         message:
           "Ошибка соединения с сервером",
       };
@@ -239,6 +253,7 @@ export function AuthProvider({
 
   // ===================================================
   // ВХОД АДМИНИСТРАТОРА
+  // RENDER / POSTGRESQL
   // ===================================================
 
   async function adminLogin(
@@ -246,48 +261,66 @@ export function AuthProvider({
     password: string
   ): Promise<Result> {
     try {
-      const enteredLogin =
-        login.trim().toLowerCase();
-
-      const email =
-        ADMIN_EMAIL.toLowerCase();
-
-      if (
-        enteredLogin !== "admin" &&
-        enteredLogin !== email
-      ) {
+      if (!login.trim()) {
         return {
           success: false,
-
-          message:
-            "Неверный логин или пароль",
+          message: "Введите логин",
         };
       }
 
       if (!password.trim()) {
         return {
           success: false,
-          message:
-            "Введите пароль",
+          message: "Введите пароль",
         };
       }
 
-      const credential =
-        await signInWithEmailAndPassword(
-          auth,
-          ADMIN_EMAIL,
-          password
-        );
+      const apiUrl = getApiUrl();
 
-      const firebaseUser =
-        credential.user;
+      const response = await fetch(
+        `${apiUrl}/api/admin/login`,
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify({
+            login: login.trim(),
+            password,
+          }),
+        }
+      );
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
+        return {
+          success: false,
+          message:
+            data.message ||
+            "Неверный логин или пароль",
+        };
+      }
 
       const adminUser: User = {
-        id: firebaseUser.uid,
+        id:
+          data.admin?.id ??
+          "admin",
 
-        name: "Administrator",
+        name:
+          data.admin?.name ??
+          "Administrator",
 
-        login: "admin",
+        login:
+          data.admin?.login ??
+          "admin",
 
         phone: "",
 
@@ -299,7 +332,8 @@ export function AuthProvider({
 
         orders: 0,
 
-        customerQR: undefined,
+        customerQR:
+          undefined,
 
         role: "admin",
       };
@@ -315,75 +349,16 @@ export function AuthProvider({
         success: true,
         message: "Вход выполнен",
       };
-    } catch (error: any) {
+    } catch (error) {
       console.error(
-        "Firebase admin login error:",
+        "Admin login error:",
         error
       );
 
-      const code =
-        error?.code ?? "";
-
-      if (
-        code ===
-          "auth/invalid-credential" ||
-        code ===
-          "auth/wrong-password" ||
-        code ===
-          "auth/user-not-found" ||
-        code ===
-          "auth/invalid-email"
-      ) {
-        return {
-          success: false,
-
-          message:
-            "Неверный логин или пароль",
-        };
-      }
-
-      if (
-        code ===
-        "auth/too-many-requests"
-      ) {
-        return {
-          success: false,
-
-          message:
-            "Слишком много попыток. Попробуйте позже.",
-        };
-      }
-
-      if (
-        code ===
-        "auth/network-request-failed"
-      ) {
-        return {
-          success: false,
-
-          message:
-            "Ошибка соединения с Firebase",
-        };
-      }
-
-      if (
-        code ===
-        "auth/operation-not-allowed"
-      ) {
-        return {
-          success: false,
-
-          message:
-            "В Firebase не включён вход по Email/Password",
-        };
-      }
-
       return {
         success: false,
-
-        message: `Ошибка Firebase: ${
-          code || "unknown"
-        }`,
+        message:
+          "Ошибка соединения с сервером",
       };
     }
   }
@@ -395,18 +370,16 @@ export function AuthProvider({
   async function register(
     name: string,
     phone: string,
-    password: string
+    _password: string
   ): Promise<Result> {
     console.log(
       "Старая регистрация отключена:",
       name,
-      phone,
-      password
+      phone
     );
 
     return {
       success: false,
-
       message:
         "Регистрация по логину и паролю отключена. Используйте вход по имени и телефону.",
     };
@@ -422,7 +395,6 @@ export function AuthProvider({
     if (!user) {
       return {
         success: false,
-
         message:
           "Пользователь не найден",
       };
@@ -442,13 +414,8 @@ export function AuthProvider({
       setUser(updatedUser);
 
       // Администратора не обновляем
-      if (
-        user.role !== "admin"
-      ) {
-        const apiUrl = (
-          import.meta.env.VITE_API_URL ||
-          "http://localhost:3001"
-        ).replace(/\/$/, "");
+      if (user.role !== "admin") {
+        const apiUrl = getApiUrl();
 
         const response =
           await fetch(
@@ -477,7 +444,7 @@ export function AuthProvider({
 
           throw new Error(
             result?.message ||
-            "Ошибка обновления профиля"
+              "Ошибка обновления профиля"
           );
         }
       }
@@ -495,7 +462,6 @@ export function AuthProvider({
 
       return {
         success: false,
-
         message:
           "Ошибка обновления профиля",
       };
@@ -507,19 +473,6 @@ export function AuthProvider({
   // ===================================================
 
   function logout() {
-    if (
-      user?.role === "admin"
-    ) {
-      signOut(auth).catch(
-        (error) => {
-          console.error(
-            "Firebase logout error:",
-            error
-          );
-        }
-      );
-    }
-
     localStorage.removeItem(
       "currentUser"
     );
@@ -548,7 +501,6 @@ export function AuthProvider({
 
       updateProfile,
     }),
-
     [user]
   );
 

@@ -536,6 +536,63 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
+app.post("/api/admin/setup", async (req, res) => {
+  try {
+    const { login, password } = req.body || {};
+
+    if (login !== "admin" || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Неверные данные",
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(
+      String(password),
+      12
+    );
+
+    const result = await pgQuery(
+      `
+      INSERT INTO admin_users (
+        id,
+        login,
+        password_hash,
+        name,
+        role
+      )
+      VALUES (
+        gen_random_uuid(),
+        $1,
+        $2,
+        'Administrator',
+        'admin'
+      )
+      ON CONFLICT (login)
+      DO UPDATE SET
+        password_hash = EXCLUDED.password_hash,
+        name = EXCLUDED.name,
+        role = EXCLUDED.role,
+        updated_at = NOW()
+      RETURNING id, login, name, role
+      `,
+      ["admin", passwordHash]
+    );
+
+    return res.json({
+      success: true,
+      admin: result.rows[0],
+    });
+  } catch (error) {
+    console.error("ADMIN SETUP ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка создания администратора",
+    });
+  }
+});
+
 // =====================================================
 // ADMIN LOGIN
 // FIREBASE
@@ -543,89 +600,47 @@ app.post("/api/auth/login", async (req, res) => {
 
 app.post("/api/admin/login", async (req, res) => {
   try {
-    const { login, password } =
-      req.body || {};
+    const { login, password } = req.body;
 
     if (!login || !password) {
       return res.status(400).json({
         success: false,
-        message:
-          "Р вЂ™Р Р†Р ВµР Т‘Р С‘РЎвЂљР Вµ Р В»Р С•Р С–Р С‘Р Р… Р С‘ Р С—Р В°РЎР‚Р С•Р В»РЎРЉ",
+        message: "Введите логин и пароль",
       });
     }
 
-    const snapshot = await db
-      .collection("adminUsers")
-      .where(
-        "login",
-        "==",
-        String(login).trim()
-      )
-      .limit(1)
-      .get();
+    const adminLogin = String(login).trim();
 
-    if (snapshot.empty) {
+    if (adminLogin !== "admin") {
       return res.status(401).json({
         success: false,
-        message:
-          "Р СњР ВµР Р†Р ВµРЎР‚Р Р…РЎвЂ№Р в„– Р В»Р С•Р С–Р С‘Р Р… Р С‘Р В»Р С‘ Р С—Р В°РЎР‚Р С•Р В»РЎРЉ",
+        message: "Неверный логин или пароль",
       });
     }
 
-    const adminDoc =
-      snapshot.docs[0];
+    const adminPassword = process.env.ADMIN_PASSWORD;
 
-    const admin =
-      adminDoc.data();
-
-    if (!admin.passwordHash) {
-      return res.status(500).json({
-        success: false,
-        message:
-          "Р Р€ Р В°Р Т‘Р СР С‘Р Р…Р С‘РЎРѓРЎвЂљРЎР‚Р В°РЎвЂљР С•РЎР‚Р В° Р Р…Р Вµ Р Р…Р В°РЎРѓРЎвЂљРЎР‚Р С•Р ВµР Р… Р С—Р В°РЎР‚Р С•Р В»РЎРЉ",
-      });
-    }
-
-    const passwordValid =
-      await bcrypt.compare(
-        String(password),
-        String(admin.passwordHash)
-      );
-
-    if (!passwordValid) {
+    if (!adminPassword || password !== adminPassword) {
       return res.status(401).json({
         success: false,
-        message:
-          "Р СњР ВµР Р†Р ВµРЎР‚Р Р…РЎвЂ№Р в„– Р В»Р С•Р С–Р С‘Р Р… Р С‘Р В»Р С‘ Р С—Р В°РЎР‚Р С•Р В»РЎРЉ",
+        message: "Неверный логин или пароль",
       });
     }
 
     return res.json({
       success: true,
-      message: "Р вЂ™РЎвЂ¦Р С•Р Т‘ Р Р†РЎвЂ№Р С—Р С•Р В»Р Р…Р ВµР Р…",
-
       admin: {
-        id: adminDoc.id,
-        login: admin.login,
-
-        name:
-          admin.name ||
-          "Administrator",
-
-        role:
-          admin.role ||
-          "admin",
+        login: "admin",
+        name: "Администратор",
+        role: "admin",
       },
     });
   } catch (error) {
-    console.error(
-      "ADMIN LOGIN ERROR:",
-      error
-    );
+    console.error("ADMIN LOGIN ERROR:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Р С›РЎв‚¬Р С‘Р В±Р С”Р В° РЎРѓР ВµРЎР‚Р Р†Р ВµРЎР‚Р В°",
+      message: "Ошибка входа",
     });
   }
 });
