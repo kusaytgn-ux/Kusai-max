@@ -2496,6 +2496,165 @@ app.get(
   }
 );
 
+// ==========================================
+// СИНХРОНИЗАЦИЯ ВСЕХ ТОВАРОВ ИЗ МОЙСКЛАД В POSTGRESQL
+// ==========================================
+
+app.post(
+  "/api/moysklad/sync",
+  async (req, res) => {
+    try {
+      console.log("");
+      console.log("======================================");
+      console.log("MOYSKLAD → POSTGRES: СИНХРОНИЗАЦИЯ ВСЕХ ТОВАРОВ");
+      console.log("======================================");
+
+      const products = await getProducts();
+
+      let created = 0;
+      let updated = 0;
+
+      for (const product of products) {
+        try {
+          const existing = await pgQuery(
+            `
+            SELECT id
+            FROM products
+            WHERE id = $1
+            LIMIT 1
+            `,
+            [product.id]
+          );
+
+          const images = JSON.stringify(
+            Array.isArray(product.images)
+              ? product.images
+              : []
+          );
+
+          if (existing.rows.length > 0) {
+            await pgQuery(
+              `
+              UPDATE products
+              SET
+                title = $2,
+                name = $3,
+                price = $4,
+                images = $5,
+                description = $6,
+                article = $7,
+                code = $8,
+                external_code = $9,
+                barcode = $10,
+                archived = $11,
+                buy_price = $12,
+                updated_at = NOW(),
+                synced_at = NOW()
+              WHERE id = $1
+              `,
+              [
+                product.id,
+                product.name || "",
+                product.name || "",
+                Number(product.price) || 0,
+                images,
+                product.description || "",
+                product.article || "",
+                product.code || "",
+                product.externalCode || "",
+                product.barcode || "",
+                Boolean(product.archived),
+                product.buyPrice != null
+                  ? Number(product.buyPrice)
+                  : null,
+              ]
+            );
+
+            updated++;
+
+            console.log(
+              `UPDATED: ${product.name} — ${product.images?.length || 0} фото`
+            );
+          } else {
+            await pgQuery(
+              `
+              INSERT INTO products (
+                id,
+                title,
+                name,
+                price,
+                images,
+                description,
+                article,
+                code,
+                external_code,
+                barcode,
+                archived,
+                buy_price,
+                updated_at,
+                synced_at
+              )
+              VALUES (
+                $1,$2,$3,$4,$5,$6,$7,$8,
+                $9,$10,$11,$12,NOW(),NOW()
+              )
+              `,
+              [
+                product.id,
+                product.name || "",
+                product.name || "",
+                Number(product.price) || 0,
+                images,
+                product.description || "",
+                product.article || "",
+                product.code || "",
+                product.externalCode || "",
+                product.barcode || "",
+                Boolean(product.archived),
+                product.buyPrice != null
+                  ? Number(product.buyPrice)
+                  : null,
+              ]
+            );
+
+            created++;
+
+            console.log(
+              `CREATED: ${product.name} — ${product.images?.length || 0} фото`
+            );
+          }
+        } catch (productError) {
+          console.error(
+            `Ошибка товара ${product?.name || product?.id}:`,
+            productError?.message || productError
+          );
+        }
+      }
+
+      console.log("======================================");
+      console.log(
+        `СИНХРОНИЗАЦИЯ ЗАВЕРШЕНА: создано ${created}, обновлено ${updated}`
+      );
+      console.log("======================================");
+
+      return res.json({
+        success: true,
+        count: products.length,
+        created,
+        updated,
+      });
+    } catch (error) {
+      console.error("ОШИБКА ПОЛНОЙ СИНХРОНИЗАЦИИ:", error);
+
+      return res.status(500).json({
+        success: false,
+        message: "Ошибка синхронизации товаров",
+        error: error?.message || String(error),
+      });
+    }
+  }
+);
+
 // =====================================================
 // СИНХРОНИЗАЦИЯ AIRPODS ИЗ МОЙСКЛАД В POSTGRESQL
 // =====================================================
