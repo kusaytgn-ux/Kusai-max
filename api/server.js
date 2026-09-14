@@ -6,6 +6,7 @@ import crypto from "crypto";
 
 import {
   getAirPods,
+  getProducts,
 } from "./moysklad.js";
 
 
