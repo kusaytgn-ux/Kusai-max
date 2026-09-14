@@ -526,47 +526,83 @@ function getItemType(item) {
 // ============================================================
 
 async function getProductImages(item) {
-  try {
-    const type = item?.meta?.type;
-    const id = item?.id;
+  const type = item?.meta?.type;
+  const id = item?.id;
 
-    if (!type || !id) {
-      return [];
-    }
-
-    const response = await moysklad.get(
-      `/entity/${type}/${id}/images`,
-      {
-        auth: getAuth(),
-      }
-    );
-
-    const rows = response.data?.rows || [];
-
-    console.log(
-      `MOYSKLAD: ${item.name || id} — фотографий: ${rows.length}`
-    );
-
-    return rows
-      .map((image) => {
-        const imageId = image?.meta?.href?.split("/").pop();
-
-        if (!imageId) {
-          return null;
-        }
-
-        return `/api/moysklad/image/${imageId}`;
-      })
-      .filter(Boolean);
-  } catch (error) {
-    console.error(
-      `MOYSKLAD: ошибка загрузки фотографий ${item?.name || item?.id}:`,
-      error.response?.status,
-      error.message
-    );
-
+  if (!type || !id) {
     return [];
   }
+
+  const maxAttempts = 5;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await moysklad.get(
+        `/entity/${type}/${id}/images`,
+        {
+          auth: getAuth(),
+        }
+      );
+
+      const rows = response.data?.rows || [];
+
+      console.log(
+        `MOYSKLAD: ${item.name || id} — фотографий: ${rows.length}`
+      );
+
+      return rows
+        .map((image) => {
+          const imageId = image?.meta?.href?.split("/").pop();
+
+          if (!imageId) {
+            return null;
+          }
+
+          return `/api/moysklad/image/${imageId}`;
+        })
+        .filter(Boolean);
+
+    } catch (error) {
+      const status = error.response?.status;
+
+      if (status === 429) {
+        const waitTime = Math.min(
+          5000 * attempt,
+          30000
+        );
+
+        console.log(
+          `MOYSKLAD: лимит 429 для "${item.name || id}". ` +
+          `Попытка ${attempt}/${maxAttempts}. ` +
+          `Ждём ${waitTime / 1000} сек.`
+        );
+
+        await new Promise((resolve) =>
+          setTimeout(resolve, waitTime)
+        );
+
+        continue;
+      }
+
+      console.error(
+        `MOYSKLAD: ошибка загрузки фотографий ${
+          item?.name || item?.id
+        }:`,
+        status,
+        error.message
+      );
+
+      return [];
+    }
+  }
+
+  console.error(
+    `MOYSKLAD: не удалось получить фотографии товара ${
+      item?.name || item?.id
+    } после ${maxAttempts} попыток`
+  );
+
+  return [];
 }
 
 // ============================================================
@@ -816,6 +852,10 @@ for (const item of rows) {
     );
 
     const images = await getProductImages(item);
+
+await new Promise((resolve) =>
+  setTimeout(resolve, 500)
+);
 
     const product = normalizeProduct(
       {
