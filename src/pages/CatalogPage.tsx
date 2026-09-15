@@ -392,7 +392,7 @@ function CatalogPage() {
       </div>
     );
   }
-
+  // Заглушка каталога
     return (
     <div className="min-h-screen bg-black pb-28">
       <Header />

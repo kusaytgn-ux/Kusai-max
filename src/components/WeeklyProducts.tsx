@@ -55,11 +55,7 @@ function WeeklyProducts() {
     loadWeeklyProducts();
   }, []);
 
-  if (loading) {
-    return null;
-  }
-
-  if (products.length === 0) {
+  if (loading || products.length === 0) {
     return null;
   }
 
@@ -91,16 +87,20 @@ function WeeklyProducts() {
               ? product.images[0]
               : null;
 
+          const productTitle =
+            product.title || product.name || "Товар";
+
           return (
             <div
               key={product.id}
-              className="relative min-w-[240px] overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900"
+              onClick={() => navigate(`/product/${product.id}`)}
+              className="relative min-w-[240px] cursor-pointer overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900 transition hover:border-yellow-400 hover:-translate-y-1"
             >
 
               {image ? (
                 <img
                   src={image}
-                  alt={product.title || product.name || "Товар"}
+                  alt={productTitle}
                   className="h-44 w-full object-cover"
                 />
               ) : (
@@ -114,7 +114,10 @@ function WeeklyProducts() {
               </span>
 
               <button
-                onClick={() => toggleFavorite(product.id)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  toggleFavorite(product.id);
+                }}
                 className="absolute right-3 top-3 rounded-full bg-black/60 p-2 backdrop-blur"
               >
                 <Heart
@@ -130,7 +133,7 @@ function WeeklyProducts() {
               <div className="p-5">
 
                 <h3 className="text-lg font-bold text-white">
-                  {product.title || product.name || "Товар"}
+                  {productTitle}
                 </h3>
 
                 <div className="mt-2 flex items-center gap-2">
@@ -149,15 +152,6 @@ function WeeklyProducts() {
                 <p className="mt-4 text-2xl font-black text-yellow-400">
                   {formatPrice(product.price)}
                 </p>
-
-                <button
-                  onClick={() =>
-                    navigate(`/product/${product.id}`)
-                  }
-                  className="mt-5 w-full rounded-2xl bg-yellow-400 py-3 font-bold text-black transition hover:bg-yellow-300"
-                >
-                  Подробнее
-                </button>
 
               </div>
 
