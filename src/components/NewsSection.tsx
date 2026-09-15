@@ -1,23 +1,46 @@
 import { CalendarDays, ArrowRight } from "lucide-react";
+import { useEffect, useState } from "react";
+
+const API_URL = import.meta.env.VITE_API_URL || "";
+
+type ClubNews = {
+  id: string;
+  dateLabel: string;
+  title: string;
+  text: string;
+  buttonText: string;
+  enabled: boolean;
+};
 
 function NewsSection() {
-  const news = [
-    {
-      title: "Закрытая презентация Apple",
-      text: "Участники KUSAI MAX первыми увидят новые устройства.",
-      date: "25 июля",
-    },
-    {
-      title: "Двойные бонусы",
-      text: "До конца недели начисляем x2 бонусов за покупки.",
-      date: "До 30 июля",
-    },
-    {
-      title: "Premium Concierge",
-      text: "Теперь доступна персональная видеоконсультация.",
-      date: "Новинка",
-    },
-  ];
+  const [news, setNews] = useState<ClubNews[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadNews() {
+      try {
+        const response = await fetch(`${API_URL}/api/club-news`);
+        const data = await response.json();
+
+        if (data.success && Array.isArray(data.news)) {
+          setNews(data.news);
+        } else {
+          setNews([]);
+        }
+      } catch (error) {
+        console.error("Ошибка загрузки новостей клуба:", error);
+        setNews([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadNews();
+  }, []);
+
+  if (loading || news.length === 0) {
+    return null;
+  }
 
   return (
     <section className="mt-8">
@@ -31,7 +54,7 @@ function NewsSection() {
         {news.map((item) => (
 
           <div
-            key={item.title}
+            key={item.id}
             className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5 transition hover:border-yellow-400"
           >
 
@@ -40,7 +63,7 @@ function NewsSection() {
               <CalendarDays size={18} />
 
               <span className="text-sm font-semibold">
-                {item.date}
+                {item.dateLabel}
               </span>
 
             </div>
@@ -53,8 +76,8 @@ function NewsSection() {
               {item.text}
             </p>
 
-            <button className="mt-4 flex items-center gap-2 text-yellow-400 font-semibold">
-              Подробнее
+            <button className="mt-4 flex items-center gap-2 font-semibold text-yellow-400">
+              {item.buttonText}
               <ArrowRight size={16} />
             </button>
 
