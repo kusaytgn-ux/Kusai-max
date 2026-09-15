@@ -2,6 +2,7 @@ import AdminUsers from "../components/admin/AdminUsers";
 import AdminTradeIn from "../components/admin/AdminTradeIn";
 import AdminConcierge from "../components/admin/AdminConcierge";
 import AdminCatalog from "../components/admin/AdminCatalog";
+import AdminHome from "../components/admin/AdminHome";
 
 import { useConcierge } from "../store/ConciergeContext";
 
@@ -16,6 +17,7 @@ import {
   ShoppingCart,
   Gift,
   Settings,
+  Home,
 } from "lucide-react";
 
 function AdminPage() {
@@ -36,6 +38,11 @@ function AdminPage() {
       id: "dashboard",
       title: "Dashboard",
       icon: LayoutDashboard,
+    },
+    { 
+      id: "home", 
+      title: "Главная", 
+      icon: Home 
     },
     {
       id: "catalog",
@@ -526,6 +533,26 @@ function AdminPage() {
                 </div>
               </div>
             </>
+          )}
+
+          {/* ======================================
+              ГЛАВНАЯ
+          ====================================== */}
+
+          {section === "home" && (
+            <div>
+              <div className="mb-6">
+                <p className="text-xs font-black uppercase tracking-[0.25em] text-[#ec008c]">
+                  Homepage
+                </p>
+
+                <h2 className="mt-2 text-3xl font-black">
+                  Главная
+                </h2>
+              </div>
+
+              <AdminHome />
+            </div>
           )}
 
           {/* ======================================

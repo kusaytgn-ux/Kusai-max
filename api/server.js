@@ -3,6 +3,7 @@ import axios from "axios";
 import cors from "cors";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import { registerHomepageRoutes } from "./homepage.js";
 
 import {
   getAirPods,
@@ -128,6 +129,11 @@ app.use(
 );
 
 app.use(express.json());
+
+const initializeHomepageTables =
+  registerHomepageRoutes(app, pgQuery);
+
+await initializeHomepageTables();
 
 // =====================================================
 // HELPERS
