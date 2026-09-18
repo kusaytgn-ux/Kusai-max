@@ -4,13 +4,8 @@ import {
   LogOut,
 } from "lucide-react";
 
-import {
-  useNavigate,
-} from "react-router-dom";
-
-import {
-  useState,
-} from "react";
+import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 
 import { useAuth } from "../../auth/AuthContext";
 
@@ -45,9 +40,7 @@ function Header() {
 
   function handleLogout() {
     logout();
-
     setProfileOpen(false);
-
     navigate("/login");
   }
 
@@ -80,36 +73,21 @@ function Header() {
           type="button"
           onClick={() => navigate("/")}
           className="text-left"
+          aria-label="KUSAI MAX — на главную"
         >
-          <div>
-            <div
-              className="
-                text-[25px]
-                font-black
-                leading-none
-                tracking-tight
-                text-white
-              "
-            >
-              KUS
-              <span className="text-[#FFE500]">
-                AI
-              </span>
-            </div>
-
-            <div
-              className="
-                mt-1
-                text-[8px]
-                font-black
-                uppercase
-                tracking-[0.3em]
-                text-[#FFE500]
-              "
-            >
-              MAX CLUB
-            </div>
-          </div>
+          <img
+            src="/kusai-max-logo.png"
+            alt="KUSAI MAX CLUB"
+            className="
+              -ml-25
+              block
+              h-auto
+              w-[330px]
+              max-w-[120vw]
+              object-contain
+              object-left
+            "
+          />
         </button>
 
         {/* ACTIONS */}
@@ -121,6 +99,7 @@ function Header() {
           <button
             type="button"
             onClick={() => navigate("/concierge")}
+            aria-label="Консьерж"
             className="
               relative
               flex
@@ -150,8 +129,8 @@ function Header() {
                   -right-1
                   -top-1
                   flex
-                  min-w-[18px]
                   h-[18px]
+                  min-w-[18px]
                   items-center
                   justify-center
                   rounded-full
@@ -173,6 +152,7 @@ function Header() {
 
           <button
             type="button"
+            aria-label="Уведомления"
             className="
               flex
               h-10
@@ -204,6 +184,7 @@ function Header() {
               onClick={() =>
                 setProfileOpen((prev) => !prev)
               }
+              aria-label="Профиль"
               className="
                 flex
                 h-10
@@ -239,7 +220,6 @@ function Header() {
                   shadow-2xl
                 "
               >
-
                 {/* USER INFO */}
 
                 <div
@@ -250,8 +230,7 @@ function Header() {
                   "
                 >
                   <div className="font-black text-white">
-                    {user?.name ||
-                      "Пользователь"}
+                    {user?.name || "Пользователь"}
                   </div>
 
                   {user?.phone && (
@@ -287,15 +266,11 @@ function Header() {
                   "
                 >
                   <LogOut size={18} />
-
                   Выйти из профиля
                 </button>
-
               </div>
             )}
-
           </div>
-
         </div>
       </div>
     </header>

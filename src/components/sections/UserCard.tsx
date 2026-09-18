@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Heart,
   Package,
@@ -14,10 +14,12 @@ import { useCart } from "../../store/CartContext";
 import { useAuth } from "../../auth/AuthContext";
 import { useNavigate } from "react-router-dom";
 
-function getQRImageSrc(qr: unknown): string | null {
-  if (!qr) return null;
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:3001"
+).replace(/\/$/, "");
 
-  if (typeof qr !== "string") {
+function getQRImageSrc(qr: unknown): string | null {
+  if (!qr || typeof qr !== "string") {
     return null;
   }
 
@@ -43,7 +45,6 @@ function getQRImageSrc(qr: unknown): string | null {
     return `data:image/png;base64,${btoa(binary)}`;
   } catch (error) {
     console.error("Ошибка преобразования QR:", error);
-
     return null;
   }
 }
@@ -52,38 +53,106 @@ function UserCard() {
   const { user } = useAuth();
   const { favorites } = useFavorites();
   const { totalItems } = useCart();
-
   const navigate = useNavigate();
 
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
 
+  const [kusaiScore, setKusaiScore] = useState(0);
+  const [scoreLoading, setScoreLoading] = useState(true);
+
   const customerQR = user?.customerQR;
   const qrImageSrc = getQRImageSrc(customerQR);
 
-  console.log("=== ПРОВЕРКА QR ===");
-  console.log("USER:", user);
-  console.log("CUSTOMER QR:", customerQR);
-  console.log("QR IMAGE SRC:", qrImageSrc);
+  // Бонусный баланс — отдельно от Kusai Score.
+  const points = Number(user?.points ?? 0) || 0;
 
-  const points = user?.points ?? 0;
+  // Получаем историю покупок из 1С и рассчитываем Kusai Score.
+  useEffect(() => {
+    if (!user?.phone) {
+      setKusaiScore(0);
+      setScoreLoading(false);
+      return;
+    }
 
+    const clientPhone = user.phone;
+    let cancelled = false;
+
+    async function loadKusaiScore() {
+      try {
+        setScoreLoading(true);
+
+        const encodedPhone = encodeURIComponent(clientPhone);
+
+        const response = await fetch(
+          `${API_URL}/api/clients/phone/${encodedPhone}/sales-history`
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data.message || "Не удалось загрузить историю покупок"
+          );
+        }
+
+        const sales = Array.isArray(data.sales) ? data.sales : [];
+
+        // Каждый чек считаем отдельно.
+        // 1 SCORE за каждые полные 100 ₽.
+        // Остатки между чеками не переносятся.
+        const totalScore = sales.reduce(
+          (total: number, sale: any) => {
+            const amount = Number(sale.sum) || 0;
+
+            return (
+              total +
+              Math.floor(Math.max(0, amount) / 100)
+            );
+          },
+          0
+        );
+
+        if (!cancelled) {
+          setKusaiScore(totalScore);
+        }
+      } catch (error) {
+        console.error(
+          "Ошибка загрузки Kusai Score:",
+          error
+        );
+
+        if (!cancelled) {
+          setKusaiScore(0);
+        }
+      } finally {
+        if (!cancelled) {
+          setScoreLoading(false);
+        }
+      }
+    }
+
+    void loadKusaiScore();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.phone]);
+
+  // Уровень определяется по Kusai Score.
   const kusaiLevel =
-    points >= 200000
-      ? "MAX"
-      : points >= 50000
-      ? "GOLD"
-      : points >= 10000
-      ? "SILVER"
-      : "START";
-
-  const kusaiScore = Math.floor(points / 100);
+    kusaiScore >= 15000
+      ? "MAX BLACK"
+      : kusaiScore >= 5000
+      ? "MAX GOLD"
+      : kusaiScore >= 1000
+      ? "MAX SILVER"
+      : "MAX MEMBER";
 
   return (
     <section className="relative">
       <div className="relative mt-4 overflow-hidden rounded-[28px] border border-yellow-400/20 bg-zinc-950 p-6 shadow-2xl">
-        
-        {/* ПРИВЕТСТВИЕ */}
 
+        {/* ПРИВЕТСТВИЕ */}
         <div>
           <p className="text-sm font-medium text-zinc-400">
             Добро пожаловать
@@ -95,12 +164,14 @@ function UserCard() {
         </div>
 
         {/* СТАТИСТИКА */}
-
         <div className="mt-6 grid grid-cols-2 gap-3">
 
           {/* СТАТУС */}
-
-          <div className="rounded-2xl border border-white/5 bg-zinc-900 p-4">
+          <button
+            type="button"
+            onClick={() => navigate("/club")}
+            className="w-full rounded-2xl border border-white/5 bg-zinc-900 p-4 text-left transition active:scale-[0.98]"
+          >
             <p className="text-xs uppercase tracking-widest text-zinc-500">
               Статус
             </p>
@@ -111,33 +182,26 @@ function UserCard() {
                 height="20"
                 viewBox="0 0 24 24"
                 fill="none"
+                aria-hidden="true"
               >
                 <path
-                  d="
-                    M12 2
-                    L14.9 8.1
-                    L21.5 8.8
-                    L16.6 13.3
-                    L17.9 19.8
-                    L12 16.4
-                    L6.1 19.8
-                    L7.4 13.3
-                    L2.5 8.8
-                    L9.1 8.1
-                    Z
-                  "
+                  d="M12 2 L14.9 8.1 L21.5 8.8 L16.6 13.3 L17.9 19.8 L12 16.4 L6.1 19.8 L7.4 13.3 L2.5 8.8 L9.1 8.1 Z"
                   fill="#FFE500"
                 />
               </svg>
 
               <h3 className="font-black text-[#FFE500]">
-                KUSAI {kusaiLevel}
+                {scoreLoading ? "…" : kusaiLevel}
               </h3>
+
+              <ChevronRight
+                size={22}
+                className="ml-auto shrink-0 text-[#FFE500]"
+              />
             </div>
-          </div>
+          </button>
 
           {/* БОНУСЫ */}
-
           <button
             type="button"
             onClick={() => setIsQRModalOpen(true)}
@@ -166,19 +230,19 @@ function UserCard() {
           </button>
 
           {/* KUSAI SCORE */}
-
           <div className="rounded-2xl border border-white/5 bg-zinc-900 p-4">
             <p className="text-xs uppercase tracking-widest text-zinc-500">
               KUSAI SCORE
             </p>
 
             <h3 className="mt-3 text-xl font-black text-[#FFE500]">
-              {kusaiScore.toLocaleString("ru-RU")}
+              {scoreLoading
+                ? "…"
+                : kusaiScore.toLocaleString("ru-RU")}
             </h3>
           </div>
 
           {/* ЗАКАЗЫ */}
-
           <div className="rounded-2xl border border-white/5 bg-zinc-900 p-4">
             <p className="text-xs uppercase tracking-widest text-zinc-500">
               Заказы
@@ -195,7 +259,6 @@ function UserCard() {
           </div>
 
           {/* ИЗБРАННОЕ */}
-
           <button
             type="button"
             onClick={() => navigate("/favorites")}
@@ -225,7 +288,6 @@ function UserCard() {
           </button>
 
           {/* МОИ ПОКУПКИ */}
-
           <button
             type="button"
             onClick={() => navigate("/purchases")}
@@ -256,7 +318,6 @@ function UserCard() {
         </div>
 
         {/* КОРЗИНА */}
-
         <button
           type="button"
           onClick={() => navigate("/cart")}
@@ -284,71 +345,9 @@ function UserCard() {
             />
           </div>
         </button>
-
-        {/* МОЙ КЛУБ */}
-
-        <div className="mt-4">
-          <button
-            type="button"
-            onClick={() => navigate("/club")}
-            className="flex min-h-[88px] w-full items-center rounded-[22px] border border-yellow-400 bg-black px-6 text-left transition active:scale-[0.99]"
-          >
-            <div className="flex h-14 w-14 items-center justify-center">
-              <svg
-                width="54"
-                height="54"
-                viewBox="0 0 64 64"
-                fill="none"
-              >
-                <path
-                  d="
-                    M10 18
-                    L18 40
-                    H46
-                    L54 18
-                    L43 28
-                    L32 10
-                    L21 28
-                    L10 18Z
-                  "
-                  stroke="#FFE500"
-                  strokeWidth="3"
-                  strokeLinejoin="round"
-                />
-
-                <path
-                  d="M18 44H46"
-                  stroke="#FFE500"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                />
-
-                <circle cx="10" cy="18" r="3" fill="#FFE500" />
-                <circle cx="32" cy="10" r="3" fill="#FFE500" />
-                <circle cx="54" cy="18" r="3" fill="#FFE500" />
-              </svg>
-            </div>
-
-            <div className="ml-5">
-              <div className="text-[24px] font-black uppercase leading-none text-white">
-                МОЙ КЛУБ
-              </div>
-
-              <div className="mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-[#FFE500]">
-                Смотреть привилегии
-              </div>
-            </div>
-
-            <ChevronRight
-              size={30}
-              className="ml-auto text-[#FFE500]"
-            />
-          </button>
-        </div>
       </div>
 
       {/* QR MODAL */}
-
       {isQRModalOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-5 backdrop-blur-md">
           <div className="relative w-full max-w-[420px] overflow-hidden rounded-[32px] border border-yellow-400/20 bg-zinc-950 p-6 shadow-2xl">
@@ -357,6 +356,7 @@ function UserCard() {
               type="button"
               onClick={() => setIsQRModalOpen(false)}
               className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full bg-zinc-800 text-white transition active:scale-95"
+              aria-label="Закрыть QR-код"
             >
               <X size={22} />
             </button>
