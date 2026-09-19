@@ -21,7 +21,6 @@ import { useAuth } from "../auth/AuthContext";
 const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:3001"
 ).replace(/\/$/, "");
-
 const CLUB_LEVELS = [
   {
     name: "MAX MEMBER",
@@ -75,6 +74,7 @@ const CLUB_PRIVILEGES: Record<string, string[]> = {
 };
 
 function ClubPage() {
+  const [showPromoCode, setShowPromoCode] = useState(false);
   const { user } = useAuth();
 
   const bonuses = Number(user?.bonuses ?? 0) || 0;
@@ -498,7 +498,6 @@ function ClubPage() {
             })}
           </div>
         </section>
-
         {/* ПРЕДЛОЖЕНИЕ */}
         <section className="rounded-3xl border border-yellow-500/30 bg-gradient-to-r from-zinc-900 to-zinc-800 p-6">
           <h2 className="text-xl font-bold text-white">
@@ -507,20 +506,39 @@ function ClubPage() {
 
           <p className="mt-3 text-zinc-400">
             Только участникам клуба KUSAI MAX доступна
-            дополнительная скидка 
+            дополнительная скидка{" "}
             <span className="font-bold text-yellow-400">
-              {" "}5 000
+              5 000 ₽
             </span>{" "}
-            рублей на предзаказ Iphone 18 Pro/Pro Max!
+            рублей на предзаказ iPhone 18 Pro / Pro Max!
             Жми на кнопку ниже и забирай промокод!
           </p>
 
           <button
             type="button"
+            onClick={() => setShowPromoCode((prev) => !prev)}
             className="mt-6 w-full rounded-2xl bg-yellow-400 py-4 font-bold text-black transition hover:bg-yellow-300"
           >
-            Использовать предложение
+            {showPromoCode
+              ? "Скрыть промокод"
+              : "Использовать предложение"}
           </button>
+
+          {showPromoCode && (
+            <div className="mt-5 rounded-2xl border border-yellow-400/30 bg-black/40 p-5 text-center">
+              <p className="text-sm text-zinc-400">
+                Ваш промокод на скидку 5 000 ₽
+              </p>
+
+              <div className="mt-3 text-3xl font-black tracking-widest text-yellow-400">
+                KUSAI5000
+              </div>
+
+              <p className="mt-3 text-xs text-zinc-500">
+                Покажите промокод сотруднику при оформлении предзаказа.
+              </p>
+            </div>
+          )}
         </section>
       </main>
 
