@@ -18,10 +18,55 @@ import { query as pgQuery } from "./postgres.js";
 import {
   getOneCCustomer,
   getOneCSalesHistory,
+  getOneCCustomerQR,
 //  getOneCBonusHistory,
 } from "./oneC.js";
 
 const app = express();
+
+
+/**
+ * Получение QR-кода клиента по запросу приложения.
+ */
+app.get(
+  "/api/clients/phone/:phone/qr",
+  async (req, res) => {
+    try {
+      const phone = decodeURIComponent(req.params.phone);
+
+      if (!phone) {
+        return res.status(400).json({
+          success: false,
+          message: "Не указан телефон клиента",
+        });
+      }
+
+      const customerQR = await getOneCCustomerQR(phone);
+
+      if (!customerQR) {
+        return res.status(404).json({
+          success: false,
+          message: "QR-код клиента не найден в 1С",
+        });
+      }
+
+      return res.json({
+        success: true,
+        customerQR,
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка API получения QR-кода:",
+        error?.message || error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: "Не удалось получить QR-код из 1С",
+      });
+    }
+  }
+);
 
 app.get("/api/moysklad/image/:imageId", async (req, res) => {
   try {

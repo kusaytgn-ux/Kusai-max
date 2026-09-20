@@ -1,4 +1,6 @@
+
 import { useEffect, useState } from "react";
+
 import {
   Heart,
   Package,
@@ -32,6 +34,14 @@ function getQRImageSrc(qr: unknown): string | null {
   }
 
   try {
+    // Если строка уже является Base64.
+    const base64Pattern = /^[A-Za-z0-9+/]+={0,2}$/;
+
+    if (base64Pattern.test(qr) && qr.length > 100) {
+      return `data:image/png;base64,${qr}`;
+    }
+
+    // Поддержка бинарной строки, если backend вернул её.
     const bytes = new Uint8Array(
       Array.from(qr).map((char) => char.charCodeAt(0))
     );
@@ -56,15 +66,67 @@ function UserCard() {
   const navigate = useNavigate();
 
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrError, setQrError] = useState("");
+  const [qrImage, setQrImage] = useState<string | null>(null);
 
   const [kusaiScore, setKusaiScore] = useState(0);
   const [scoreLoading, setScoreLoading] = useState(true);
 
-  const customerQR = user?.customerQR;
-  const qrImageSrc = getQRImageSrc(customerQR);
-
   // Бонусный баланс — отдельно от Kusai Score.
   const points = Number(user?.points ?? 0) || 0;
+
+  // Получение QR-кода по нажатию.
+  async function handleShowQR() {
+    setIsQRModalOpen(true);
+    setQrError("");
+    setQrImage(null);
+
+    if (!user?.phone) {
+      setQrError("Не найден телефон клиента");
+      return;
+    }
+
+    try {
+      setQrLoading(true);
+
+      const encodedPhone = encodeURIComponent(user.phone);
+
+      const response = await fetch(
+        `${API_URL}/api/clients/phone/${encodedPhone}/qr`
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message || "Не удалось получить QR-код"
+        );
+      }
+
+      const image = getQRImageSrc(
+        data.customerQR ?? data.qr
+      );
+
+      if (!image) {
+        throw new Error(
+          "Сервер не вернул изображение QR-кода"
+        );
+      }
+
+      setQrImage(image);
+    } catch (error) {
+      console.error("Ошибка загрузки QR-кода:", error);
+
+      setQrError(
+        error instanceof Error
+          ? error.message
+          : "Ошибка загрузки QR-кода"
+      );
+    } finally {
+      setQrLoading(false);
+    }
+  }
 
   // Получаем историю покупок из 1С и рассчитываем Kusai Score.
   useEffect(() => {
@@ -95,7 +157,9 @@ function UserCard() {
           );
         }
 
-        const sales = Array.isArray(data.sales) ? data.sales : [];
+        const sales = Array.isArray(data.sales)
+          ? data.sales
+          : [];
 
         // Каждый чек считаем отдельно.
         // 1 SCORE за каждые полные 100 ₽.
@@ -151,7 +215,6 @@ function UserCard() {
   return (
     <section className="relative">
       <div className="relative mt-4 overflow-hidden rounded-[28px] border border-yellow-400/20 bg-zinc-950 p-6 shadow-2xl">
-
         {/* ПРИВЕТСТВИЕ */}
         <div>
           <p className="text-sm font-medium text-zinc-400">
@@ -165,7 +228,6 @@ function UserCard() {
 
         {/* СТАТИСТИКА */}
         <div className="mt-6 grid grid-cols-2 gap-3">
-
           {/* СТАТУС */}
           <button
             type="button"
@@ -201,10 +263,10 @@ function UserCard() {
             </div>
           </button>
 
-          {/* БОНУСЫ */}
+          {/* БОНУСЫ / QR */}
           <button
             type="button"
-            onClick={() => setIsQRModalOpen(true)}
+            onClick={handleShowQR}
             className="w-full rounded-2xl border border-white/5 bg-zinc-900 p-4 text-left transition active:scale-[0.98]"
           >
             <div className="flex items-start justify-between">
@@ -351,7 +413,6 @@ function UserCard() {
       {isQRModalOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-5 backdrop-blur-md">
           <div className="relative w-full max-w-[420px] overflow-hidden rounded-[32px] border border-yellow-400/20 bg-zinc-950 p-6 shadow-2xl">
-
             <button
               type="button"
               onClick={() => setIsQRModalOpen(false)}
@@ -376,9 +437,20 @@ function UserCard() {
             </div>
 
             <div className="mt-7 flex min-h-[280px] items-center justify-center rounded-[24px] bg-white p-5">
-              {qrImageSrc ? (
+              {qrLoading ? (
+                <div className="text-center">
+                  <QrCode
+                    size={64}
+                    className="mx-auto animate-pulse text-zinc-300"
+                  />
+
+                  <p className="mt-4 text-sm font-medium text-zinc-500">
+                    Загружаем QR-код…
+                  </p>
+                </div>
+              ) : qrImage ? (
                 <img
-                  src={qrImageSrc}
+                  src={qrImage}
                   alt="QR-код клиента"
                   className="h-full w-full max-h-[280px] max-w-[280px] object-contain"
                 />
@@ -390,7 +462,7 @@ function UserCard() {
                   />
 
                   <p className="mt-4 text-sm font-medium text-zinc-500">
-                    QR-код пока недоступен
+                    {qrError || "QR-код пока недоступен"}
                   </p>
                 </div>
               )}

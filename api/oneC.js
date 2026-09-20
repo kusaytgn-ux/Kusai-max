@@ -392,6 +392,83 @@ export async function getOneCCustomer(phone) {
   return null;
 }
 
+
+/**
+ * Получение QR-кода клиента из 1С отдельно от загрузки профиля.
+ */
+export async function getOneCCustomerQR(phone) {
+  const variants = getOneCPhoneVariants(phone);
+
+  console.log("1С: запрос QR-кода клиента");
+  console.log("Телефон:", phone);
+
+  for (const phoneVariant of variants) {
+    const url =
+      `${ONE_C_URL}/getCustomerQR?phone=` +
+      encodeURIComponent(phoneVariant);
+
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: ONE_C_AUTH,
+          Accept: "image/png, image/*, application/octet-stream",
+        },
+        dispatcher: oneCAgent,
+      });
+
+      console.log(
+        `1С getCustomerQR ${phoneVariant}: HTTP ${response.status}`
+      );
+
+      if (response.status === 404) {
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          `1С getCustomerQR HTTP ${response.status}`
+        );
+      }
+
+      const contentType =
+        response.headers.get("content-type") || "";
+
+      const buffer = Buffer.from(
+        await response.arrayBuffer()
+      );
+
+      if (!buffer.length) {
+        console.log("1С вернула пустой QR");
+        continue;
+      }
+
+      // Поддерживаем ответ с PNG/JPEG/WebP.
+      let mimeType = contentType
+        .split(";")[0]
+        .trim()
+        .toLowerCase();
+
+      if (!mimeType.startsWith("image/")) {
+        mimeType = "image/png";
+      }
+
+      return `data:${mimeType};base64,${buffer.toString("base64")}`;
+    } catch (error) {
+      console.error(
+        `Ошибка получения QR для ${phoneVariant}:`,
+        error?.message || error
+      );
+
+      if (phoneVariant === variants[variants.length - 1]) {
+        throw error;
+      }
+    }
+  }
+
+  return null;
+}
+
   /*
 |--------------------------------------------------------------------------
 | Получение истории продаж клиента из 1С
