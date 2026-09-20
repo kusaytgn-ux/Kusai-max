@@ -488,3 +488,97 @@ export async function getOneCSalesHistory(phone) {
 
   return [];
 } 
+/*
+|--------------------------------------------------------------------------
+| Получение истории начисления и списания бонусов клиента из 1С
+|--------------------------------------------------------------------------
+*/
+
+export async function getOneCBonusHistory(phone) {
+  const variants = getOneCPhoneVariants(phone);
+
+  console.log("");
+  console.log("======================================");
+  console.log("1С: ПОЛУЧЕНИЕ ИСТОРИИ БОНУСОВ");
+  console.log("======================================");
+
+  console.log("Исходный телефон:", phone);
+
+  const url = `${ONE_C_URL}/getAllCustomers`;
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+
+      headers: {
+        Authorization: ONE_C_AUTH,
+        Accept: "application/json",
+      },
+
+      dispatcher: oneCAgent,
+    });
+
+    const text = await response.text();
+
+    console.log(
+      `1С getAllCustomers HTTP ${response.status}`
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `1С getAllCustomers HTTP ${response.status}: ${text}`
+      );
+    }
+
+    const data = JSON.parse(text);
+
+    if (!Array.isArray(data)) {
+      throw new Error(
+        "1С getAllCustomers вернул не массив клиентов"
+      );
+    }
+
+    // Нормализуем телефоны: оставляем только цифры.
+    const normalizePhone = (value) =>
+      String(value || "").replace(/\D/g, "");
+
+    const targetPhones = new Set(
+      variants.map(normalizePhone)
+    );
+
+    const customer = data.find((item) => {
+      const customerPhone = normalizePhone(
+        item.phone
+      );
+
+      return targetPhones.has(customerPhone);
+    });
+
+    if (!customer) {
+      console.log(
+        "1С: клиент по телефону не найден"
+      );
+
+      return [];
+    }
+
+    const bonusHistory = Array.isArray(
+      customer.bonusHistory
+    )
+      ? customer.bonusHistory
+      : [];
+
+    console.log(
+      `1С: получено бонусных операций: ${bonusHistory.length}`
+    );
+
+    return bonusHistory;
+  } catch (error) {
+    console.error(
+      "Ошибка получения истории бонусов из 1С:",
+      error?.message || error
+    );
+
+    throw error;
+  }
+}

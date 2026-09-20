@@ -18,6 +18,7 @@ import { query as pgQuery } from "./postgres.js";
 import {
   getOneCCustomer,
   getOneCSalesHistory,
+  getOneCBonusHistory,
 } from "./oneC.js";
 
 const app = express();
@@ -5062,24 +5063,31 @@ app.get(
         phone
       );
 
-      const sales =
-        await getOneCSalesHistory(phone);
+      const [
+  sales,
+  bonusHistory,
+] = await Promise.all([
+  getOneCSalesHistory(phone),
+  getOneCBonusHistory(phone),
+]);
 
-      return res.json({
-        success: true,
+return res.json({
+  success: true,
 
-        phone,
+  phone,
 
-        count:
-          Array.isArray(sales)
-            ? sales.length
-            : 0,
+  count: Array.isArray(sales)
+    ? sales.length
+    : 0,
 
-        sales:
-          Array.isArray(sales)
-            ? sales
-            : [],
-      });
+  sales: Array.isArray(sales)
+    ? sales
+    : [],
+
+  bonusHistory: Array.isArray(bonusHistory)
+    ? bonusHistory
+    : [],
+});
 
     } catch (error) {
 

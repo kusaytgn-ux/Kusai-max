@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
-
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import {
@@ -27,19 +26,18 @@ type Client = {
   role?: string;
 };
 
-type Operation = {
-  id: string;
-  type: string;
-  points: number;
-  reason?: string;
-  operationDate?: string;
-};
-
 type Sale = {
   id: string;
   date?: string;
   goods?: string;
   sum?: number;
+};
+
+type BonusOperation = {
+  id: string;
+  date?: string;
+  goods?: string;
+  sum: number;
 };
 
 const API_URL = (
@@ -53,11 +51,11 @@ function AdminClientPage() {
   const [client, setClient] =
     useState<Client | null>(null);
 
-  const [operations, setOperations] =
-    useState<Operation[]>([]);
-
   const [sales, setSales] =
     useState<Sale[]>([]);
+
+  const [bonusHistory, setBonusHistory] =
+    useState<BonusOperation[]>([]);
 
   const [loading, setLoading] =
     useState(true);
@@ -83,11 +81,6 @@ function AdminClientPage() {
             clientPhone
           )}`;
 
-        const operationsUrl =
-          `${API_URL}/api/clients/phone/${encodeURIComponent(
-            clientPhone
-          )}/operations`;
-
         const salesUrl =
           `${API_URL}/api/clients/phone/${encodeURIComponent(
             clientPhone
@@ -95,11 +88,9 @@ function AdminClientPage() {
 
         const [
           clientResponse,
-          operationsResponse,
           salesResponse,
         ] = await Promise.all([
           fetch(clientUrl),
-          fetch(operationsUrl),
           fetch(salesUrl),
         ]);
 
@@ -113,26 +104,11 @@ function AdminClientPage() {
         if (!clientData.success) {
           throw new Error(
             clientData.message ||
-            "Клиент не найден"
+              "Клиент не найден"
           );
         }
 
         setClient(clientData.client);
-
-        if (operationsResponse.ok) {
-          const operationsData =
-            await operationsResponse.json();
-
-          setOperations(
-            Array.isArray(
-              operationsData.operations
-            )
-              ? operationsData.operations
-              : []
-          );
-        } else {
-          setOperations([]);
-        }
 
         if (salesResponse.ok) {
           const salesData =
@@ -143,14 +119,34 @@ function AdminClientPage() {
               ? salesData.sales
               : []
           );
+
+          setBonusHistory(
+            Array.isArray(
+              salesData.bonusHistory
+            )
+              ? salesData.bonusHistory
+                  .filter(
+                    (item: BonusOperation) =>
+                      Number.isFinite(
+                        Number(item.sum)
+                      )
+                  )
+                  .map(
+                    (item: BonusOperation) => ({
+                      ...item,
+                      sum: Number(item.sum),
+                    })
+                  )
+              : []
+          );
         } else {
           console.error(
-            "Не удалось загрузить историю покупок из 1С"
+            "Не удалось загрузить историю из 1С"
           );
 
           setSales([]);
+          setBonusHistory([]);
         }
-
       } catch (error) {
         console.error(
           "Ошибка загрузки клиента:",
@@ -158,9 +154,8 @@ function AdminClientPage() {
         );
 
         setClient(null);
-        setOperations([]);
         setSales([]);
-
+        setBonusHistory([]);
       } finally {
         setLoading(false);
         setSalesLoading(false);
@@ -168,12 +163,7 @@ function AdminClientPage() {
     }
 
     void load();
-
   }, [phone]);
-
-  const bonusOperations = useMemo(() => {
-    return operations;
-  }, [operations]);
 
   function formatMoney(value?: number) {
     if (
@@ -230,10 +220,7 @@ function AdminClientPage() {
     const normalized =
       status.toLowerCase();
 
-    const statuses: Record<
-      string,
-      string
-    > = {
+    const statuses: Record<string, string> = {
       active: "ACTIVE",
       inactive: "INACTIVE",
       new: "NEW CLIENT",
@@ -299,7 +286,6 @@ function AdminClientPage() {
             "
           >
             <ArrowLeft size={18} />
-
             Назад
           </button>
 
@@ -326,7 +312,6 @@ function AdminClientPage() {
 
               <div className="mt-1 flex items-center gap-2 text-zinc-500">
                 <Phone size={15} />
-
                 {client.phone}
               </div>
             </div>
@@ -337,15 +322,7 @@ function AdminClientPage() {
 
         <div className="grid gap-4 md:grid-cols-3">
 
-          <div
-            className="
-              rounded-[28px]
-              border
-              border-zinc-800
-              bg-[#19191c]
-              p-6
-            "
-          >
+          <div className="rounded-[28px] border border-zinc-800 bg-[#19191c] p-6">
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium text-zinc-500">
                 Бонусы
@@ -360,40 +337,22 @@ function AdminClientPage() {
             <p className="mt-4 text-4xl font-black text-yellow-400">
               {formatPoints(
                 client.points ??
-                client.bonuses
+                  client.bonuses
               )}
             </p>
           </div>
 
-          <div
-            className="
-              rounded-[28px]
-              border
-              border-zinc-800
-              bg-[#19191c]
-              p-6
-            "
-          >
+          <div className="rounded-[28px] border border-zinc-800 bg-[#19191c] p-6">
             <p className="text-sm font-medium text-zinc-500">
               Статус
             </p>
 
             <p className="mt-4 text-2xl font-black">
-              {getStatusLabel(
-                client.status
-              )}
+              {getStatusLabel(client.status)}
             </p>
           </div>
 
-          <div
-            className="
-              rounded-[28px]
-              border
-              border-zinc-800
-              bg-[#19191c]
-              p-6
-            "
-          >
+          <div className="rounded-[28px] border border-zinc-800 bg-[#19191c] p-6">
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium text-zinc-500">
                 Покупки
@@ -414,17 +373,7 @@ function AdminClientPage() {
 
         {/* PURCHASES FROM 1C */}
 
-        <section
-          className="
-            mt-5
-            rounded-[28px]
-            border
-            border-zinc-800
-            bg-[#19191c]
-            p-6
-            md:p-8
-          "
-        >
+        <section className="mt-5 rounded-[28px] border border-zinc-800 bg-[#19191c] p-6 md:p-8">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-black">
@@ -443,36 +392,13 @@ function AdminClientPage() {
           </div>
 
           {salesLoading ? (
-
-            <div
-              className="
-                mt-6
-                rounded-2xl
-                border
-                border-zinc-800
-                bg-black/30
-                p-8
-                text-center
-              "
-            >
+            <div className="mt-6 rounded-2xl border border-zinc-800 bg-black/30 p-8 text-center">
               <p className="text-zinc-500">
                 Получаем актуальную историю из 1С...
               </p>
             </div>
-
           ) : sales.length === 0 ? (
-
-            <div
-              className="
-                mt-6
-                rounded-2xl
-                border
-                border-zinc-800
-                bg-black/30
-                p-8
-                text-center
-              "
-            >
+            <div className="mt-6 rounded-2xl border border-zinc-800 bg-black/30 p-8 text-center">
               <ShoppingBag
                 size={36}
                 className="mx-auto text-zinc-700"
@@ -482,127 +408,79 @@ function AdminClientPage() {
                 Покупок пока нет
               </p>
             </div>
-
           ) : (
-
             <div className="mt-6 overflow-hidden rounded-2xl border border-zinc-800">
-
-              {sales.map(
-                (sale, index) => (
-
-                  <div
-                    key={
-                      sale.id ||
-                      `${sale.date}-${index}`
+              {sales.map((sale, index) => (
+                <div
+                  key={
+                    sale.id ||
+                    `${sale.date}-${index}`
+                  }
+                  className={`
+                    flex
+                    flex-col
+                    gap-5
+                    px-5
+                    py-5
+                    transition
+                    hover:bg-white/[0.02]
+                    md:flex-row
+                    md:items-center
+                    md:justify-between
+                    ${
+                      index !== sales.length - 1
+                        ? "border-b border-zinc-800"
+                        : ""
                     }
-                    className={`
-                      flex
-                      flex-col
-                      gap-5
-                      px-5
-                      py-5
-                      transition
-                      hover:bg-white/[0.02]
-                      md:flex-row
-                      md:items-center
-                      md:justify-between
-                      ${
-                        index !==
-                        sales.length - 1
-                          ? "border-b border-zinc-800"
-                          : ""
-                      }
-                    `}
-                  >
-
-                    <div className="flex min-w-0 items-center gap-4">
-
-                      <div
-                        className="
-                          flex
-                          h-11
-                          w-11
-                          shrink-0
-                          items-center
-                          justify-center
-                          rounded-xl
-                          bg-zinc-800
-                        "
-                      >
-                        <ShoppingBag
-                          size={19}
-                          className="text-zinc-400"
-                        />
-                      </div>
-
-                      <div className="min-w-0">
-
-                        <p className="truncate text-lg font-bold">
-                          {sale.goods ||
-                            "Покупка"}
-                        </p>
-
-                        <div className="mt-1 flex items-center gap-2 text-sm text-zinc-500">
-                          <CalendarDays
-                            size={14}
-                          />
-
-                          {formatDate(
-                            sale.date
-                          )}
-                        </div>
-
-                      </div>
+                  `}
+                >
+                  <div className="flex min-w-0 items-center gap-4">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-zinc-800">
+                      <ShoppingBag
+                        size={19}
+                        className="text-zinc-400"
+                      />
                     </div>
 
-                    <div className="text-left md:text-right">
-
-                      <p className="text-sm text-zinc-500">
-                        Сумма
+                    <div className="min-w-0">
+                      <p className="truncate text-lg font-bold">
+                        {sale.goods || "Покупка"}
                       </p>
 
-                      <p className="mt-1 text-xl font-black">
-                        {formatMoney(
-                          sale.sum
-                        )}
-                      </p>
+                      <div className="mt-1 flex items-center gap-2 text-sm text-zinc-500">
+                        <CalendarDays size={14} />
 
+                        {formatDate(sale.date)}
+                      </div>
                     </div>
-
                   </div>
 
-                )
-              )}
+                  <div className="text-left md:text-right">
+                    <p className="text-sm text-zinc-500">
+                      Сумма
+                    </p>
 
+                    <p className="mt-1 text-xl font-black">
+                      {formatMoney(sale.sum)}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
-
           )}
-
         </section>
 
-        {/* BONUS HISTORY */}
+        {/* BONUS HISTORY FROM 1C */}
 
-        <section
-          className="
-            mt-5
-            rounded-[28px]
-            border
-            border-zinc-800
-            bg-[#19191c]
-            p-6
-            md:p-8
-          "
-        >
-
+        <section className="mt-5 rounded-[28px] border border-zinc-800 bg-[#19191c] p-6 md:p-8">
           <div className="flex items-center justify-between">
-
             <div>
               <h2 className="text-2xl font-black">
                 История бонусов
               </h2>
 
               <p className="mt-1 text-sm text-zinc-500">
-                Все начисления и списания
+                Начисления и списания из 1С
               </p>
             </div>
 
@@ -610,152 +488,113 @@ function AdminClientPage() {
               size={24}
               className="text-zinc-600"
             />
-
           </div>
 
-          {bonusOperations.length === 0 ? (
-
-            <div
-              className="
-                mt-6
-                rounded-2xl
-                border
-                border-zinc-800
-                bg-black/30
-                p-8
-                text-center
-              "
-            >
+          {bonusHistory.length === 0 ? (
+            <div className="mt-6 rounded-2xl border border-zinc-800 bg-black/30 p-8 text-center">
               <p className="text-zinc-500">
                 Операций пока нет
               </p>
             </div>
-
           ) : (
-
             <div className="mt-6 overflow-hidden rounded-2xl border border-zinc-800">
+              {bonusHistory.map((item, index) => {
+                const amount = Number(item.sum);
+                const isAdd = amount > 0;
 
-              {bonusOperations.map(
-                (item, index) => {
-
-                  const isAdd =
-                    item.type === "add" ||
-                    item.points > 0;
-
-                  return (
-
-                    <div
-                      key={item.id}
-                      className={`
-                        flex
-                        items-center
-                        justify-between
-                        gap-4
-                        px-5
-                        py-5
-                        ${
-                          index !==
-                          bonusOperations.length - 1
-                            ? "border-b border-zinc-800"
-                            : ""
-                        }
-                      `}
-                    >
-
-                      <div className="flex min-w-0 items-center gap-4">
-
-                        <div
-                          className={`
-                            flex
-                            h-10
-                            w-10
-                            shrink-0
-                            items-center
-                            justify-center
-                            rounded-xl
-                            ${
-                              isAdd
-                                ? "bg-yellow-400/10"
-                                : "bg-red-500/10"
-                            }
-                          `}
-                        >
-
-                          {isAdd ? (
-
-                            <TrendingUp
-                              size={18}
-                              className="text-yellow-400"
-                            />
-
-                          ) : (
-
-                            <TrendingDown
-                              size={18}
-                              className="text-red-400"
-                            />
-
-                          )}
-
-                        </div>
-
-                        <div className="min-w-0">
-
-                          <p className="font-bold">
-                            {item.reason ||
-                              (
-                                isAdd
-                                  ? "Начисление"
-                                  : "Списание"
-                              )}
-                          </p>
-
-                          {item.operationDate && (
-
-                            <p className="mt-1 text-sm text-zinc-500">
-                              {formatDate(
-                                item.operationDate
-                              )}
-                            </p>
-
-                          )}
-
-                        </div>
-
-                      </div>
-
-                      <p
+                return (
+                  <div
+                    key={`${item.id}-${index}`}
+                    className={`
+                      flex
+                      items-center
+                      justify-between
+                      gap-4
+                      px-5
+                      py-5
+                      ${
+                        index !==
+                        bonusHistory.length - 1
+                          ? "border-b border-zinc-800"
+                          : ""
+                      }
+                    `}
+                  >
+                    <div className="flex min-w-0 items-center gap-4">
+                      <div
                         className={`
+                          flex
+                          h-10
+                          w-10
                           shrink-0
-                          text-lg
-                          font-black
+                          items-center
+                          justify-center
+                          rounded-xl
                           ${
                             isAdd
-                              ? "text-yellow-400"
-                              : "text-red-400"
+                              ? "bg-green-500/10"
+                              : "bg-red-500/10"
                           }
                         `}
                       >
-                        {isAdd ? "+" : "-"}
-
-                        {formatPoints(
-                          Math.abs(
-                            item.points
-                          )
+                        {isAdd ? (
+                          <TrendingUp
+                            size={18}
+                            className="text-green-400"
+                          />
+                        ) : (
+                          <TrendingDown
+                            size={18}
+                            className="text-red-400"
+                          />
                         )}
+                      </div>
 
-                      </p>
+                      <div className="min-w-0">
+                        <p className="font-bold">
+                          {item.goods ||
+                            (isAdd
+                              ? "Начисление бонусов"
+                              : "Списание бонусов")}
+                        </p>
 
+                        {item.date && (
+                          <p className="mt-1 text-sm text-zinc-500">
+                            {formatDate(item.date)}
+                          </p>
+                        )}
+                      </div>
                     </div>
 
-                  );
-                }
-              )}
+                    <p
+                      className={`
+                        shrink-0
+                        text-lg
+                        font-black
+                        ${
+                          isAdd
+                            ? "text-green-400"
+                            : amount < 0
+                              ? "text-red-400"
+                              : "text-zinc-400"
+                        }
+                      `}
+                    >
+                      {isAdd
+                        ? "+"
+                        : amount < 0
+                          ? "−"
+                          : ""}
 
+                      {formatPoints(
+                        Math.abs(amount)
+                      )}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
-
           )}
-
         </section>
 
       </div>
