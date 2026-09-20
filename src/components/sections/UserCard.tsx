@@ -1,6 +1,5 @@
 
 import { useEffect, useState } from "react";
-
 import {
   Heart,
   Package,
@@ -10,7 +9,6 @@ import {
   X,
   QrCode,
 } from "lucide-react";
-
 import { useFavorites } from "../../store/FavoritesContext";
 import { useCart } from "../../store/CartContext";
 import { useAuth } from "../../auth/AuthContext";
@@ -19,45 +17,6 @@ import { useNavigate } from "react-router-dom";
 const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:3001"
 ).replace(/\/$/, "");
-
-function getQRImageSrc(qr: unknown): string | null {
-  if (!qr || typeof qr !== "string") {
-    return null;
-  }
-
-  if (
-    qr.startsWith("http://") ||
-    qr.startsWith("https://") ||
-    qr.startsWith("data:image")
-  ) {
-    return qr;
-  }
-
-  try {
-    // Если строка уже является Base64.
-    const base64Pattern = /^[A-Za-z0-9+/]+={0,2}$/;
-
-    if (base64Pattern.test(qr) && qr.length > 100) {
-      return `data:image/png;base64,${qr}`;
-    }
-
-    // Поддержка бинарной строки, если backend вернул её.
-    const bytes = new Uint8Array(
-      Array.from(qr).map((char) => char.charCodeAt(0))
-    );
-
-    let binary = "";
-
-    bytes.forEach((byte) => {
-      binary += String.fromCharCode(byte);
-    });
-
-    return `data:image/png;base64,${btoa(binary)}`;
-  } catch (error) {
-    console.error("Ошибка преобразования QR:", error);
-    return null;
-  }
-}
 
 function UserCard() {
   const { user } = useAuth();
@@ -91,28 +50,36 @@ function UserCard() {
       setQrLoading(true);
 
       const encodedPhone = encodeURIComponent(user.phone);
+      const qrUrl = `${API_URL}/api/clients/phone/${encodedPhone}/qr`;
 
-      const response = await fetch(
-        `${API_URL}/api/clients/phone/${encodedPhone}/qr`
-      );
+      console.log("QR URL:", qrUrl);
+
+      const response = await fetch(qrUrl);
+
+      console.log("QR HTTP status:", response.status);
 
       const data = await response.json();
 
+      console.log("QR response:", {
+        success: data.success,
+        hasCustomerQR: Boolean(data.customerQR),
+        hasQR: Boolean(data.qr),
+        message: data.message,
+      });
+
       if (!response.ok || !data.success) {
         throw new Error(
-          data.message || "Не удалось получить QR-код"
+          data.message || `Ошибка запроса: HTTP ${response.status}`
         );
       }
 
-      const image = getQRImageSrc(
-        data.customerQR ?? data.qr
-      );
+      const image = data.customerQR ?? data.qr;
 
-      if (!image) {
-        throw new Error(
-          "Сервер не вернул изображение QR-кода"
-        );
+      if (!image || typeof image !== "string") {
+        throw new Error("Сервер не вернул изображение QR-кода");
       }
+
+      console.log("QR image prefix:", image.slice(0, 30));
 
       setQrImage(image);
     } catch (error) {
@@ -144,7 +111,6 @@ function UserCard() {
         setScoreLoading(true);
 
         const encodedPhone = encodeURIComponent(clientPhone);
-
         const response = await fetch(
           `${API_URL}/api/clients/phone/${encodedPhone}/sales-history`
         );
@@ -157,9 +123,7 @@ function UserCard() {
           );
         }
 
-        const sales = Array.isArray(data.sales)
-          ? data.sales
-          : [];
+        const sales = Array.isArray(data.sales) ? data.sales : [];
 
         // Каждый чек считаем отдельно.
         // 1 SCORE за каждые полные 100 ₽.
