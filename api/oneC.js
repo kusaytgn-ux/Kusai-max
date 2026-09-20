@@ -493,7 +493,7 @@ export async function getOneCSalesHistory(phone) {
 | Получение истории начисления и списания бонусов клиента из 1С
 |--------------------------------------------------------------------------
 */
-
+/*
 export async function getOneCBonusHistory(phone) {
   const variants = getOneCPhoneVariants(phone);
 
@@ -582,3 +582,4 @@ export async function getOneCBonusHistory(phone) {
     throw error;
   }
 }
+  */
