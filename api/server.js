@@ -18,7 +18,7 @@ import { query as pgQuery } from "./postgres.js";
 import {
   getOneCCustomer,
   getOneCSalesHistory,
-  getOneCBonusHistory,
+//  getOneCBonusHistory,
 } from "./oneC.js";
 
 const app = express();
@@ -5068,7 +5068,7 @@ app.get(
   bonusHistory,
 ] = await Promise.all([
   getOneCSalesHistory(phone),
-  getOneCBonusHistory(phone),
+//  getOneCBonusHistory(phone),
 ]);
 
 return res.json({
