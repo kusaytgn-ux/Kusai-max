@@ -24,6 +24,15 @@ import {
 
 const app = express();
 
+// CORS — обязательно до API-маршрутов
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  })
+);
+
+app.use(express.json());
 
 /**
  * Получение QR-кода клиента по запросу приложения.
@@ -32,7 +41,7 @@ app.get(
   "/api/clients/phone/:phone/qr",
   async (req, res) => {
     try {
-      const phone = decodeURIComponent(req.params.phone);
+      const phone = req.params.phone;
 
       if (!phone) {
         return res.status(400).json({
