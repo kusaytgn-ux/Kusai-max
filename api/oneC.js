@@ -565,98 +565,88 @@ export async function getOneCSalesHistory(phone) {
 
   return [];
 } 
-/*
-|--------------------------------------------------------------------------
-| Получение истории начисления и списания бонусов клиента из 1С
-|--------------------------------------------------------------------------
-*/
-/*
+
+/**
+ * Получение истории начисления и списания бонусов клиента из 1С.
+ */
 export async function getOneCBonusHistory(phone) {
   const variants = getOneCPhoneVariants(phone);
 
-  console.log("");
-  console.log("======================================");
-  console.log("1С: ПОЛУЧЕНИЕ ИСТОРИИ БОНУСОВ");
-  console.log("======================================");
+  console.log("1С: получение истории бонусов");
 
-  console.log("Исходный телефон:", phone);
+  for (const phoneVariant of variants) {
+    const url =
+      `${ONE_C_URL}/bonusHistory?phone=` +
+      encodeURIComponent(phoneVariant);
 
-  const url = `${ONE_C_URL}/getAllCustomers`;
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: ONE_C_AUTH,
+          Accept: "application/json",
+        },
+        dispatcher: oneCAgent,
+      });
 
-  try {
-    const response = await fetch(url, {
-      method: "GET",
+      const text = await response.text();
 
-      headers: {
-        Authorization: ONE_C_AUTH,
-        Accept: "application/json",
-      },
-
-      dispatcher: oneCAgent,
-    });
-
-    const text = await response.text();
-
-    console.log(
-      `1С getAllCustomers HTTP ${response.status}`
-    );
-
-    if (!response.ok) {
-      throw new Error(
-        `1С getAllCustomers HTTP ${response.status}: ${text}`
-      );
-    }
-
-    const data = JSON.parse(text);
-
-    if (!Array.isArray(data)) {
-      throw new Error(
-        "1С getAllCustomers вернул не массив клиентов"
-      );
-    }
-
-    // Нормализуем телефоны: оставляем только цифры.
-    const normalizePhone = (value) =>
-      String(value || "").replace(/\D/g, "");
-
-    const targetPhones = new Set(
-      variants.map(normalizePhone)
-    );
-
-    const customer = data.find((item) => {
-      const customerPhone = normalizePhone(
-        item.phone
-      );
-
-      return targetPhones.has(customerPhone);
-    });
-
-    if (!customer) {
       console.log(
-        "1С: клиент по телефону не найден"
+        `1С bonusHistory HTTP ${response.status}`
+      );
+
+      if (response.status === 404) {
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          `1С bonusHistory HTTP ${response.status}: ${text}`
+        );
+      }
+
+      let data;
+
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(
+          "1С bonusHistory вернула некорректный JSON"
+        );
+      }
+
+      // По примеру программиста 1С метод возвращает массив.
+      if (Array.isArray(data)) {
+        console.log(
+          `1С: получено бонусных операций: ${data.length}`
+        );
+
+        return data;
+      }
+
+      // На случай, если 1С вернёт массив внутри объекта.
+      if (Array.isArray(data?.bonusHistory)) {
+        return data.bonusHistory;
+      }
+
+      console.warn(
+        "1С bonusHistory вернула неожиданный формат"
       );
 
       return [];
+    } catch (error) {
+      console.error(
+        "Ошибка bonusHistory:",
+        error?.message || error
+      );
+
+      if (
+        phoneVariant === variants[variants.length - 1]
+      ) {
+        throw error;
+      }
     }
-
-    const bonusHistory = Array.isArray(
-      customer.bonusHistory
-    )
-      ? customer.bonusHistory
-      : [];
-
-    console.log(
-      `1С: получено бонусных операций: ${bonusHistory.length}`
-    );
-
-    return bonusHistory;
-  } catch (error) {
-    console.error(
-      "Ошибка получения истории бонусов из 1С:",
-      error?.message || error
-    );
-
-    throw error;
   }
+
+  return [];
 }
-  */

@@ -19,7 +19,7 @@ import {
   getOneCCustomer,
   getOneCSalesHistory,
   getOneCCustomerQR,
-//  getOneCBonusHistory,
+  getOneCBonusHistory,
 } from "./oneC.js";
 
 const app = express();
@@ -5117,27 +5117,16 @@ app.get(
         phone
       );
 
-      const [
-  sales,
-  bonusHistory,
-] = await Promise.all([
+    const [sales, bonusHistory] = await Promise.all([
   getOneCSalesHistory(phone),
-//  getOneCBonusHistory(phone),
+  getOneCBonusHistory(phone),
 ]);
 
 return res.json({
   success: true,
-
   phone,
-
-  count: Array.isArray(sales)
-    ? sales.length
-    : 0,
-
-  sales: Array.isArray(sales)
-    ? sales
-    : [],
-
+  count: Array.isArray(sales) ? sales.length : 0,
+  sales: Array.isArray(sales) ? sales : [],
   bonusHistory: Array.isArray(bonusHistory)
     ? bonusHistory
     : [],
@@ -5162,6 +5151,42 @@ return res.json({
     }
   }
 );
+
+
+
+/**
+ * Получение истории бонусов клиента из 1С.
+ */
+app.get(
+  "/api/clients/phone/:phone/bonus-history",
+  async (req, res) => {
+    try {
+      const phone = decodeURIComponent(
+        req.params.phone
+      );
+
+      const bonusHistory =
+        await getOneCBonusHistory(phone);
+
+      return res.json({
+        success: true,
+        bonusHistory,
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка API получения истории бонусов:",
+        error?.message || error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Не удалось получить историю бонусов из 1С",
+      });
+    }
+  }
+);
+
 
 // =====================================================
 // UNKNOWN ROUTE
