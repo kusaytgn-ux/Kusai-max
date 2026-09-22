@@ -1,5 +1,4 @@
 import Header from "../components/layout/Header";
-import BottomNavigation from "../components/navigation/BottomNavigation";
 import ProductCard from "../components/cards/ProductCard";
 import { useFavorites } from "../store/FavoritesContext";
 import { useProducts } from "../store/ProductContext";
@@ -25,8 +24,6 @@ function FavoritesPage() {
             <div className="h-10 w-10 animate-spin rounded-full border-4 border-zinc-800 border-t-yellow-400" />
           </div>
         </main>
-
-        <BottomNavigation />
       </div>
     );
   }
@@ -112,7 +109,6 @@ function FavoritesPage() {
 
       </main>
 
-      <BottomNavigation />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import Header from "../components/layout/Header";
-import BottomNavigation from "../components/navigation/BottomNavigation";
+
 
 function HistoryPage() {
   return (
@@ -12,7 +12,6 @@ function HistoryPage() {
         </h2>
       </main>
 
-      <BottomNavigation />
     </div>
   );
 }

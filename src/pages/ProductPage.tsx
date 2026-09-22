@@ -4,7 +4,6 @@ import { Star } from "lucide-react";
 import BackButton from "../components/ui/BackButton";
 
 import Header from "../components/layout/Header";
-import BottomNavigation from "../components/navigation/BottomNavigation";
 import Button from "../components/ui/Button";
 import ProductGallery from "../components/product/ProductGallery";
 
@@ -157,7 +156,6 @@ function ProductPage() {
 
       </main>
 
-      <BottomNavigation />
     </div>
   );
 }

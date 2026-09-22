@@ -1,7 +1,7 @@
 import Header from "../components/layout/Header";
 import OfferCard from "../components/OfferCard";
 import WeeklyProducts from "../components/WeeklyProducts";
-import BottomNavigation from "../components/navigation/BottomNavigation";
+
 import UserCard from "../components/sections/UserCard";
 import NewsSection from "../components/NewsSection";
 
@@ -20,7 +20,6 @@ function HomePage() {
         <NewsSection />
       </main>
 
-      <BottomNavigation />
     </div>
   );
 }

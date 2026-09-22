@@ -10,7 +10,6 @@ import { useLocation } from "react-router-dom";
 import { Send } from "lucide-react";
 
 import Header from "../components/layout/Header";
-import BottomNavigation from "../components/navigation/BottomNavigation";
 
 import { useConcierge } from "../store/ConciergeContext";
 import { useAuth } from "../auth/AuthContext";
@@ -220,7 +219,6 @@ function ConciergePage() {
 
       </div>
 
-      <BottomNavigation />
 
     </div>
   );

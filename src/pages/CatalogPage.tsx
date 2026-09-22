@@ -1,6 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import Header from "../components/layout/Header";
-import BottomNavigation from "../components/navigation/BottomNavigation";
 import ProductCard from "../components/cards/ProductCard";
 import SearchInput from "../components/ui/SearchInput";
 import { useProducts } from "../store/ProductContext";
@@ -388,7 +387,7 @@ function CatalogPage() {
             </div>
           </div>
         </main>
-        <BottomNavigation />
+        
       </div>
     );
   }
@@ -415,7 +414,7 @@ function CatalogPage() {
         </div>
       </main>
 
-      <BottomNavigation />
+      
     </div>
   );
 
@@ -657,7 +656,7 @@ function CatalogPage() {
         </div>
       </main>
 
-      <BottomNavigation />
+      
     </div>
   );
 }

@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 
 import {
@@ -15,7 +14,6 @@ import {
 
 import BackButton from "../components/ui/BackButton";
 import Header from "../components/layout/Header";
-import BottomNavigation from "../components/navigation/BottomNavigation";
 import { useAuth } from "../auth/AuthContext";
 
 const API_URL = (
@@ -566,7 +564,6 @@ function ClubPage() {
         </section>
       </main>
 
-      <BottomNavigation />
     </div>
   );
 }

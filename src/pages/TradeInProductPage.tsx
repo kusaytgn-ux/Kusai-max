@@ -5,7 +5,6 @@ import BackButton from "../components/ui/BackButton";
 import { useCart } from "../store/CartContext";
 
 import Header from "../components/layout/Header";
-import BottomNavigation from "../components/navigation/BottomNavigation";
 import ProductGallery from "../components/product/ProductGallery";
 import Button from "../components/ui/Button";
 
@@ -234,8 +233,6 @@ function TradeInProductPage() {
           </Button>
         </div>
       </main>
-
-      <BottomNavigation />
     </div>
   );
 }

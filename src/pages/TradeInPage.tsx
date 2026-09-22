@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRightLeft, Check, X } from "lucide-react";
 
-import BottomNavigation from "../components/navigation/BottomNavigation";
+
 import Button from "../components/ui/Button";
 
 import type { TradeInProduct } from "../types/TradeInProduct";
@@ -845,7 +845,7 @@ function TradeInPage() {
         </div>
       )}
 
-      <BottomNavigation />
+      
     </div>
   );
 }

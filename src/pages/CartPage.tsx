@@ -1,5 +1,5 @@
 import Header from "../components/layout/Header";
-import BottomNavigation from "../components/navigation/BottomNavigation";
+
 
 import { useCart } from "../store/CartContext";
 
@@ -97,8 +97,6 @@ function CartPage() {
           </>
         )}
       </main>
-
-      <BottomNavigation />
     </div>
   );
 }
