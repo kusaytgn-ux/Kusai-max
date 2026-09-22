@@ -40,6 +40,12 @@ const tabOrder = [
   "/cart",
 ];
 
+const cardRoutes = [
+  "/club",
+  "/favorites",
+  "/purchases",
+];
+
 function getTabIndex(pathname: string) {
   return tabOrder.findIndex((path) => {
     if (path === "/") {
@@ -53,6 +59,10 @@ function getTabIndex(pathname: string) {
   });
 }
 
+function isCardRoute(pathname: string) {
+  return cardRoutes.includes(pathname);
+}
+
 function AppRouter() {
   const { user, isAuthenticated } = useAuth();
   const location = useLocation();
@@ -60,6 +70,8 @@ function AppRouter() {
   const previousTab = useRef(
     getTabIndex(location.pathname)
   );
+
+  const previousPath = useRef(location.pathname);
 
   const [direction, setDirection] = useState(1);
 
@@ -81,39 +93,102 @@ function AppRouter() {
     }
   }, [location.pathname]);
 
+  const currentPath = location.pathname;
+  const previousPathname = previousPath.current;
+
+  const isCardTransition =
+    (previousPathname === "/" &&
+      isCardRoute(currentPath)) ||
+    (isCardRoute(previousPathname) &&
+      currentPath === "/") ||
+    isCardRoute(currentPath);
+
+  if (previousPath.current !== currentPath) {
+    previousPath.current = currentPath;
+  }
+
   const isMainTab =
-    getTabIndex(location.pathname) !== -1;
+    getTabIndex(currentPath) !== -1;
 
   const showBottomNavigation =
     isAuthenticated &&
     user?.role !== "admin" &&
     isMainTab;
 
+  const pageVariants = {
+    initial: (custom: {
+      card: boolean;
+      mainTab: boolean;
+      direction: number;
+    }) => ({
+      opacity: 0,
+      scale: custom.card ? 0.7 : 1,
+      x: custom.card
+        ? 0
+        : custom.mainTab
+          ? custom.direction * 45
+          : 0,
+      y: 0,
+    }),
+
+    animate: {
+      opacity: 1,
+      scale: 1,
+      x: 0,
+      y: 0,
+    },
+
+    exit: (custom: {
+      card: boolean;
+      mainTab: boolean;
+      direction: number;
+    }) => ({
+      opacity: 0,
+      scale: custom.card ? 0.7 : 1,
+      x: custom.card
+        ? 0
+        : custom.mainTab
+          ? custom.direction * -45
+          : 0,
+      y: 0,
+    }),
+  };
+
+  const transitionConfig = isCardTransition
+    ? {
+        duration: 0.3,
+        ease: "easeInOut" as const,
+      }
+    : {
+        duration: 0.22,
+        ease: "easeInOut" as const,
+      };
+
+  const animationCustom = {
+    card: isCardTransition,
+    mainTab: isMainTab,
+    direction,
+  };
+
   return (
     <div className="min-h-screen bg-black">
-      {/* Анимируются только страницы */}
+      {/* Анимируется только содержимое страниц */}
       <div className="pb-24">
         <AnimatePresence
           mode="wait"
           initial={false}
+          custom={animationCustom}
         >
           <motion.div
             key={location.pathname}
-            initial={{
-              opacity: 0,
-              x: isMainTab ? direction * 45 : 0,
-            }}
-            animate={{
-              opacity: 1,
-              x: 0,
-            }}
-            exit={{
-              opacity: 0,
-              x: isMainTab ? direction * -45 : 0,
-            }}
-            transition={{
-              duration: 0.22,
-              ease: "easeInOut",
+            custom={animationCustom}
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={transitionConfig}
+            style={{
+              transformOrigin: "center center",
             }}
             className="w-full"
           >
@@ -270,7 +345,7 @@ function AppRouter() {
         </AnimatePresence>
       </div>
 
-      {/* Меню вне анимации страниц */}
+      {/* Нижняя навигация не участвует в анимации */}
       {showBottomNavigation && (
         <BottomNavigation />
       )}
