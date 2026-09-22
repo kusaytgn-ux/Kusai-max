@@ -82,26 +82,156 @@ export function AuthProvider({
     useState<User | null>(null);
 
   // ===================================================
-  // ВОССТАНОВЛЕНИЕ СЕССИИ
+  // ВОССТАНОВЛЕНИЕ СЕССИИ И ОБНОВЛЕНИЕ БАЛАНСА
   // ===================================================
 
   useEffect(() => {
-    const saved =
-      localStorage.getItem("currentUser");
+    const saved = localStorage.getItem("currentUser");
 
     if (!saved) {
       return;
     }
 
-    try {
-      const parsed = JSON.parse(saved);
+    let savedUser: User;
 
-      setUser(parsed);
+    try {
+      savedUser = JSON.parse(saved);
     } catch {
-      localStorage.removeItem(
-        "currentUser"
-      );
+      localStorage.removeItem("currentUser");
+      return;
     }
+
+    setUser(savedUser);
+
+    // Администратору не требуется обновление клиентского баланса.
+    if (savedUser.role === "admin" || !savedUser.phone) {
+      return;
+    }
+
+    let cancelled = false;
+    let isRefreshing = false;
+
+    async function refreshClient() {
+      if (isRefreshing || cancelled) {
+        return;
+      }
+
+      isRefreshing = true;
+
+      try {
+        const apiUrl = getApiUrl();
+
+        const response = await fetch(
+          `${apiUrl}/api/clients/phone/${encodeURIComponent(
+            savedUser.phone
+          )}`
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success || !data.client) {
+          throw new Error(
+            data.message || "Не удалось обновить профиль"
+          );
+        }
+
+        const client = data.client;
+
+        if (cancelled) {
+          return;
+        }
+
+        setUser((currentUser) => {
+          if (
+            !currentUser ||
+            currentUser.role === "admin" ||
+            currentUser.phone !== savedUser.phone
+          ) {
+            return currentUser;
+          }
+
+          const updatedUser: User = {
+            ...currentUser,
+            ...client,
+
+            id: client.id ?? currentUser.id,
+            name: client.name ?? currentUser.name,
+            phone: client.phone ?? currentUser.phone,
+
+            points: Number(
+              client.points ?? currentUser.points ?? 0
+            ),
+
+            bonuses: Number(
+              client.bonuses ??
+                client.points ??
+                currentUser.bonuses ??
+                currentUser.points ??
+                0
+            ),
+
+            status: client.status ?? currentUser.status,
+            orders: Number(
+              client.orders ?? currentUser.orders ?? 0
+            ),
+
+            customerQR:
+              client.customerQR ??
+              client.customer_qr ??
+              client.qr ??
+              currentUser.customerQR,
+
+            role: "user",
+          };
+
+          localStorage.setItem(
+            "currentUser",
+            JSON.stringify(updatedUser)
+          );
+
+          return updatedUser;
+        });
+      } catch (error) {
+        console.error(
+          "Ошибка обновления профиля клиента:",
+          error
+        );
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    // Обновляем сразу после восстановления сессии.
+    void refreshClient();
+
+    // Обновляем при возвращении пользователя в приложение.
+    function handleFocus() {
+      void refreshClient();
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        void refreshClient();
+      }
+    }
+
+    window.addEventListener("focus", handleFocus);
+
+    document.addEventListener(
+      "visibilitychange",
+      handleVisibilityChange
+    );
+
+    return () => {
+      cancelled = true;
+
+      window.removeEventListener("focus", handleFocus);
+
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange
+      );
+    };
   }, []);
 
   // ===================================================
