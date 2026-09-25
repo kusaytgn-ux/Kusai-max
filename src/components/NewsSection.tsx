@@ -1,4 +1,4 @@
-import { CalendarDays, ArrowRight } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
@@ -76,7 +76,7 @@ function NewsSection() {
               {item.text}
             </p>
 
-        
+           
 
           </div>
 
