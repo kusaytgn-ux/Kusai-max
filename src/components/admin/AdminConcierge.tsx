@@ -33,7 +33,6 @@ function AdminConcierge() {
   const [userNames, setUserNames] = useState<Record<string, string>>({});
 
   const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     async function loadUsers() {
@@ -197,13 +196,6 @@ function AdminConcierge() {
     markMessagesAsRead,
   ]);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "end",
-    });
-  }, [chat]);
-
   async function handleSend() {
     if (
       !text.trim() ||
@@ -219,10 +211,6 @@ function AdminConcierge() {
       );
 
       setText("");
-
-      requestAnimationFrame(() => {
-        inputRef.current?.focus();
-      });
     } catch (error) {
       console.error(
         "Ошибка отправки сообщения:",
@@ -254,10 +242,6 @@ function AdminConcierge() {
     setSelectedUser(phone);
     setNewUser("");
     setShowNewChat(false);
-
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
   }
 
   async function handleDeleteChat() {
@@ -282,41 +266,13 @@ function AdminConcierge() {
   }
 
   return (
-    <div
-      className="
-        flex
-        h-[80vh]
-        min-h-0
-        overflow-hidden
-        rounded-[28px]
-        border
-        border-zinc-800
-        bg-black
-        shadow-2xl
-
-        max-md:h-[calc(100dvh-24px)]
-        max-md:rounded-[20px]
-      "
-    >
+    <div className="flex h-[80vh] min-h-0 overflow-hidden rounded-[28px] border border-zinc-800 bg-black shadow-2xl">
 
       {/* ========================= */}
       {/* ЛЕВАЯ КОЛОНКА */}
       {/* ========================= */}
 
-      <div
-        className="
-          flex
-          w-80
-          min-h-0
-          shrink-0
-          flex-col
-          border-r
-          border-zinc-800
-          bg-zinc-950
-
-          max-md:w-full
-        "
-      >
+      <div className="flex w-80 min-h-0 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950">
 
         {/* Заголовок */}
 
@@ -325,10 +281,7 @@ function AdminConcierge() {
           <div className="flex min-w-0 items-center gap-3">
 
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#A8FF00] text-black">
-              <MessageCircle
-                size={22}
-                strokeWidth={2.5}
-              />
+              <MessageCircle size={22} strokeWidth={2.5} />
             </div>
 
             <div className="min-w-0">
@@ -383,26 +336,14 @@ function AdminConcierge() {
             "
             title="Новый чат"
           >
-            <Plus
-              size={22}
-              strokeWidth={2.5}
-            />
+            <Plus size={22} strokeWidth={2.5} />
           </button>
 
         </div>
 
         {/* Список пользователей */}
 
-        <div
-          className="
-            min-h-0
-            flex-1
-            overflow-y-auto
-            p-3
-
-            max-md:hidden
-          "
-        >
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
 
           {users.length === 0 ? (
 
@@ -465,6 +406,8 @@ function AdminConcierge() {
                     `}
                   >
 
+                    {/* Аватар */}
+
                     <div
                       className={`
                         flex
@@ -479,7 +422,7 @@ function AdminConcierge() {
                         ${
                           selected
                             ? "bg-[#A8FF00] text-black"
-                            : "bg-zinc-800 text-zinc-400"
+                            : "bg-zinc-800 text-zinc-300"
                         }
                       `}
                     >
@@ -488,29 +431,42 @@ function AdminConcierge() {
                         .toUpperCase()}
                     </div>
 
+                    {/* Имя */}
+
                     <div className="min-w-0 flex-1">
 
-                      <div className="flex items-center justify-between gap-2">
-
-                        <p className="truncate text-sm font-bold text-white">
-                          {name}
-                        </p>
-
-                        {unread > 0 && (
-                          <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#EC008C] px-1.5 text-[10px] font-black text-white">
-                            {unread > 99
-                              ? "99+"
-                              : unread}
-                          </span>
-                        )}
-
-                      </div>
+                      <p
+                        className={`
+                          truncate
+                          text-sm
+                          font-bold
+                          ${
+                            selected
+                              ? "text-white"
+                              : "text-zinc-200"
+                          }
+                        `}
+                      >
+                        {name}
+                      </p>
 
                       <p className="mt-1 truncate text-xs text-zinc-500">
                         {phone}
                       </p>
 
                     </div>
+
+                    {/* Непрочитанные */}
+
+                    {unread > 0 && (
+
+                      <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-[#EC008C] px-1.5 text-[10px] font-black text-white">
+                        {unread > 99
+                          ? "99+"
+                          : unread}
+                      </span>
+
+                    )}
 
                   </button>
 
@@ -523,45 +479,47 @@ function AdminConcierge() {
 
         </div>
 
-        {/* ========================= */}
-        {/* ЧАТ */}
-        {/* ========================= */}
+      </div>
 
-        <div
-          className={`
-            min-w-0
-            flex-1
-            flex-col
-            min-h-0
-            bg-black
+      {/* ========================= */}
+      {/* ПРАВАЯ КОЛОНКА */}
+      {/* ========================= */}
 
-            ${
-              selectedUser
-                ? "flex"
-                : "hidden"
-            }
+      <div className="flex min-w-0 min-h-0 flex-1 flex-col bg-black">
 
-            max-md:flex
-          `}
-        >
+        {/* Заголовок чата */}
 
-          {/* Заголовок чата */}
+        <div className="flex shrink-0 items-center justify-between border-b border-zinc-800 bg-zinc-950 p-5">
 
-          <div className="flex shrink-0 items-center justify-between border-b border-zinc-800 bg-zinc-950 px-5 py-4">
+          <div className="min-w-0">
 
-            <div className="min-w-0">
+            <h2 className="truncate text-xl font-black text-white">
 
-              <p className="truncate text-base font-black text-white">
-                {getUserName(
-                  selectedUser
-                )}
-              </p>
+              {selectedUser
+                ? getUserName(
+                    selectedUser
+                  )
+                : "Выберите пользователя"}
 
-              <p className="mt-0.5 text-xs text-zinc-500">
+            </h2>
+
+            {selectedUser && (
+
+              <p className="mt-1 text-xs text-zinc-500">
+
                 {selectedUser}
+                {" • "}
+                {chat.length} сообщений
+
               </p>
 
-            </div>
+            )}
+
+          </div>
+
+          {/* Удаление */}
+
+          {selectedUser && (
 
             <button
               type="button"
@@ -572,12 +530,15 @@ function AdminConcierge() {
                 flex
                 h-10
                 w-10
-                shrink-0
                 items-center
                 justify-center
                 rounded-xl
+                border
+                border-zinc-800
+                bg-zinc-900
                 text-zinc-500
                 transition
+                hover:border-red-500/40
                 hover:bg-red-500/10
                 hover:text-red-400
               "
@@ -586,157 +547,148 @@ function AdminConcierge() {
               <Trash2 size={18} />
             </button>
 
-          </div>
+          )}
 
-          {/* Сообщения */}
+        </div>
 
-          <div
-            className="
-              min-h-0
-              flex-1
-              overflow-y-auto
-              overscroll-contain
-              px-5
-              py-5
+        {/* Сообщения */}
 
-              [WebkitOverflowScrolling:touch]
-            "
-          >
+        <div className="min-h-0 flex-1 overflow-y-auto bg-black p-6">
 
-            {chat.length === 0 ? (
+          {!selectedUser ? (
 
-              <div className="flex h-full items-center justify-center text-center">
+            <div className="flex h-full flex-col items-center justify-center">
 
-                <div>
+              <div className="flex h-20 w-20 items-center justify-center rounded-[28px] border border-zinc-800 bg-zinc-950">
 
-                  <MessageCircle
-                    size={34}
-                    className="mx-auto text-zinc-700"
-                  />
-
-                  <p className="mt-3 text-sm font-semibold text-zinc-600">
-                    Сообщений пока нет
-                  </p>
-
-                </div>
+                <MessageCircle
+                  size={34}
+                  className="text-zinc-700"
+                />
 
               </div>
 
-            ) : (
+              <p className="mt-5 text-sm font-semibold text-zinc-600">
+                Выберите пользователя
+              </p>
 
-              <div className="space-y-3">
+            </div>
 
-                {chat.map((message) => (
+          ) : chat.length === 0 ? (
 
-                  <div
-                    key={message.id}
-                    className={`flex ${
+            <div className="flex h-full flex-col items-center justify-center">
+
+              <div className="flex h-20 w-20 items-center justify-center rounded-[28px] border border-zinc-800 bg-zinc-950">
+
+                <MessageCircle
+                  size={34}
+                  className="text-zinc-700"
+                />
+
+              </div>
+
+              <p className="mt-5 text-center text-sm text-zinc-500">
+
+                Сообщений пока нет.
+                <br />
+                Напишите пользователю первым.
+
+              </p>
+
+            </div>
+
+          ) : (
+
+            <div className="mx-auto max-w-4xl space-y-4">
+
+              {chat.map((message) => (
+
+                <div
+                  key={message.id}
+                  className={`
+                    flex
+                    ${
                       message.author ===
                       "admin"
                         ? "justify-end"
                         : "justify-start"
-                    }`}
+                    }
+                  `}
+                >
+
+                  <div
+                    className={`
+                      max-w-[70%]
+                      rounded-[22px]
+                      border
+                      px-5
+                      py-3.5
+                      shadow-lg
+                      ${
+                        message.author ===
+                        "admin"
+                          ? "border-[#A8FF00]/30 bg-[#A8FF00] text-black"
+                          : "border-zinc-800 bg-zinc-900 text-white"
+                      }
+                    `}
                   >
 
-                    <div
+                    <p className="text-sm leading-relaxed">
+                      {message.text}
+                    </p>
+
+                    <span
                       className={`
-                        max-w-[70%]
-                        rounded-[22px]
-                        border
-                        px-5
-                        py-3.5
-                        shadow-lg
+                        mt-2
+                        block
+                        text-right
+                        text-[10px]
                         ${
                           message.author ===
                           "admin"
-                            ? "border-[#A8FF00]/30 bg-[#A8FF00] text-black"
-                            : "border-zinc-800 bg-zinc-900 text-white"
+                            ? "text-black/50"
+                            : "text-zinc-500"
                         }
                       `}
                     >
-
-                      <p className="text-sm leading-relaxed">
-                        {message.text}
-                      </p>
-
-                      <span
-                        className={`
-                          mt-2
-                          block
-                          text-right
-                          text-[10px]
-                          ${
-                            message.author ===
-                            "admin"
-                              ? "text-black/50"
-                              : "text-zinc-500"
-                          }
-                        `}
-                      >
-                        {message.createdAt
-                          ? new Date(
-                              String(
-                                message.createdAt
-                              )
-                            ).toLocaleTimeString(
-                              [],
-                              {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }
+                      {message.createdAt
+                        ? new Date(
+                            String(
+                              message.createdAt
                             )
-                          : ""}
-                      </span>
-
-                    </div>
+                          ).toLocaleTimeString(
+                            [],
+                            {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }
+                          )
+                        : ""}
+                    </span>
 
                   </div>
 
-                ))}
+                </div>
 
-                <div ref={bottomRef} />
+              ))}
 
-              </div>
+              <div ref={bottomRef} />
 
-            )}
+            </div>
 
-          </div>
+          )}
 
-          {/* Поле отправки */}
+        </div>
 
-          <div
-            className="
-              flex
-              shrink-0
-              gap-3
-              border-t
-              border-zinc-800
-              bg-zinc-950
-              p-4
+        {/* Поле отправки */}
 
-              max-md:pb-[calc(1rem+env(safe-area-inset-bottom))]
-            "
-          >
+        {selectedUser && (
 
-            <div
-              className="
-                flex
-                min-w-0
-                flex-1
-                items-center
-                rounded-2xl
-                border
-                border-zinc-800
-                bg-black
-                px-4
-                transition
-                focus-within:border-[#A8FF00]/50
-              "
-            >
+          <div className="flex shrink-0 gap-3 border-t border-zinc-800 bg-zinc-950 p-4">
+
+            <div className="flex min-w-0 flex-1 items-center rounded-2xl border border-zinc-800 bg-black px-4 transition focus-within:border-[#A8FF00]/50">
 
               <input
-                ref={inputRef}
-                type="text"
                 value={text}
                 onChange={(event) =>
                   setText(
@@ -744,11 +696,6 @@ function AdminConcierge() {
                   )
                 }
                 placeholder="Введите сообщение..."
-                autoComplete="off"
-                autoCorrect="on"
-                autoCapitalize="sentences"
-                enterKeyHint="send"
-                inputMode="text"
                 className="
                   min-w-0
                   flex-1
@@ -758,24 +705,13 @@ function AdminConcierge() {
                   text-white
                   outline-none
                   placeholder:text-zinc-600
-
-                  touch-manipulation
                 "
-                onFocus={(event) => {
-                  requestAnimationFrame(() => {
-                    event.currentTarget.scrollIntoView({
-                      block: "nearest",
-                      inline: "nearest",
-                    });
-                  });
-                }}
                 onKeyDown={(event) => {
                   if (
                     event.key ===
                     "Enter"
                   ) {
-                    event.preventDefault();
-                    void handleSend();
+                    handleSend();
                   }
                 }}
               />
@@ -784,9 +720,7 @@ function AdminConcierge() {
 
             <button
               type="button"
-              onClick={() => {
-                void handleSend();
-              }}
+              onClick={handleSend}
               className="
                 flex
                 h-12
@@ -804,15 +738,12 @@ function AdminConcierge() {
               "
               title="Отправить"
             >
-              <Send
-                size={19}
-                strokeWidth={2.5}
-              />
+              <Send size={19} strokeWidth={2.5} />
             </button>
 
           </div>
 
-        </div>
+        )}
 
       </div>
 
@@ -880,7 +811,6 @@ function AdminConcierge() {
 
               <input
                 autoFocus
-                type="tel"
                 value={newUser}
                 onChange={(event) =>
                   handleNewUserChange(
@@ -889,8 +819,6 @@ function AdminConcierge() {
                 }
                 placeholder="9061234567"
                 inputMode="numeric"
-                enterKeyHint="done"
-                autoComplete="tel"
                 maxLength={10}
                 className="
                   min-w-0
@@ -902,15 +830,12 @@ function AdminConcierge() {
                   text-white
                   outline-none
                   placeholder:text-zinc-700
-
-                  touch-manipulation
                 "
                 onKeyDown={(event) => {
                   if (
                     event.key ===
                     "Enter"
                   ) {
-                    event.preventDefault();
                     handleStartNewChat();
                   }
                 }}

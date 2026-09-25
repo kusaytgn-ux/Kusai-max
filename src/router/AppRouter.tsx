@@ -1,4 +1,3 @@
-
 import { useEffect, useRef, useState } from "react";
 import {
   Routes,
@@ -115,6 +114,19 @@ function AppRouter() {
     user?.role !== "admin" &&
     isMainTab;
 
+  /*
+   * ВАЖНО:
+   *
+   * Concierge не должен находиться внутри
+   * transform/scale motion-контейнера.
+   *
+   * Иначе position: fixed внутри ConciergePage
+   * на мобильном может перестать быть привязан
+   * к viewport, из-за чего клавиатура работает
+   * некорректно.
+   */
+  const isConcierge = currentPath === "/concierge";
+
   const pageVariants = {
     initial: (custom: {
       card: boolean;
@@ -170,6 +182,167 @@ function AppRouter() {
     direction,
   };
 
+  /*
+   * Все Routes остаются абсолютно теми же.
+   * Мы просто один раз создаём их содержимое,
+   * чтобы для Concierge использовать контейнер
+   * без transform.
+   */
+  const routesContent = (
+    <Routes location={location}>
+      {/* ГЛАВНАЯ */}
+      <Route
+        path="/"
+        element={
+          isAuthenticated ? (
+            user?.role === "admin" ? (
+              <Navigate
+                to="/admin"
+                replace
+              />
+            ) : (
+              <HomePage />
+            )
+          ) : (
+            <WelcomePage />
+          )
+        }
+      />
+
+      {/* КЛИЕНТСКАЯ ЧАСТЬ */}
+      <Route
+        path="/welcome"
+        element={<WelcomePage />}
+      />
+
+      <Route
+        path="/catalog"
+        element={<CatalogPage />}
+      />
+
+      <Route
+        path="/product/:id"
+        element={<ProductPage />}
+      />
+
+      <Route
+        path="/club"
+        element={<ClubPage />}
+      />
+
+      <Route
+        path="/tradein"
+        element={<TradeInPage />}
+      />
+
+      <Route
+        path="/tradein/:id"
+        element={<TradeInProductPage />}
+      />
+
+      <Route
+        path="/history"
+        element={<HistoryPage />}
+      />
+
+      <Route
+        path="/purchases"
+        element={<PurchasesPage />}
+      />
+
+      <Route
+        path="/concierge"
+        element={<ConciergePage />}
+      />
+
+      <Route
+        path="/select"
+        element={<SelectPage />}
+      />
+
+      <Route
+        path="/login"
+        element={<LoginPage />}
+      />
+
+      <Route
+        path="/cart"
+        element={<CartPage />}
+      />
+
+      <Route
+        path="/favorites"
+        element={<FavoritesPage />}
+      />
+
+      {/* ПРОФИЛЬ */}
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRouter>
+            <ProfilePage />
+          </ProtectedRouter>
+        }
+      />
+
+      <Route
+        path="/profile/edit"
+        element={
+          <ProtectedRouter>
+            <EditProfilePage />
+          </ProtectedRouter>
+        }
+      />
+
+      {/* ВХОД АДМИНИСТРАТОРА */}
+      <Route
+        path="/admin-login"
+        element={<AdminLoginPage />}
+      />
+
+      {/* АДМИН-ПАНЕЛЬ */}
+      <Route
+        path="/admin"
+        element={
+          user?.role === "admin" ? (
+            <AdminPage />
+          ) : (
+            <Navigate
+              to="/admin-login"
+              replace
+            />
+          )
+        }
+      />
+
+      {/* КАРТОЧКА КЛИЕНТА */}
+      <Route
+        path="/admin/users/:phone"
+        element={
+          user?.role === "admin" ? (
+            <AdminClientPage />
+          ) : (
+            <Navigate
+              to="/admin-login"
+              replace
+            />
+          )
+        }
+      />
+
+      {/* НЕИЗВЕСТНЫЙ АДРЕС */}
+      <Route
+        path="*"
+        element={
+          <Navigate
+            to="/"
+            replace
+          />
+        }
+      />
+    </Routes>
+  );
+
   return (
     <div className="min-h-screen bg-black">
       {/* Анимируется только содержимое страниц */}
@@ -179,169 +352,65 @@ function AppRouter() {
           initial={false}
           custom={animationCustom}
         >
-          <motion.div
-            key={location.pathname}
-            custom={animationCustom}
-            variants={pageVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            transition={transitionConfig}
-            style={{
-              transformOrigin: "center center",
-            }}
-            className="w-full"
-          >
-            <Routes location={location}>
-              {/* ГЛАВНАЯ */}
-              <Route
-                path="/"
-                element={
-                  isAuthenticated ? (
-                    user?.role === "admin" ? (
-                      <Navigate
-                        to="/admin"
-                        replace
-                      />
-                    ) : (
-                      <HomePage />
-                    )
-                  ) : (
-                    <WelcomePage />
-                  )
-                }
-              />
-
-              {/* КЛИЕНТСКАЯ ЧАСТЬ */}
-              <Route
-                path="/welcome"
-                element={<WelcomePage />}
-              />
-
-              <Route
-                path="/catalog"
-                element={<CatalogPage />}
-              />
-
-              <Route
-                path="/product/:id"
-                element={<ProductPage />}
-              />
-
-              <Route
-                path="/club"
-                element={<ClubPage />}
-              />
-
-              <Route
-                path="/tradein"
-                element={<TradeInPage />}
-              />
-
-              <Route
-                path="/tradein/:id"
-                element={<TradeInProductPage />}
-              />
-
-              <Route
-                path="/history"
-                element={<HistoryPage />}
-              />
-
-              <Route
-                path="/purchases"
-                element={<PurchasesPage />}
-              />
-
-              <Route
-                path="/concierge"
-                element={<ConciergePage />}
-              />
-
-              <Route
-                path="/select"
-                element={<SelectPage />}
-              />
-
-              <Route
-                path="/login"
-                element={<LoginPage />}
-              />
-
-              <Route
-                path="/cart"
-                element={<CartPage />}
-              />
-
-              <Route
-                path="/favorites"
-                element={<FavoritesPage />}
-              />
-
-              {/* ПРОФИЛЬ */}
-              <Route
-                path="/profile"
-                element={
-                  <ProtectedRouter>
-                    <ProfilePage />
-                  </ProtectedRouter>
-                }
-              />
-
-              <Route
-                path="/profile/edit"
-                element={
-                  <ProtectedRouter>
-                    <EditProfilePage />
-                  </ProtectedRouter>
-                }
-              />
-
-              {/* ВХОД АДМИНИСТРАТОРА */}
-              <Route
-                path="/admin-login"
-                element={<AdminLoginPage />}
-              />
-
-              {/* АДМИН-ПАНЕЛЬ */}
-              <Route
-                path="/admin"
-                element={
-                  user?.role === "admin" ? (
-                    <AdminPage />
-                  ) : (
-                    <Navigate
-                      to="/admin-login"
-                      replace
-                    />
-                  )
-                }
-              />
-
-              {/* КАРТОЧКА КЛИЕНТА */}
-              <Route
-                path="/admin/users/:phone"
-                element={
-                  user?.role === "admin" ? (
-                    <AdminClientPage />
-                  ) : (
-                    <Navigate
-                      to="/admin-login"
-                      replace
-                    />
-                  )
-                }
-              />
-
-              {/* НЕИЗВЕСТНЫЙ АДРЕС */}
-              <Route
-                path="*"
-                element={
-                  <Navigate to="/" replace />
-                }
-              />
-            </Routes>
-          </motion.div>
+          {isConcierge ? (
+            /*
+             * CONCIERGE:
+             *
+             * Здесь НЕТ scale / x / y и вообще
+             * нет transform-анимации.
+             *
+             * Только opacity.
+             *
+             * Это позволяет position: fixed внутри
+             * ConciergePage нормально работать
+             * относительно viewport мобильного устройства.
+             */
+            <motion.div
+              key={location.pathname}
+              initial={{
+                opacity: 0,
+              }}
+              animate={{
+                opacity: 1,
+              }}
+              exit={{
+                opacity: 0,
+              }}
+              transition={{
+                duration: 0.22,
+                ease: "easeInOut",
+              }}
+              className="w-full"
+            >
+              {routesContent}
+            </motion.div>
+          ) : (
+            /*
+             * ВСЕ ОСТАЛЬНЫЕ СТРАНИЦЫ:
+             *
+             * Здесь остаётся наша предыдущая
+             * анимация:
+             *
+             * - карточки → scale 0.7 → 1
+             * - обычные страницы → движение сбоку
+             */
+            <motion.div
+              key={location.pathname}
+              custom={animationCustom}
+              variants={pageVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={transitionConfig}
+              style={{
+                transformOrigin:
+                  "center center",
+              }}
+              className="w-full"
+            >
+              {routesContent}
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
 
