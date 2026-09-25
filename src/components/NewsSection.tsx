@@ -76,10 +76,7 @@ function NewsSection() {
               {item.text}
             </p>
 
-            <button className="mt-4 flex items-center gap-2 font-semibold text-yellow-400">
-              {item.buttonText}
-              <ArrowRight size={16} />
-            </button>
+        
 
           </div>
 
