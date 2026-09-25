@@ -33,9 +33,6 @@ function ConciergePage() {
   const inputRef =
     useRef<HTMLInputElement>(null);
 
-  const touchStartY =
-    useRef(0);
-
   useEffect(() => {
     if (location.state?.message) {
       setText(location.state.message);
@@ -95,6 +92,14 @@ function ConciergePage() {
       );
 
       setText("");
+
+      /*
+       * После отправки возвращаем фокус
+       * в поле ввода.
+       */
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+      });
     } catch (error) {
       console.error(
         "Ошибка отправки сообщения:",
@@ -109,6 +114,7 @@ function ConciergePage() {
       <Header />
 
       <main className="mx-auto flex max-w-md flex-col px-5 py-5">
+
         <BackButton />
 
         <h1 className="mb-5 text-3xl font-black text-white">
@@ -141,11 +147,16 @@ function ConciergePage() {
                 <span className="text-right text-xs opacity-60">
                   {message.createdAt
                     ? new Date(
-                        String(message.createdAt)
-                      ).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
+                        String(
+                          message.createdAt
+                        )
+                      ).toLocaleTimeString(
+                        [],
+                        {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }
+                      )
                     : ""}
                 </span>
 
@@ -159,36 +170,33 @@ function ConciergePage() {
 
       </main>
 
-      <div className="fixed bottom-20 left-0 right-0">
+      <div
+        className="
+          fixed
+          bottom-20
+          left-0
+          right-0
+          z-50
+        "
+      >
 
         <div className="mx-auto flex max-w-md items-center gap-3 px-5">
 
           <input
             ref={inputRef}
+            type="text"
             value={text}
             onChange={(event) =>
               setText(event.target.value)
             }
             placeholder="Введите сообщение..."
-            onTouchStart={(event) => {
-              touchStartY.current =
-                event.touches[0].clientY;
-            }}
-            onTouchMove={(event) => {
-              const currentY =
-                event.touches[0].clientY;
-
-              if (
-                currentY -
-                  touchStartY.current >
-                  20 &&
-                document.activeElement ===
-                  inputRef.current
-              ) {
-                inputRef.current?.blur();
-              }
-            }}
+            autoComplete="off"
+            autoCorrect="on"
+            autoCapitalize="sentences"
+            enterKeyHint="send"
+            inputMode="text"
             className="
+              min-w-0
               flex-1
               rounded-2xl
               bg-zinc-900
@@ -197,17 +205,35 @@ function ConciergePage() {
               text-white
               outline-none
             "
+            onTouchStart={() => {
+              /*
+               * Важно:
+               * focus вызывается непосредственно
+               * внутри пользовательского touch-события.
+               */
+              inputRef.current?.focus();
+            }}
+            onPointerDown={() => {
+              /*
+               * Дополнительная страховка для
+               * мобильных WebView.
+               */
+              inputRef.current?.focus();
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
-                handleSend();
+                event.preventDefault();
+                void handleSend();
               }
             }}
           />
-        
+
           <button
             type="button"
-            onClick={handleSend}
-            className="rounded-2xl bg-yellow-400 p-3"
+            onClick={() => {
+              void handleSend();
+            }}
+            className="shrink-0 rounded-2xl bg-yellow-400 p-3"
           >
             <Send
               size={20}
@@ -218,7 +244,6 @@ function ConciergePage() {
         </div>
 
       </div>
-
 
     </div>
   );
