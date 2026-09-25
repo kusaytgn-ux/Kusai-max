@@ -1,4 +1,4 @@
-
+import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -312,98 +312,144 @@ function UserCard() {
       </div>
 
       {/* QR MODAL С АНИМАЦИЕЙ */}
-      <AnimatePresence>
-        {isQRModalOpen && (
-          <motion.div
-            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-5 backdrop-blur-md"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
+      {createPortal(
+  <AnimatePresence>
+    {isQRModalOpen && (
+      <motion.div
+        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-5 backdrop-blur-md"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+      >
+        <motion.div
+          className="relative max-h-[calc(100dvh-40px)] w-full max-w-[420px] overflow-y-auto rounded-[32px] border border-yellow-400/20 bg-zinc-950 p-6 shadow-2xl"
+          initial={{ opacity: 0, scale: 0.94 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.94 }}
+          transition={{
+            duration: 0.2,
+            ease: [0.22, 1, 0.36, 1],
+          }}
+        >
+
+          <button
+            type="button"
+            onClick={() => setIsQRModalOpen(false)}
+            className="
+              absolute
+              right-5
+              top-5
+              flex
+              h-10
+              w-10
+              items-center
+              justify-center
+              rounded-full
+              bg-zinc-800
+              text-white
+              transition
+              active:scale-95
+            "
+            aria-label="Закрыть QR-код"
           >
-            <motion.div
-              className="relative w-full max-w-[420px] overflow-hidden rounded-[32px] border border-yellow-400/20 bg-zinc-950 p-6 shadow-2xl"
-              initial={{ opacity: 0, scale: 0.7 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.7 }}
-              transition={{
-                duration: 0.3,
-                ease: "easeOut",
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => setIsQRModalOpen(false)}
-                className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full bg-zinc-800 text-white transition active:scale-95"
-                aria-label="Закрыть QR-код"
-              >
-                <X size={22} />
-              </button>
+            <X size={22} />
+          </button>
 
-              <div className="pt-3 text-center">
-                <div className="text-xs font-bold uppercase tracking-[0.25em] text-[#FFE500]">
-                  KUSAI MAX
-                </div>
+          <div className="pt-3 text-center">
 
-                <h2 className="mt-3 text-3xl font-black text-white">
-                  Ваш QR-код
-                </h2>
+            <div className="text-xs font-bold uppercase tracking-[0.25em] text-[#FFE500]">
+              KUSAI MAX
+            </div>
 
-                <p className="mx-auto mt-3 max-w-[280px] text-sm leading-relaxed text-zinc-500">
-                  Покажите этот QR-код продавцу перед покупкой
+            <h2 className="mt-3 text-3xl font-black text-white">
+              Ваш QR-код
+            </h2>
+
+            <p className="mx-auto mt-3 max-w-[280px] text-sm leading-relaxed text-zinc-500">
+              Покажите этот QR-код продавцу перед покупкой
+            </p>
+
+          </div>
+
+          <div className="mt-7 flex min-h-[280px] items-center justify-center rounded-[24px] bg-white p-5">
+
+            {qrLoading ? (
+
+              <div className="text-center">
+                <QrCode
+                  size={64}
+                  className="mx-auto animate-pulse text-zinc-300"
+                />
+
+                <p className="mt-4 text-sm font-medium text-zinc-500">
+                  Загружаем QR-код…
                 </p>
               </div>
 
-              <div className="mt-7 flex min-h-[280px] items-center justify-center rounded-[24px] bg-white p-5">
-                {qrLoading ? (
-                  <div className="text-center">
-                    <QrCode
-                      size={64}
-                      className="mx-auto animate-pulse text-zinc-300"
-                    />
-                    <p className="mt-4 text-sm font-medium text-zinc-500">
-                      Загружаем QR-код…
-                    </p>
-                  </div>
-                ) : qrImage ? (
-                  <img
-                    src={qrImage}
-                    alt="QR-код клиента"
-                    className="h-full w-full max-h-[280px] max-w-[280px] object-contain"
-                  />
-                ) : (
-                  <div className="text-center">
-                    <QrCode
-                      size={64}
-                      className="mx-auto text-zinc-300"
-                    />
-                    <p className="mt-4 text-sm font-medium text-zinc-500">
-                      {qrError || "QR-код пока недоступен"}
-                    </p>
-                  </div>
-                )}
+            ) : qrImage ? (
+
+              <img
+                src={qrImage}
+                alt="QR-код клиента"
+                className="h-full w-full max-h-[280px] max-w-[280px] object-contain"
+              />
+
+            ) : (
+
+              <div className="text-center">
+
+                <QrCode
+                  size={64}
+                  className="mx-auto text-zinc-300"
+                />
+
+                <p className="mt-4 text-sm font-medium text-zinc-500">
+                  {qrError || "QR-код пока недоступен"}
+                </p>
+
               </div>
 
-              <div className="mt-6 text-center">
-                <p className="text-xs uppercase tracking-widest text-zinc-600">
-                  Клиент
-                </p>
-                <p className="mt-2 text-lg font-bold text-white">
-                  {user?.name || "KUSAI CLIENT"}
-                </p>
-              </div>
+            )}
 
-              <button
-                type="button"
-                onClick={() => setIsQRModalOpen(false)}
-                className="mt-6 w-full rounded-2xl bg-[#FFE500] py-4 font-black text-black transition active:scale-[0.98]"
-              >
-                ГОТОВО
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+
+          <div className="mt-6 text-center">
+
+            <p className="text-xs uppercase tracking-widest text-zinc-600">
+              Клиент
+            </p>
+
+            <p className="mt-2 text-lg font-bold text-white">
+              {user?.name || "KUSAI CLIENT"}
+            </p>
+
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsQRModalOpen(false)}
+            className="
+              mt-6
+              w-full
+              rounded-2xl
+              bg-[#FFE500]
+              py-4
+              font-black
+              text-black
+              transition
+              active:scale-[0.98]
+            "
+          >
+            ГОТОВО
+          </button>
+
+        </motion.div>
+      </motion.div>
+    )}
+  </AnimatePresence>,
+  document.body
+)}
     </section>
   );
 }
