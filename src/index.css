@@ -1248,3 +1248,17 @@ a {
     font-size: 17px;
   }
 }
+
+/* Скрываем полосу прокрутки, сохраняя саму прокрутку */
+html,
+body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
