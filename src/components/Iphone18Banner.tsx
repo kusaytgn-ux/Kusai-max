@@ -6,15 +6,21 @@ function Iphone18Banner() {
           w-full
           overflow-hidden
           rounded-[45px]
-          border-white/10
+          border-yellow-400/20
+          bg-black
           shadow-2xl
         "
       >
         <img
-          src="/iphone18pro-banner.png"
+          src="/iphone18pro-banner.webp"
           alt="iPhone 18 Pro от 1490 рублей по программе Trade-In"
+          width="1200"
+          height="600"
+          loading="eager"
+          decoding="async"
           className="
             block
+            aspect-[2/1]
             h-auto
             w-full
             object-cover
