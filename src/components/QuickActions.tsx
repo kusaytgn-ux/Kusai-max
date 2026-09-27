@@ -44,7 +44,7 @@ function QuickActions() {
         </h2>
 
         <span className="text-sm text-zinc-500">
-          KUSAI MAX
+          KUSAY MAX
         </span>
       </div>
 

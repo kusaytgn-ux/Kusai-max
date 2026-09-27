@@ -14,7 +14,7 @@ export function registerHomepageRoutes(app, pgQuery) {
       await pgQuery(`
         CREATE TABLE IF NOT EXISTS homepage_offer (
           id UUID PRIMARY KEY,
-          badge TEXT NOT NULL DEFAULT 'Эксклюзив KUSAI MAX',
+          badge TEXT NOT NULL DEFAULT 'Эксклюзив KUSAY MAX',
           title TEXT NOT NULL DEFAULT 'Персональное предложение',
           text TEXT NOT NULL DEFAULT '',
           discount TEXT NOT NULL DEFAULT '3%',
@@ -97,7 +97,7 @@ export function registerHomepageRoutes(app, pgQuery) {
           `,
           [
             crypto.randomUUID(),
-            "Эксклюзив KUSAI MAX",
+            "Эксклюзив KUSAY MAX",
             "Персональное предложение",
             "Только для участников клуба действует персональная скидка на технику Apple до конца недели.",
             "3%",
@@ -213,7 +213,7 @@ export function registerHomepageRoutes(app, pgQuery) {
           `,
           [
             crypto.randomUUID(),
-            badge || "Эксклюзив KUSAI MAX",
+            badge || "Эксклюзив KUSAY MAX",
             title || "Персональное предложение",
             text || "",
             discount || "3%",
@@ -238,7 +238,7 @@ export function registerHomepageRoutes(app, pgQuery) {
           `,
           [
             existing.rows[0].id,
-            badge || "Эксклюзив KUSAI MAX",
+            badge || "Эксклюзив KUSAY MAX",
             title || "Персональное предложение",
             text || "",
             discount || "3%",

@@ -62,7 +62,7 @@ export function useKusaiScore(
       );
 
       if (!response.ok) {
-        throw new Error("Не удалось загрузить KUSAI Score");
+        throw new Error("Не удалось загрузить KUSAY Score");
       }
 
       const data: KusaiScoreData = await response.json();
@@ -78,7 +78,7 @@ export function useKusaiScore(
       setError(
         err instanceof Error
           ? err.message
-          : "Не удалось загрузить KUSAI Score",
+          : "Не удалось загрузить KUSAY Score",
       );
     } finally {
       setLoading(false);

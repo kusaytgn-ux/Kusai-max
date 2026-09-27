@@ -168,7 +168,7 @@ function UserCard() {
           {/* KUSAI SCORE */}
           <div className="rounded-2xl border border-white/5 bg-zinc-900 p-4">
             <p className="text-xs uppercase tracking-widest text-zinc-500">
-              KUSAI SCORE
+              KUSAY SCORE
             </p>
 
             <h3 className="mt-3 text-xl font-black text-[#FFE500]">
@@ -327,7 +327,7 @@ function UserCard() {
 
               <div className="pt-3 text-center">
                 <div className="text-xs font-bold uppercase tracking-[0.25em] text-[#FFE500]">
-                  KUSAI MAX
+                  KUSAY MAX
                 </div>
 
                 <h2 className="mt-3 text-3xl font-black text-white">
@@ -379,7 +379,7 @@ function UserCard() {
 
                 <p className="mt-2 text-lg font-bold text-white">
                   {user?.name ||
-                    "KUSAI CLIENT"}
+                    "KUSAY CLIENT"}
                 </p>
               </div>
 

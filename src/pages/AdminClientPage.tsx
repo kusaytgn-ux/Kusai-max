@@ -264,7 +264,7 @@ function AdminClientPage() {
         if (!response.ok || !data.success) {
           throw new Error(
             data.message ||
-              "Не удалось обновить KUSAI Score"
+              "Не удалось обновить KUSAY Score"
           );
         }
 
@@ -287,7 +287,7 @@ function AdminClientPage() {
         }
       } catch (error) {
         console.error(
-          "Ошибка обновления KUSAI Score:",
+          "Ошибка обновления KUSAY Score:",
           error
         );
       } finally {
@@ -398,7 +398,7 @@ function AdminClientPage() {
       ) {
         throw new Error(
           data.message ||
-            "Не удалось изменить KUSAI Score"
+            "Не удалось изменить KUSAY Score"
         );
       }
 
@@ -423,7 +423,7 @@ function AdminClientPage() {
       setScoreError(
         error instanceof Error
           ? error.message
-          : "Ошибка изменения KUSAI Score"
+          : "Ошибка изменения KUSAY Score"
       );
     } finally {
       setScoreSaving(false);
@@ -665,7 +665,7 @@ function AdminClientPage() {
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <h2 className="text-2xl font-black">
-                KUSAI SCORE
+                KUSAY SCORE
               </h2>
 
               <p className="mt-1 text-sm text-zinc-500">
@@ -904,7 +904,7 @@ function AdminClientPage() {
           <div className="mt-6">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-black">
-                История KUSAI Score
+                История KUSAY Score
               </h3>
 
               <span className="text-xs text-zinc-600">
@@ -942,7 +942,7 @@ function AdminClientPage() {
                         <div className="min-w-0">
                           <p className="font-bold text-white">
                             {operation.reason ||
-                              "Операция KUSAI Score"}
+                              "Операция KUSAY Score"}
                           </p>
 
                           {operation.comment && (

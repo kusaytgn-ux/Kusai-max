@@ -409,7 +409,7 @@ function CatalogPage() {
           <p className="mt-4 max-w-sm text-sm leading-6 text-zinc-400">
             Мы уже готовим товары и фотографии.
             <br />
-            Совсем скоро здесь появится полный каталог KUSAI MAX.
+            Совсем скоро здесь появится полный каталог KUSAY MAX.
           </p>
         </div>
       </main>

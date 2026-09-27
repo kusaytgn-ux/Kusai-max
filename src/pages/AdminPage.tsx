@@ -341,7 +341,7 @@ function AdminPage() {
 
             <div className="mt-8 rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4">
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/25">
-                KUSAI MAX
+                KUSAY MAX
               </p>
 
               <div className="mt-3 flex items-center gap-2">
@@ -376,7 +376,7 @@ function AdminPage() {
                 </h2>
 
                 <p className="mt-2 text-sm text-white/35">
-                  Основные показатели KUSAI MAX
+                  Основные показатели KUSAY MAX
                 </p>
               </div>
 
@@ -518,7 +518,7 @@ function AdminPage() {
                     <span className="h-2 w-2 rounded-full bg-[#a8ff00] shadow-[0_0_10px_rgba(168,255,0,0.8)]" />
 
                     <span className="text-xs font-black uppercase tracking-[0.25em] text-white/30">
-                      KUSAI SYSTEM
+                      KUSAY SYSTEM
                     </span>
                   </div>
 

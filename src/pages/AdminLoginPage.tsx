@@ -100,7 +100,7 @@ return ( <div
         tracking-widest
       "
     >
-      KUSAI MAX
+      KUSAY MAX
     </h1>
 
     <p
@@ -165,7 +165,7 @@ return ( <div
         mt-10
       "
     >
-      KUSAI MAX SECURITY SYSTEM
+      KUSAY MAX SECURITY SYSTEM
     </p>
   </div>
 </div>

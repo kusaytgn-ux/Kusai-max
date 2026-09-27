@@ -522,7 +522,7 @@ console.log("QR ИЗ 1С QRCode:", oneCClient?.QRCode);
 app.get("/", (req, res) => {
   return res.json({
     success: true,
-    message: "KUSAI MAX API РЎР‚Р В°Р В±Р С•РЎвЂљР В°Р ВµРЎвЂљ",
+    message: "KUSAY MAX API РЎР‚Р В°Р В±Р С•РЎвЂљР В°Р ВµРЎвЂљ",
     serverTime: new Date().toISOString(),
   });
 });
@@ -530,7 +530,7 @@ app.get("/", (req, res) => {
 app.get("/api", (req, res) => {
   return res.json({
     success: true,
-    message: "KUSAI MAX API РЎР‚Р В°Р В±Р С•РЎвЂљР В°Р ВµРЎвЂљ",
+    message: "KUSAY MAX API РЎР‚Р В°Р В±Р С•РЎвЂљР В°Р ВµРЎвЂљ",
   });
 });
 
@@ -540,7 +540,7 @@ app.get("/api/health", async (req, res) => {
 
     return res.json({
       success: true,
-      message: "KUSAI MAX API Р С—Р С•Р Т‘Р С”Р В»РЎР‹РЎвЂЎР ВµР Р…",
+      message: "KUSAY MAX API Р С—Р С•Р Т‘Р С”Р В»РЎР‹РЎвЂЎР ВµР Р…",
       database: "PostgreSQL Р С—Р С•Р Т‘Р С”Р В»РЎР‹РЎвЂЎР ВµР Р…",
       serverTime: new Date().toISOString(),
     });
@@ -2572,7 +2572,7 @@ app.get(
     return res.json({
       success: true,
       message:
-        "KUSAI MAX API Р С—Р С•Р Т‘Р С”Р В»РЎР‹РЎвЂЎР ВµР Р…",
+        "KUSAY MAX API Р С—Р С•Р Т‘Р С”Р В»РЎР‹РЎвЂЎР ВµР Р…",
 
       serverTime:
         new Date().toISOString(),
@@ -5208,11 +5208,11 @@ app.get(
         ...result,
       });
     } catch (error) {
-      console.error("GET KUSAI SCORE ERROR:", error);
+      console.error("GET KUSAY SCORE ERROR:", error);
 
       return res.status(500).json({
         success: false,
-        message: "Не удалось получить KUSAI Score",
+        message: "Не удалось получить KUSAY Score",
         error: error.message,
       });
     }
@@ -5245,11 +5245,11 @@ app.get(
         ...result,
       });
     } catch (error) {
-      console.error("GET KUSAI SCORE BY PHONE ERROR:", error);
+      console.error("GET KUSAY SCORE BY PHONE ERROR:", error);
 
       return res.status(500).json({
         success: false,
-        message: "Не удалось получить KUSAI Score",
+        message: "Не удалось получить KUSAY Score",
         error: error.message,
       });
     }
@@ -5272,7 +5272,7 @@ app.post(
       if (!Number.isFinite(amount) || amount <= 0) {
         return res.status(400).json({
           success: false,
-          message: "Количество KUSAI Score должно быть больше 0",
+          message: "Количество KUSAY Score должно быть больше 0",
         });
       }
 
@@ -5326,7 +5326,7 @@ app.post(
           crypto.randomUUID(),
           clientPhone,
           amount,
-          reason || "Ручное начисление KUSAI Score",
+          reason || "Ручное начисление KUSAY Score",
           comment,
         ]
       );
@@ -5335,15 +5335,15 @@ app.post(
 
       return res.json({
         success: true,
-        message: "KUSAI Score начислен",
+        message: "KUSAY Score начислен",
         ...result,
       });
     } catch (error) {
-      console.error("ADD KUSAI SCORE ERROR:", error);
+      console.error("ADD KUSAY SCORE ERROR:", error);
 
       return res.status(500).json({
         success: false,
-        message: "Ошибка начисления KUSAI Score",
+        message: "Ошибка начисления KUSAY Score",
         error: error.message,
       });
     }
@@ -5366,7 +5366,7 @@ app.post(
       if (!Number.isFinite(amount) || amount <= 0) {
         return res.status(400).json({
           success: false,
-          message: "Количество KUSAI Score должно быть больше 0",
+          message: "Количество KUSAY Score должно быть больше 0",
         });
       }
 
@@ -5403,7 +5403,7 @@ app.post(
       if (amount > current.score) {
         return res.status(400).json({
           success: false,
-          message: `Недостаточно KUSAI Score. Доступно: ${current.score}`,
+          message: `Недостаточно KUSAY Score. Доступно: ${current.score}`,
           score: current.score,
         });
       }
@@ -5425,7 +5425,7 @@ app.post(
           crypto.randomUUID(),
           clientPhone,
           amount,
-          reason || "Ручное списание KUSAI Score",
+          reason || "Ручное списание KUSAY Score",
           comment,
         ]
       );
@@ -5434,11 +5434,11 @@ app.post(
 
       return res.json({
         success: true,
-        message: "KUSAI Score списан",
+        message: "KUSAY Score списан",
         ...result,
       });
     } catch (error) {
-      console.error("REMOVE KUSAI SCORE ERROR:", error);
+      console.error("REMOVE KUSAY SCORE ERROR:", error);
 
       return res.status(500).json({
         success: false,

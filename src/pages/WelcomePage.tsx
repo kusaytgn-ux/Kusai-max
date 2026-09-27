@@ -14,7 +14,7 @@ function WelcomePage() {
       <div className="w-full max-w-lg text-center">
 
         <h1 className="text-6xl font-black tracking-widest text-yellow-400">
-          KUSAI
+          KUSAY
         </h1>
 
         <h2 className="mt-2 text-4xl font-black text-white">

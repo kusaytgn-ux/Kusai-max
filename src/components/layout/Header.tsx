@@ -73,11 +73,11 @@ function Header() {
           type="button"
           onClick={() => navigate("/")}
           className="text-left"
-          aria-label="KUSAI MAX — на главную"
+          aria-label="KUSAY MAX — на главную"
         >
           <img
             src="/kusai-max-logo.png"
-            alt="KUSAI MAX CLUB"
+            alt="KUSAY MAX CLUB"
             className="
               -ml-25
               block

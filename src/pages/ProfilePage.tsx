@@ -42,7 +42,7 @@ function ProfilePage() {
               </h2>
 
               <p className="text-zinc-400">
-                Пользователь KUSAI MAX
+                Пользователь KUSAY MAX
               </p>
 
             </div>

@@ -1132,7 +1132,7 @@ function AdminHome() {
             <div>
 
               <h3 className="text-xl font-black text-white">
-                Эксклюзив KUSAI MAX
+                Эксклюзив KUSAY MAX
               </h3>
 
               <p className="mt-1 text-sm text-white/40">

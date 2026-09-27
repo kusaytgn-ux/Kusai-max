@@ -72,7 +72,7 @@ function LoginPage() {
         </h1>
 
         <p className="mt-2 text-center text-zinc-400">
-          Вход в KUSAI MAX
+          Вход в KUSAY MAX
         </p>
 
         <div className="mt-8 space-y-5">

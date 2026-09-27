@@ -73,7 +73,7 @@ updatedAt: client.updated_at
 app.get("/", (req, res) => {
 res.json({
 success: true,
-message: "KUSAI MAX API работает",
+message: "KUSAY MAX API работает",
 serverTime: new Date().toISOString(),
 });
 });
@@ -81,7 +81,7 @@ serverTime: new Date().toISOString(),
 app.get("/api", (req, res) => {
 res.json({
 success: true,
-message: "KUSAI MAX API работает",
+message: "KUSAY MAX API работает",
 });
 });
 
@@ -1183,7 +1183,7 @@ if (apiKey !== ONE_C_API_KEY) {
 return res.json({
   success: true,
   message:
-    "KUSAI MAX API подключен",
+    "KUSAY MAX API подключен",
   serverTime:
     new Date().toISOString(),
 });
