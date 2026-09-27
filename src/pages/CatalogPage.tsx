@@ -1,4 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from "react";
+//скипнуть следующую строку после видоса 
+import { useNavigate } from "react-router-dom";
 import Header from "../components/layout/Header";
 import ProductCard from "../components/cards/ProductCard";
 import SearchInput from "../components/ui/SearchInput";
@@ -200,6 +202,8 @@ function parseProduct(product: Product): ParsedProduct {
 }
 
 function CatalogPage() {
+  //Скипнуть следуюущую строку после видоса 
+    const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [selectedSection, setSelectedSection] = useState("");
   const [selectedBrand, setSelectedBrand] = useState("");
@@ -391,7 +395,179 @@ function CatalogPage() {
       </div>
     );
   }
-  // Заглушка каталога
+
+   //вот все ниже нахуй скипнуть когда снима видос 
+    // =====================================================
+  // ВРЕМЕННЫЙ КАТАЛОГ iPHONE 18
+  // УДАЛИТЬ, КОГДА БУДЕТ ГОТОВ ОСНОВНОЙ КАТАЛОГ
+  // =====================================================
+
+  const temporaryIphones = [
+    {
+      name: "iPhone 18 Pro",
+      color: "Чёрный",
+      colorClass: "bg-black",
+      image: "/iphone18pro-black.png",
+    },
+    {
+      name: "iPhone 18 Pro",
+      color: "Серебряный",
+      colorClass: "bg-zinc-300",
+      image: "/iphone18pro-silver.png",
+    },
+    {
+      name: "iPhone 18 Pro",
+      color: "Голубой",
+      colorClass: "bg-sky-300",
+      image: "/iphone18pro-blue.png",
+    },
+    {
+      name: "iPhone 18 Pro",
+      color: "Бургунди",
+      colorClass: "bg-red-900",
+      image: "/iphone18pro-burgundy.png",
+    },
+    {
+      name: "iPhone 18 Pro Max",
+      color: "Чёрный",
+      colorClass: "bg-black",
+      image: "/iphone18pro-black.png",
+    },
+    {
+      name: "iPhone 18 Pro Max",
+      color: "Серебряный",
+      colorClass: "bg-zinc-300",
+      image: "/iphone18pro-silver.png",
+    },
+    {
+      name: "iPhone 18 Pro Max",
+      color: "Голубой",
+      colorClass: "bg-sky-300",
+      image: "/iphone18pro-blue.png",
+    },
+    {
+      name: "iPhone 18 Pro Max",
+      color: "Бургунди",
+      colorClass: "bg-red-900",
+      image: "/iphone18pro-burgundy.png",
+    },
+  ];
+    return (
+    <div className="min-h-screen bg-black pb-28">
+      <Header />
+
+      <main className="mx-auto max-w-md px-5 py-5">
+        {/* ЗАГОЛОВОК */}
+
+        <div className="mb-6">
+          <h1 className="text-3xl font-black tracking-tight text-white">
+            Каталог
+          </h1>
+
+          <p className="mt-1 text-sm text-zinc-500">
+            iPhone 18 Pro и iPhone 18 Pro Max
+          </p>
+        </div>
+
+        {/* iPHONE 18 */}
+
+        <div className="grid grid-cols-2 gap-3">
+          {temporaryIphones.map((iphone) => (
+            <div
+              key={`${iphone.name}-${iphone.color}`}
+              className="
+                overflow-hidden
+                rounded-[24px]
+                border
+                border-white/5
+                bg-zinc-950
+                shadow-xl
+              "
+            >
+              {/* ФОТО */}
+
+              <div
+                className="
+                  flex
+                  h-[220px]
+                  items-center
+                  justify-center
+                  bg-zinc-900
+                  p-4
+                "
+              >
+                <img
+                  src={iphone.image}
+                  alt={`${iphone.name} ${iphone.color}`}
+                  className="
+                    max-h-full
+                    max-w-full
+                    object-contain
+                    transition
+                    duration-300
+                  "
+                />
+              </div>
+
+              {/* ИНФОРМАЦИЯ */}
+
+              <div className="p-4">
+                <h2 className="text-base font-black text-white">
+                  {iphone.name}
+                </h2>
+
+                <div className="mt-2 flex items-center gap-2">
+                  <span
+                    className={`
+                      h-3
+                      w-3
+                      rounded-full
+                      border
+                      border-white/20
+                      ${iphone.colorClass}
+                    `}
+                  />
+
+                  <span className="text-xs text-zinc-400">
+                    {iphone.color}
+                  </span>
+                </div>
+
+                <p className="mt-4 text-xs leading-5 text-zinc-500">
+                  Цену уточняйте у менеджера
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => navigate("/concierge")}
+                  className="
+                    mt-4
+                    flex
+                    w-full
+                    items-center
+                    justify-center
+                    rounded-xl
+                    bg-[#FFE500]
+                    px-3
+                    py-3
+                    text-xs
+                    font-black
+                    text-black
+                    transition
+                    active:scale-[0.97]
+                  "
+                >
+                  Узнать цену
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </main>
+    </div>
+  );
+
+  // Заглушка каталога 
     return (
     <div className="min-h-screen bg-black pb-28">
       <Header />
