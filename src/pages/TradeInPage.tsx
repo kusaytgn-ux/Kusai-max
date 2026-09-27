@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { ArrowRightLeft, Check, X } from "lucide-react";
-
 
 import Button from "../components/ui/Button";
 
@@ -321,6 +321,47 @@ function TradeInPage() {
     };
   }, []);
 
+  /*
+   * Блокируем прокрутку основной страницы,
+   * пока открыта модалка оценки.
+   *
+   * Это особенно важно на мобильном Safari:
+   * сама страница Trade-In больше не будет
+   * уезжать вверх/вниз при работе с модалкой.
+   */
+  useEffect(() => {
+    if (!showEstimator) {
+      return;
+    }
+
+    const scrollY = window.scrollY;
+
+    const bodyElement = document.body;
+    const htmlElement = document.documentElement;
+
+    bodyElement.style.position = "fixed";
+    bodyElement.style.top = `-${scrollY}px`;
+    bodyElement.style.left = "0";
+    bodyElement.style.right = "0";
+    bodyElement.style.width = "100%";
+    bodyElement.style.overflow = "hidden";
+
+    htmlElement.style.overflow = "hidden";
+
+    return () => {
+      bodyElement.style.position = "";
+      bodyElement.style.top = "";
+      bodyElement.style.left = "";
+      bodyElement.style.right = "";
+      bodyElement.style.width = "";
+      bodyElement.style.overflow = "";
+
+      htmlElement.style.overflow = "";
+
+      window.scrollTo(0, scrollY);
+    };
+  }, [showEstimator]);
+
   function startEstimator() {
     setShowEstimator(true);
     setStep(1);
@@ -398,6 +439,430 @@ function TradeInPage() {
             undefined
         )
       : [];
+
+  const estimatorModal = (
+    <div
+      className="
+        fixed
+        inset-0
+        z-[9999]
+        flex
+        items-center
+        justify-center
+        overflow-hidden
+        bg-black/80
+        px-5
+        py-5
+        backdrop-blur-sm
+      "
+      style={{
+        height: "100dvh",
+        width: "100%",
+      }}
+    >
+      <div
+        className="
+          flex
+          w-full
+          max-w-md
+          flex-col
+          overflow-hidden
+          rounded-3xl
+          bg-zinc-900
+          shadow-2xl
+        "
+        style={{
+          maxHeight: "calc(100dvh - 40px)",
+        }}
+      >
+        {/* HEADER */}
+        <div className="flex shrink-0 items-center justify-between border-b border-zinc-800 px-6 py-5">
+          <div>
+            <p className="text-sm text-zinc-500">
+              Trade-In
+            </p>
+
+            <h2 className="text-2xl font-black">
+              Оценка устройства
+            </h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={closeEstimator}
+            className="
+              rounded-full
+              bg-zinc-800
+              p-2
+              text-zinc-400
+              transition
+              hover:text-white
+              active:scale-95
+            "
+            aria-label="Закрыть"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* SCROLLABLE CONTENT */}
+        <div
+          className="
+            min-h-0
+            flex-1
+            overflow-y-auto
+            overscroll-contain
+            px-6
+            pb-6
+          "
+          style={{
+            WebkitOverflowScrolling: "touch",
+          }}
+        >
+          {result ? (
+            <div className="mt-8">
+              {result.accepted ? (
+                <>
+                  <div className="rounded-3xl bg-green-500/10 p-6 text-center">
+                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-500">
+                      <Check
+                        size={32}
+                        className="text-black"
+                      />
+                    </div>
+
+                    <h3 className="mt-5 text-2xl font-black">
+                      Предварительная стоимость
+                    </h3>
+
+                    <p className="mt-4 text-5xl font-black text-yellow-400">
+                      {result.price.toLocaleString(
+                        "ru-RU"
+                      )}{" "}
+                      ₽
+                    </p>
+
+                    <p className="mt-4 text-zinc-400">
+                      Итоговая стоимость может
+                      измениться после осмотра
+                      устройства.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-3xl bg-red-500/10 p-6 text-center">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-500">
+                    <X
+                      size={32}
+                      className="text-black"
+                    />
+                  </div>
+
+                  <h3 className="mt-5 text-2xl font-black">
+                    Устройство не принимается
+                  </h3>
+
+                  <p className="mt-4 text-zinc-400">
+                    {result.reason}
+                  </p>
+                </div>
+              )}
+
+              <div className="mt-6 space-y-3">
+                <Button
+                  onClick={resetEstimator}
+                >
+                  Рассчитать другое устройство
+                </Button>
+
+                <button
+                  type="button"
+                  onClick={closeEstimator}
+                  className="
+                    w-full
+                    rounded-2xl
+                    bg-zinc-800
+                    py-3
+                    font-semibold
+                    text-white
+                    transition
+                    hover:bg-zinc-700
+                    active:scale-[0.98]
+                  "
+                >
+                  Закрыть
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* PROGRESS */}
+              <div className="mt-6 flex gap-2">
+                {Array.from({
+                  length: 6,
+                }).map((_, index) => (
+                  <div
+                    key={index}
+                    className={`h-1.5 flex-1 rounded-full ${
+                      index < step
+                        ? "bg-yellow-400"
+                        : "bg-zinc-700"
+                    }`}
+                  />
+                ))}
+              </div>
+
+              {/* STEP 1 */}
+              {step === 1 && (
+                <div className="mt-8">
+                  <h3 className="text-2xl font-bold">
+                    Какое у вас устройство?
+                  </h3>
+
+                  <div className="mt-5 grid gap-3">
+                    {MODELS.map((item) => (
+                      <button
+                        type="button"
+                        key={item}
+                        onClick={() =>
+                          setModel(item)
+                        }
+                        className={`rounded-2xl border p-4 text-left font-semibold transition active:scale-[0.99] ${
+                          model === item
+                            ? "border-yellow-400 bg-yellow-400 text-black"
+                            : "border-zinc-700 bg-zinc-800 hover:border-zinc-500"
+                        }`}
+                      >
+                        {item}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 2 */}
+              {step === 2 && (
+                <div className="mt-8">
+                  <h3 className="text-2xl font-bold">
+                    Какое состояние АКБ?
+                  </h3>
+
+                  <p className="mt-2 text-zinc-400">
+                    Укажите состояние аккумулятора
+                    от 0 до 100%.
+                  </p>
+
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    inputMode="numeric"
+                    enterKeyHint="done"
+                    placeholder="Например, 87"
+                    value={battery}
+                    onChange={(e) =>
+                      setBattery(
+                        e.target.value
+                      )
+                    }
+                    onFocus={(event) => {
+                      setTimeout(() => {
+                        event.currentTarget.scrollIntoView({
+                          behavior: "smooth",
+                          block: "center",
+                        });
+                      }, 300);
+                    }}
+                    className="
+                      mt-6
+                      w-full
+                      rounded-2xl
+                      border
+                      border-zinc-700
+                      bg-zinc-800
+                      p-4
+                      text-xl
+                      text-white
+                      outline-none
+                      focus:border-yellow-400
+                    "
+                  />
+                </div>
+              )}
+
+              {/* STEP 3 */}
+              {step === 3 && (
+                <div className="mt-8">
+                  <h3 className="text-2xl font-bold">
+                    Состояние экрана?
+                  </h3>
+
+                  <div className="mt-5 space-y-3">
+                    {SCREEN_OPTIONS.map(
+                      (item) => (
+                        <button
+                          type="button"
+                          key={item.value}
+                          onClick={() =>
+                            setScreen(
+                              item.value
+                            )
+                          }
+                          className={`w-full rounded-2xl border p-4 text-left font-semibold transition active:scale-[0.99] ${
+                            screen ===
+                            item.value
+                              ? "border-yellow-400 bg-yellow-400 text-black"
+                              : "border-zinc-700 bg-zinc-800 hover:border-zinc-500"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 4 */}
+              {step === 4 && (
+                <div className="mt-8">
+                  <h3 className="text-2xl font-bold">
+                    Состояние задней крышки,
+                    корпуса?
+                  </h3>
+
+                  <div className="mt-5 space-y-3">
+                    {BODY_OPTIONS.map(
+                      (item) => (
+                        <button
+                          type="button"
+                          key={item.value}
+                          onClick={() =>
+                            setBody(
+                              item.value
+                            )
+                          }
+                          className={`w-full rounded-2xl border p-4 text-left font-semibold transition active:scale-[0.99] ${
+                            body ===
+                            item.value
+                              ? "border-yellow-400 bg-yellow-400 text-black"
+                              : "border-zinc-700 bg-zinc-800 hover:border-zinc-500"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 5 */}
+              {step === 5 && (
+                <div className="mt-8">
+                  <h3 className="text-2xl font-bold">
+                    Комплект?
+                  </h3>
+
+                  <div className="mt-5 space-y-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setBox("yes")
+                      }
+                      className={`w-full rounded-2xl border p-4 text-left font-semibold transition active:scale-[0.99] ${
+                        box === "yes"
+                          ? "border-yellow-400 bg-yellow-400 text-black"
+                          : "border-zinc-700 bg-zinc-800 hover:border-zinc-500"
+                      }`}
+                    >
+                      Есть коробка
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setBox("no")
+                      }
+                      className={`w-full rounded-2xl border p-4 text-left font-semibold transition active:scale-[0.99] ${
+                        box === "no"
+                          ? "border-yellow-400 bg-yellow-400 text-black"
+                          : "border-zinc-700 bg-zinc-800 hover:border-zinc-500"
+                      }`}
+                    >
+                      Нет коробки
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 6 */}
+              {step === 6 && (
+                <div className="mt-8">
+                  <h3 className="text-2xl font-bold">
+                    Количество памяти?
+                  </h3>
+
+                  <div className="mt-5 grid gap-3">
+                    {selectedMemoryOptions.map(
+                      (item) => (
+                        <button
+                          type="button"
+                          key={item}
+                          onClick={() =>
+                            setMemory(item)
+                          }
+                          className={`rounded-2xl border p-4 text-left font-semibold transition active:scale-[0.99] ${
+                            memory === item
+                              ? "border-yellow-400 bg-yellow-400 text-black"
+                              : "border-zinc-700 bg-zinc-800 hover:border-zinc-500"
+                          }`}
+                        >
+                          {item}
+                        </button>
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* BUTTONS */}
+              <div className="mt-8 flex gap-3">
+                {step > 1 && (
+                  <button
+                    type="button"
+                    onClick={previousStep}
+                    className="
+                      flex-1
+                      rounded-2xl
+                      bg-zinc-800
+                      py-3
+                      font-semibold
+                      transition
+                      hover:bg-zinc-700
+                      active:scale-[0.98]
+                    "
+                  >
+                    Назад
+                  </button>
+                )}
+
+                <div className="flex-1">
+                  <Button
+                    onClick={nextStep}
+                  >
+                    {step === 6
+                      ? "Рассчитать"
+                      : "Далее"}
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-black pb-24 text-white">
@@ -536,316 +1001,11 @@ function TradeInPage() {
         )}
       </div>
 
-      {showEstimator && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 px-5 backdrop-blur-sm">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl bg-zinc-900 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-zinc-500">
-                  Trade-In
-                </p>
-
-                <h2 className="text-2xl font-black">
-                  Оценка устройства
-                </h2>
-              </div>
-
-              <button
-                onClick={closeEstimator}
-                className="rounded-full bg-zinc-800 p-2 text-zinc-400 transition hover:text-white"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {result ? (
-              <div className="mt-8">
-                {result.accepted ? (
-                  <>
-                    <div className="rounded-3xl bg-green-500/10 p-6 text-center">
-                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-500">
-                        <Check
-                          size={32}
-                          className="text-black"
-                        />
-                      </div>
-
-                      <h3 className="mt-5 text-2xl font-black">
-                        Предварительная стоимость
-                      </h3>
-
-                      <p className="mt-4 text-5xl font-black text-yellow-400">
-                        {result.price.toLocaleString(
-                          "ru-RU"
-                        )}{" "}
-                        ₽
-                      </p>
-
-                      <p className="mt-4 text-zinc-400">
-                        Итоговая стоимость может
-                        измениться после осмотра
-                        устройства.
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <div className="rounded-3xl bg-red-500/10 p-6 text-center">
-                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-500">
-                      <X
-                        size={32}
-                        className="text-black"
-                      />
-                    </div>
-
-                    <h3 className="mt-5 text-2xl font-black">
-                      Устройство не принимается
-                    </h3>
-
-                    <p className="mt-4 text-zinc-400">
-                      {result.reason}
-                    </p>
-                  </div>
-                )}
-
-                <div className="mt-6 space-y-3">
-                  <Button
-                    onClick={resetEstimator}
-                  >
-                    Рассчитать другое устройство
-                  </Button>
-
-                  <button
-                    onClick={closeEstimator}
-                    className="w-full rounded-2xl bg-zinc-800 py-3 font-semibold text-white transition hover:bg-zinc-700"
-                  >
-                    Закрыть
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="mt-6 flex gap-2">
-                  {Array.from({
-                    length: 6,
-                  }).map((_, index) => (
-                    <div
-                      key={index}
-                      className={`h-1.5 flex-1 rounded-full ${
-                        index < step
-                          ? "bg-yellow-400"
-                          : "bg-zinc-700"
-                      }`}
-                    />
-                  ))}
-                </div>
-
-                {step === 1 && (
-                  <div className="mt-8">
-                    <h3 className="text-2xl font-bold">
-                      Какое у вас устройство?
-                    </h3>
-
-                    <div className="mt-5 grid gap-3">
-                      {MODELS.map((item) => (
-                        <button
-                          key={item}
-                          onClick={() =>
-                            setModel(item)
-                          }
-                          className={`rounded-2xl border p-4 text-left font-semibold transition ${
-                            model === item
-                              ? "border-yellow-400 bg-yellow-400 text-black"
-                              : "border-zinc-700 bg-zinc-800 hover:border-zinc-500"
-                          }`}
-                        >
-                          {item}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {step === 2 && (
-                  <div className="mt-8">
-                    <h3 className="text-2xl font-bold">
-                      Какое состояние АКБ?
-                    </h3>
-
-                    <p className="mt-2 text-zinc-400">
-                      Укажите состояние аккумулятора
-                      от 0 до 100%.
-                    </p>
-
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      placeholder="Например, 87"
-                      value={battery}
-                      onChange={(e) =>
-                        setBattery(
-                          e.target.value
-                        )
-                      }
-                      className="mt-6 w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 text-xl text-white outline-none focus:border-yellow-400"
-                    />
-                  </div>
-                )}
-
-                {step === 3 && (
-                  <div className="mt-8">
-                    <h3 className="text-2xl font-bold">
-                      Состояние экрана?
-                    </h3>
-
-                    <div className="mt-5 space-y-3">
-                      {SCREEN_OPTIONS.map(
-                        (item) => (
-                          <button
-                            key={item.value}
-                            onClick={() =>
-                              setScreen(
-                                item.value
-                              )
-                            }
-                            className={`w-full rounded-2xl border p-4 text-left font-semibold transition ${
-                              screen ===
-                              item.value
-                                ? "border-yellow-400 bg-yellow-400 text-black"
-                                : "border-zinc-700 bg-zinc-800 hover:border-zinc-500"
-                            }`}
-                          >
-                            {item.label}
-                          </button>
-                        )
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {step === 4 && (
-                  <div className="mt-8">
-                    <h3 className="text-2xl font-bold">
-                      Состояние задней крышки,
-                      корпуса?
-                    </h3>
-
-                    <div className="mt-5 space-y-3">
-                      {BODY_OPTIONS.map(
-                        (item) => (
-                          <button
-                            key={item.value}
-                            onClick={() =>
-                              setBody(
-                                item.value
-                              )
-                            }
-                            className={`w-full rounded-2xl border p-4 text-left font-semibold transition ${
-                              body ===
-                              item.value
-                                ? "border-yellow-400 bg-yellow-400 text-black"
-                                : "border-zinc-700 bg-zinc-800 hover:border-zinc-500"
-                            }`}
-                          >
-                            {item.label}
-                          </button>
-                        )
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {step === 5 && (
-                  <div className="mt-8">
-                    <h3 className="text-2xl font-bold">
-                      Комплект?
-                    </h3>
-
-                    <div className="mt-5 space-y-3">
-                      <button
-                        onClick={() =>
-                          setBox("yes")
-                        }
-                        className={`w-full rounded-2xl border p-4 text-left font-semibold transition ${
-                          box === "yes"
-                            ? "border-yellow-400 bg-yellow-400 text-black"
-                            : "border-zinc-700 bg-zinc-800 hover:border-zinc-500"
-                        }`}
-                      >
-                        Есть коробка
-                      </button>
-
-                      <button
-                        onClick={() =>
-                          setBox("no")
-                        }
-                        className={`w-full rounded-2xl border p-4 text-left font-semibold transition ${
-                          box === "no"
-                            ? "border-yellow-400 bg-yellow-400 text-black"
-                            : "border-zinc-700 bg-zinc-800 hover:border-zinc-500"
-                        }`}
-                      >
-                        Нет коробки
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {step === 6 && (
-                  <div className="mt-8">
-                    <h3 className="text-2xl font-bold">
-                      Количество памяти?
-                    </h3>
-
-                    <div className="mt-5 grid gap-3">
-                      {selectedMemoryOptions.map(
-                        (item) => (
-                          <button
-                            key={item}
-                            onClick={() =>
-                              setMemory(item)
-                            }
-                            className={`rounded-2xl border p-4 text-left font-semibold transition ${
-                              memory === item
-                                ? "border-yellow-400 bg-yellow-400 text-black"
-                                : "border-zinc-700 bg-zinc-800 hover:border-zinc-500"
-                            }`}
-                          >
-                            {item}
-                          </button>
-                        )
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <div className="mt-8 flex gap-3">
-                  {step > 1 && (
-                    <button
-                      onClick={previousStep}
-                      className="flex-1 rounded-2xl bg-zinc-800 py-3 font-semibold transition hover:bg-zinc-700"
-                    >
-                      Назад
-                    </button>
-                  )}
-
-                  <div className="flex-1">
-                    <Button
-                      onClick={nextStep}
-                    >
-                      {step === 6
-                        ? "Рассчитать"
-                        : "Далее"}
-                    </Button>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      
+      {showEstimator &&
+        createPortal(
+          estimatorModal,
+          document.body
+        )}
     </div>
   );
 }
