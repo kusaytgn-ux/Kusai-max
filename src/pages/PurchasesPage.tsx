@@ -407,7 +407,7 @@ function PurchasesPage() {
               </h2>
 
               <p className="mt-2 text-sm leading-6 text-zinc-500">
-                Здесь появится история покупок и бонусов из 1С.
+                Здесь появится история покупок и бонусов.
               </p>
             </div>
           )}
