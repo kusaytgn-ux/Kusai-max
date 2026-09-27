@@ -191,7 +191,7 @@ function UserCard() {
         if (!response.ok || !data.success) {
           throw new Error(
             data.message ||
-              "Не удалось загрузить KUSAI Score"
+              "Не удалось загрузить KUSAY Score"
           );
         }
 
@@ -210,7 +210,7 @@ function UserCard() {
         }
       } catch (error) {
         console.error(
-          "Ошибка загрузки KUSAI Score:",
+          "Ошибка загрузки KUSAY Score:",
           error
         );
 
@@ -367,7 +367,7 @@ function UserCard() {
 
               <div className="text-center">
                 <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#FFE500]">
-                  KUSAI MAX
+                  KUSAY MAX
                 </p>
 
                 <h2 className="mt-1 text-2xl font-black text-white">
@@ -427,7 +427,7 @@ function UserCard() {
 
                 <p className="mt-1 text-sm font-bold text-white">
                   {user?.name ||
-                    "KUSAI CLIENT"}
+                    "KUSAY CLIENT"}
                 </p>
               </div>
 
@@ -530,11 +530,11 @@ function UserCard() {
 
               <div className="text-center">
                 <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#FFE500]">
-                  KUSAI MAX
+                  KUSAY MAX
                 </p>
 
                 <h2 className="mt-1 text-2xl font-black text-white">
-                  KUSAI SCORE
+                  KUSAY SCORE
                 </h2>
 
                 <div className="mt-2 text-3xl font-black text-[#FFE500]">
@@ -879,7 +879,7 @@ function UserCard() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-widest text-zinc-500">
-                    KUSAI SCORE
+                    KUSAY SCORE
                   </p>
 
                   <h3 className="mt-3 text-xl font-black text-[#FFE500]">
