@@ -12,6 +12,8 @@ import {
   TrendingDown,
   TrendingUp,
   UserRound,
+  Plus,
+  Minus,
 } from "lucide-react";
 
 type Client = {
@@ -40,6 +42,23 @@ type BonusOperation = {
   sum: number;
 };
 
+type KusaiScoreOperation = {
+  id: string;
+  type: "add" | "remove";
+  points: number;
+  reason: string;
+  comment?: string;
+  createdAt?: string;
+};
+
+type KusaiScoreResponse = {
+  score: number;
+  purchaseScore: number;
+  manualAdjustment: number;
+  level: string;
+  operations: KusaiScoreOperation[];
+};
+
 const API_URL = (
   import.meta.env.VITE_API_URL ||
   "http://localhost:3001"
@@ -56,6 +75,27 @@ function AdminClientPage() {
 
   const [bonusHistory, setBonusHistory] =
     useState<BonusOperation[]>([]);
+
+  const [kusaiScoreData, setKusaiScoreData] =
+    useState<KusaiScoreResponse | null>(null);
+
+  const [scoreMode, setScoreMode] =
+    useState<"add" | "remove">("add");
+
+  const [scoreReason, setScoreReason] =
+    useState("Trade-In");
+
+  const [scoreAmount, setScoreAmount] =
+    useState("150");
+
+  const [scoreComment, setScoreComment] =
+    useState("");
+
+  const [scoreSaving, setScoreSaving] =
+    useState(false);
+
+  const [scoreError, setScoreError] =
+    useState("");
 
   const [loading, setLoading] =
     useState(true);
@@ -86,12 +126,19 @@ function AdminClientPage() {
             clientPhone
           )}/sales-history`;
 
+        const scoreUrl =
+          `${API_URL}/api/clients/phone/${encodeURIComponent(
+            clientPhone
+          )}/kusai-score`;
+
         const [
           clientResponse,
           salesResponse,
+          scoreResponse,
         ] = await Promise.all([
           fetch(clientUrl),
           fetch(salesUrl),
+          fetch(scoreUrl),
         ]);
 
         if (!clientResponse.ok) {
@@ -109,6 +156,29 @@ function AdminClientPage() {
         }
 
         setClient(clientData.client);
+
+        if (scoreResponse.ok) {
+          const scoreData =
+            await scoreResponse.json();
+
+          if (scoreData.success) {
+            setKusaiScoreData({
+              score: Number(scoreData.score) || 0,
+              purchaseScore:
+                Number(scoreData.purchaseScore) || 0,
+              manualAdjustment:
+                Number(scoreData.manualAdjustment) || 0,
+              level:
+                scoreData.level || "MAX MEMBER",
+              operations:
+                Array.isArray(
+                  scoreData.operations
+                )
+                  ? scoreData.operations
+                  : [],
+            });
+          }
+        }
 
         if (salesResponse.ok) {
           const salesData =
@@ -165,7 +235,204 @@ function AdminClientPage() {
     void load();
   }, [phone]);
 
-  function formatMoney(value?: number) {
+  // Обновляем KUSAI Score у открытой страницы администратора каждые 2 секунды.
+  useEffect(() => {
+    if (!phone) {
+      return;
+    }
+
+    let stopped = false;
+    let loadingRequest = false;
+
+    async function refreshScore() {
+      if (stopped || loadingRequest) {
+        return;
+      }
+
+      loadingRequest = true;
+
+      try {
+        const response = await fetch(
+          `${API_URL}/api/clients/phone/${encodeURIComponent(
+            String(phone)
+          )}/kusai-score`
+        );
+
+        const data =
+          await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data.message ||
+              "Не удалось обновить KUSAI Score"
+          );
+        }
+
+        if (!stopped) {
+          setKusaiScoreData({
+            score: Number(data.score) || 0,
+            purchaseScore:
+              Number(data.purchaseScore) || 0,
+            manualAdjustment:
+              Number(data.manualAdjustment) || 0,
+            level:
+              data.level || "MAX MEMBER",
+            operations:
+              Array.isArray(
+                data.operations
+              )
+                ? data.operations
+                : [],
+          });
+        }
+      } catch (error) {
+        console.error(
+          "Ошибка обновления KUSAI Score:",
+          error
+        );
+      } finally {
+        loadingRequest = false;
+      }
+    }
+
+    const interval =
+      window.setInterval(() => {
+        void refreshScore();
+      }, 2000);
+
+    return () => {
+      stopped = true;
+      window.clearInterval(interval);
+    };
+  }, [phone]);
+
+  const scoreReasons = [
+    {
+      label: "Trade-In",
+      points: 150,
+    },
+    {
+      label: "Рекомендация друга",
+      points: 200,
+    },
+    {
+      label: "Отзыв",
+      points: 50,
+    },
+    {
+      label: "Ручное начисление",
+      points: null,
+    },
+    {
+      label: "Другое",
+      points: null,
+    },
+  ];
+
+  function handleScoreReasonChange(
+    value: string
+  ) {
+    setScoreReason(value);
+
+    const preset =
+      scoreReasons.find(
+        (item) => item.label === value
+      );
+
+    if (
+      preset?.points !== null &&
+      preset?.points !== undefined
+    ) {
+      setScoreAmount(
+        String(preset.points)
+      );
+    }
+  }
+
+  async function handleScoreSubmit() {
+    if (!client) {
+      return;
+    }
+
+    const amount =
+      Number(scoreAmount);
+
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
+      setScoreError(
+        "Укажи корректное количество Score"
+      );
+      return;
+    }
+
+    setScoreSaving(true);
+    setScoreError("");
+
+    try {
+      const response =
+        await fetch(
+          `${API_URL}/api/clients/${client.id}/kusai-score/${scoreMode}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify({
+              points: amount,
+              reason: scoreReason,
+              comment:
+                scoreComment.trim(),
+            }),
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
+        throw new Error(
+          data.message ||
+            "Не удалось изменить KUSAI Score"
+        );
+      }
+
+      setKusaiScoreData({
+        score: Number(data.score) || 0,
+        purchaseScore:
+          Number(data.purchaseScore) || 0,
+        manualAdjustment:
+          Number(data.manualAdjustment) || 0,
+        level:
+          data.level || "MAX MEMBER",
+        operations:
+          Array.isArray(
+            data.operations
+          )
+            ? data.operations
+            : [],
+      });
+
+      setScoreComment("");
+    } catch (error) {
+      setScoreError(
+        error instanceof Error
+          ? error.message
+          : "Ошибка изменения KUSAI Score"
+      );
+    } finally {
+      setScoreSaving(false);
+    }
+  }
+
+  function formatMoney(
+    value?: number
+  ) {
     if (
       value === undefined ||
       value === null
@@ -173,12 +440,16 @@ function AdminClientPage() {
       return "—";
     }
 
-    return `${Number(value).toLocaleString(
+    return `${Number(
+      value
+    ).toLocaleString(
       "ru-RU"
     )} ₽`;
   }
 
-  function formatPoints(value?: number) {
+  function formatPoints(
+    value?: number
+  ) {
     if (
       value === undefined ||
       value === null
@@ -186,19 +457,28 @@ function AdminClientPage() {
       return "0";
     }
 
-    return Number(value).toLocaleString(
+    return Number(
+      value
+    ).toLocaleString(
       "ru-RU"
     );
   }
 
-  function formatDate(value?: string) {
+  function formatDate(
+    value?: string
+  ) {
     if (!value) {
       return "Дата не указана";
     }
 
-    const date = new Date(value);
+    const date =
+      new Date(value);
 
-    if (Number.isNaN(date.getTime())) {
+    if (
+      Number.isNaN(
+        date.getTime()
+      )
+    ) {
       return value;
     }
 
@@ -212,7 +492,9 @@ function AdminClientPage() {
     );
   }
 
-  function getStatusLabel(status?: string) {
+  function getStatusLabel(
+    status?: string
+  ) {
     if (!status) {
       return "ACTIVE";
     }
@@ -220,11 +502,15 @@ function AdminClientPage() {
     const normalized =
       status.toLowerCase();
 
-    const statuses: Record<string, string> = {
+    const statuses: Record<
+      string,
+      string
+    > = {
       active: "ACTIVE",
       inactive: "INACTIVE",
       new: "NEW CLIENT",
-      "new client": "NEW CLIENT",
+      "new client":
+        "NEW CLIENT",
       blocked: "BLOCKED",
     };
 
@@ -348,7 +634,9 @@ function AdminClientPage() {
             </p>
 
             <p className="mt-4 text-2xl font-black">
-              {getStatusLabel(client.status)}
+              {getStatusLabel(
+                client.status
+              )}
             </p>
           </div>
 
@@ -371,9 +659,342 @@ function AdminClientPage() {
 
         </div>
 
+        {/* KUSAI SCORE */}
+
+        <section className="mt-5 rounded-[28px] border border-yellow-400/20 bg-[#19191c] p-6 md:p-8">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h2 className="text-2xl font-black">
+                KUSAI SCORE
+              </h2>
+
+              <p className="mt-1 text-sm text-zinc-500">
+                Score за покупки + ручные начисления и списания
+              </p>
+            </div>
+
+            <div className="text-left lg:text-right">
+              <p className="text-xs uppercase tracking-widest text-zinc-500">
+                Текущий Score
+              </p>
+
+              <p className="mt-1 text-4xl font-black text-yellow-400">
+                {formatPoints(
+                  kusaiScoreData?.score
+                )}
+              </p>
+
+              <p className="mt-1 text-sm font-bold text-zinc-400">
+                {kusaiScoreData?.level ||
+                  "MAX MEMBER"}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-3 md:grid-cols-3">
+
+            <div className="rounded-2xl bg-black/30 p-4">
+              <p className="text-xs uppercase tracking-widest text-zinc-600">
+                За покупки
+              </p>
+
+              <p className="mt-2 text-2xl font-black">
+                {formatPoints(
+                  kusaiScoreData?.purchaseScore
+                )}
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-black/30 p-4">
+              <p className="text-xs uppercase tracking-widest text-zinc-600">
+                Ручная корректировка
+              </p>
+
+              <p className="mt-2 text-2xl font-black">
+                {(kusaiScoreData?.manualAdjustment ?? 0) > 0
+                  ? "+"
+                  : ""}
+
+                {formatPoints(
+                  kusaiScoreData?.manualAdjustment
+                )}
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-black/30 p-4">
+              <p className="text-xs uppercase tracking-widest text-zinc-600">
+                Итог
+              </p>
+
+              <p className="mt-2 text-2xl font-black text-yellow-400">
+                {formatPoints(
+                  kusaiScoreData?.score
+                )}
+              </p>
+            </div>
+
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-zinc-800 bg-black/20 p-5">
+            <div className="grid gap-4 md:grid-cols-2">
+
+              <div>
+                <label className="text-xs uppercase tracking-widest text-zinc-500">
+                  Операция
+                </label>
+
+                <div className="mt-2 grid grid-cols-2 gap-2">
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setScoreMode("add")
+                    }
+                    className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition ${
+                      scoreMode === "add"
+                        ? "bg-green-500 text-black"
+                        : "bg-zinc-800 text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    <Plus size={17} />
+                    Начислить
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setScoreMode(
+                        "remove"
+                      )
+                    }
+                    className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition ${
+                      scoreMode ===
+                      "remove"
+                        ? "bg-red-500 text-white"
+                        : "bg-zinc-800 text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    <Minus size={17} />
+                    Списать
+                  </button>
+
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs uppercase tracking-widest text-zinc-500">
+                  Причина
+                </label>
+
+                <select
+                  value={scoreReason}
+                  onChange={(event) =>
+                    handleScoreReasonChange(
+                      event.target.value
+                    )
+                  }
+                  className="mt-2 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-yellow-400"
+                >
+                  {scoreReasons.map(
+                    (reason) => (
+                      <option
+                        key={
+                          reason.label
+                        }
+                        value={
+                          reason.label
+                        }
+                      >
+                        {reason.points !==
+                        null
+                          ? `${reason.label} — ${reason.points} Score`
+                          : reason.label}
+                      </option>
+                    )
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs uppercase tracking-widest text-zinc-500">
+                  Количество Score
+                </label>
+
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={
+                    scoreAmount
+                  }
+                  onChange={(event) =>
+                    setScoreAmount(
+                      event.target.value
+                    )
+                  }
+                  disabled={
+                    scoreReasons.find(
+                      (reason) =>
+                        reason.label ===
+                        scoreReason
+                    )?.points !== null
+                  }
+                  className="mt-2 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-yellow-400 disabled:cursor-not-allowed disabled:opacity-50"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs uppercase tracking-widest text-zinc-500">
+                  Комментарий
+                </label>
+
+                <input
+                  type="text"
+                  value={
+                    scoreComment
+                  }
+                  onChange={(event) =>
+                    setScoreComment(
+                      event.target.value
+                    )
+                  }
+                  placeholder="Необязательно"
+                  className="mt-2 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-white placeholder:text-zinc-700 outline-none focus:border-yellow-400"
+                />
+              </div>
+
+            </div>
+
+            {scoreError && (
+              <p className="mt-4 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                {scoreError}
+              </p>
+            )}
+
+            <button
+              type="button"
+              disabled={
+                scoreSaving
+              }
+              onClick={
+                handleScoreSubmit
+              }
+              className={`mt-4 w-full rounded-xl px-5 py-3 font-black text-black transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                scoreMode === "add"
+                  ? "bg-green-400 hover:bg-green-300"
+                  : "bg-red-400 hover:bg-red-300"
+              }`}
+            >
+              {scoreSaving
+                ? "Сохраняем..."
+                : scoreMode === "add"
+                  ? `Начислить ${formatPoints(
+                      Number(
+                        scoreAmount
+                      ) || 0
+                    )} Score`
+                  : `Списать ${formatPoints(
+                      Number(
+                        scoreAmount
+                      ) || 0
+                    )} Score`}
+            </button>
+          </div>
+
+          <div className="mt-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-black">
+                История KUSAI Score
+              </h3>
+
+              <span className="text-xs text-zinc-600">
+                Обновляется автоматически
+              </span>
+            </div>
+
+            {kusaiScoreData?.operations?.length ? (
+              <div className="mt-4 overflow-hidden rounded-2xl border border-zinc-800">
+
+                {kusaiScoreData.operations.map(
+                  (
+                    operation,
+                    index
+                  ) => {
+                    const isAdd =
+                      operation.type ===
+                      "add";
+
+                    return (
+                      <div
+                        key={
+                          operation.id
+                        }
+                        className={`flex items-center justify-between gap-4 px-5 py-4 ${
+                          index !==
+                          kusaiScoreData
+                            .operations
+                            .length -
+                            1
+                            ? "border-b border-zinc-800"
+                            : ""
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="font-bold text-white">
+                            {operation.reason ||
+                              "Операция KUSAI Score"}
+                          </p>
+
+                          {operation.comment && (
+                            <p className="mt-1 text-sm text-zinc-500">
+                              {
+                                operation.comment
+                              }
+                            </p>
+                          )}
+
+                          {operation.createdAt && (
+                            <p className="mt-1 text-xs text-zinc-600">
+                              {formatDate(
+                                operation.createdAt
+                              )}
+                            </p>
+                          )}
+                        </div>
+
+                        <p
+                          className={`shrink-0 text-lg font-black ${
+                            isAdd
+                              ? "text-green-400"
+                              : "text-red-400"
+                          }`}
+                        >
+                          {isAdd
+                            ? "+"
+                            : "−"}
+
+                          {formatPoints(
+                            operation.points
+                          )}
+                        </p>
+                      </div>
+                    );
+                  }
+                )}
+
+              </div>
+            ) : (
+              <div className="mt-4 rounded-2xl border border-zinc-800 bg-black/20 p-6 text-center text-sm text-zinc-600">
+                Ручных операций пока нет
+              </div>
+            )}
+          </div>
+        </section>
+
         {/* PURCHASES FROM 1C */}
 
         <section className="mt-5 rounded-[28px] border border-zinc-800 bg-[#19191c] p-6 md:p-8">
+
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-black">
@@ -410,69 +1031,86 @@ function AdminClientPage() {
             </div>
           ) : (
             <div className="mt-6 overflow-hidden rounded-2xl border border-zinc-800">
-              {sales.map((sale, index) => (
-                <div
-                  key={
-                    sale.id ||
-                    `${sale.date}-${index}`
-                  }
-                  className={`
-                    flex
-                    flex-col
-                    gap-5
-                    px-5
-                    py-5
-                    transition
-                    hover:bg-white/[0.02]
-                    md:flex-row
-                    md:items-center
-                    md:justify-between
-                    ${
-                      index !== sales.length - 1
-                        ? "border-b border-zinc-800"
-                        : ""
+
+              {sales.map(
+                (sale, index) => (
+                  <div
+                    key={
+                      sale.id ||
+                      `${sale.date}-${index}`
                     }
-                  `}
-                >
-                  <div className="flex min-w-0 items-center gap-4">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-zinc-800">
-                      <ShoppingBag
-                        size={19}
-                        className="text-zinc-400"
-                      />
+                    className={`
+                      flex
+                      flex-col
+                      gap-5
+                      px-5
+                      py-5
+                      transition
+                      hover:bg-white/[0.02]
+                      md:flex-row
+                      md:items-center
+                      md:justify-between
+                      ${
+                        index !==
+                        sales.length -
+                          1
+                          ? "border-b border-zinc-800"
+                          : ""
+                      }
+                    `}
+                  >
+                    <div className="flex min-w-0 items-center gap-4">
+
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-zinc-800">
+                        <ShoppingBag
+                          size={19}
+                          className="text-zinc-400"
+                        />
+                      </div>
+
+                      <div className="min-w-0">
+                        <p className="truncate text-lg font-bold">
+                          {sale.goods ||
+                            "Покупка"}
+                        </p>
+
+                        <div className="mt-1 flex items-center gap-2 text-sm text-zinc-500">
+                          <CalendarDays
+                            size={14}
+                          />
+
+                          {formatDate(
+                            sale.date
+                          )}
+                        </div>
+                      </div>
+
                     </div>
 
-                    <div className="min-w-0">
-                      <p className="truncate text-lg font-bold">
-                        {sale.goods || "Покупка"}
+                    <div className="text-left md:text-right">
+                      <p className="text-sm text-zinc-500">
+                        Сумма
                       </p>
 
-                      <div className="mt-1 flex items-center gap-2 text-sm text-zinc-500">
-                        <CalendarDays size={14} />
-
-                        {formatDate(sale.date)}
-                      </div>
+                      <p className="mt-1 text-xl font-black">
+                        {formatMoney(
+                          sale.sum
+                        )}
+                      </p>
                     </div>
                   </div>
+                )
+              )}
 
-                  <div className="text-left md:text-right">
-                    <p className="text-sm text-zinc-500">
-                      Сумма
-                    </p>
-
-                    <p className="mt-1 text-xl font-black">
-                      {formatMoney(sale.sum)}
-                    </p>
-                  </div>
-                </div>
-              ))}
             </div>
           )}
+
         </section>
 
         {/* BONUS HISTORY FROM 1C */}
 
         <section className="mt-5 rounded-[28px] border border-zinc-800 bg-[#19191c] p-6 md:p-8">
+
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-black">
@@ -498,103 +1136,122 @@ function AdminClientPage() {
             </div>
           ) : (
             <div className="mt-6 overflow-hidden rounded-2xl border border-zinc-800">
-              {bonusHistory.map((item, index) => {
-                const amount = Number(item.sum);
-                const isAdd = amount > 0;
 
-                return (
-                  <div
-                    key={`${item.id}-${index}`}
-                    className={`
-                      flex
-                      items-center
-                      justify-between
-                      gap-4
-                      px-5
-                      py-5
-                      ${
-                        index !==
-                        bonusHistory.length - 1
-                          ? "border-b border-zinc-800"
-                          : ""
-                      }
-                    `}
-                  >
-                    <div className="flex min-w-0 items-center gap-4">
-                      <div
-                        className={`
-                          flex
-                          h-10
-                          w-10
-                          shrink-0
-                          items-center
-                          justify-center
-                          rounded-xl
-                          ${
-                            isAdd
-                              ? "bg-green-500/10"
-                              : "bg-red-500/10"
-                          }
-                        `}
-                      >
-                        {isAdd ? (
-                          <TrendingUp
-                            size={18}
-                            className="text-green-400"
-                          />
-                        ) : (
-                          <TrendingDown
-                            size={18}
-                            className="text-red-400"
-                          />
-                        )}
-                      </div>
+              {bonusHistory.map(
+                (item, index) => {
+                  const amount =
+                    Number(
+                      item.sum
+                    );
 
-                      <div className="min-w-0">
-                        <p className="font-bold">
-                          {item.goods ||
-                            (isAdd
-                              ? "Начисление бонусов"
-                              : "Списание бонусов")}
-                        </p>
+                  const isAdd =
+                    amount > 0;
 
-                        {item.date && (
-                          <p className="mt-1 text-sm text-zinc-500">
-                            {formatDate(item.date)}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <p
+                  return (
+                    <div
+                      key={`${item.id}-${index}`}
                       className={`
-                        shrink-0
-                        text-lg
-                        font-black
+                        flex
+                        items-center
+                        justify-between
+                        gap-4
+                        px-5
+                        py-5
                         ${
-                          isAdd
-                            ? "text-green-400"
-                            : amount < 0
-                              ? "text-red-400"
-                              : "text-zinc-400"
+                          index !==
+                          bonusHistory.length -
+                            1
+                            ? "border-b border-zinc-800"
+                            : ""
                         }
                       `}
                     >
-                      {isAdd
-                        ? "+"
-                        : amount < 0
-                          ? "−"
-                          : ""}
 
-                      {formatPoints(
-                        Math.abs(amount)
-                      )}
-                    </p>
-                  </div>
-                );
-              })}
+                      <div className="flex min-w-0 items-center gap-4">
+
+                        <div
+                          className={`
+                            flex
+                            h-10
+                            w-10
+                            shrink-0
+                            items-center
+                            justify-center
+                            rounded-xl
+                            ${
+                              isAdd
+                                ? "bg-green-500/10"
+                                : "bg-red-500/10"
+                            }
+                          `}
+                        >
+                          {isAdd ? (
+                            <TrendingUp
+                              size={18}
+                              className="text-green-400"
+                            />
+                          ) : (
+                            <TrendingDown
+                              size={18}
+                              className="text-red-400"
+                            />
+                          )}
+                        </div>
+
+                        <div className="min-w-0">
+                          <p className="font-bold">
+                            {item.goods ||
+                              (isAdd
+                                ? "Начисление бонусов"
+                                : "Списание бонусов")}
+                          </p>
+
+                          {item.date && (
+                            <p className="mt-1 text-sm text-zinc-500">
+                              {formatDate(
+                                item.date
+                              )}
+                            </p>
+                          )}
+                        </div>
+
+                      </div>
+
+                      <p
+                        className={`
+                          shrink-0
+                          text-lg
+                          font-black
+                          ${
+                            isAdd
+                              ? "text-green-400"
+                              : amount < 0
+                                ? "text-red-400"
+                                : "text-zinc-400"
+                          }
+                        `}
+                      >
+                        {isAdd
+                          ? "+"
+                          : amount < 0
+                            ? "−"
+                            : ""}
+
+                        {formatPoints(
+                          Math.abs(
+                            amount
+                          )
+                        )}
+                      </p>
+
+                    </div>
+                  );
+                }
+              )}
+
             </div>
           )}
+
         </section>
 
       </div>

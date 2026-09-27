@@ -15,10 +15,12 @@ import {
 import BackButton from "../components/ui/BackButton";
 import Header from "../components/layout/Header";
 import { useAuth } from "../auth/AuthContext";
+import { useKusaiScore } from "../hooks/useKusaiScore";
 
 const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:3001"
 ).replace(/\/$/, "");
+
 const CLUB_LEVELS = [
   {
     name: "MAX MEMBER",
@@ -82,10 +84,10 @@ const CLUB_PRIVILEGES: Record<string, string[]> = {
     "Все из MAX GOLD+",
     "Персональный менеджер\nЗа вами закрепляется конкретный сотрудник КУСАЙ, который знает вашу технику, историю покупок и предпочтения.",
     "BLACK Консьерж в KUSAI MAX\nПерсональный чат непосредственно внутри приложения. Пишите, что вам необходимо-поиск, сравнение, заказ и организацию покупки берем на себя.",
-    "Максимальные клубные условия\nИндивидуальная цена на технику там, где это позволяет экономика конкретной сделки.",
+    "Максимальные клубные условия\nИндивидуальная цена на технику, где это позволяет экономика конкретной сделки.",
     "MAX Trade-In\nМаксимально возможная оценка устройства и индивидуальные условия обмена.",
     "Приоритет №1\nПервый доступ к дефицитным товарам, новым устройствам, предзаказам и ограниченным поставкам.",
-    "Персональная доставка\nБесплатная доставка заказов по Таганрогу с приоритетным обслуживаанием.",
+    "Персональная доставка\nБесплатная доставка заказов по Таганрогу с приоритетным обслуживанием.",
     "Полное сопровождение техники\nПеренос, настройка, приложения и помощь после покупки, все услуги-Бесплатно.",
     "Сервис MAX\nПриоритет №1 в сервисном центре и максимально быстрое обслуживание там, где это технически возможно.",
     "Закрытые мероприятия\nСпециальные презентации, предпродажи и мероприятия КУСАЙ.",
@@ -104,20 +106,17 @@ function ClubPage() {
   const [purchaseCount, setPurchaseCount] =
     useState<number | null>(null);
 
-  const [kusaiScore, setKusaiScore] = useState(0);
-  const [scoreLoading, setScoreLoading] = useState(true);
+  const {
+    score: kusaiScore,
+    loading: scoreLoading,
+  } = useKusaiScore(user?.phone);
 
-  // Раскрытый уровень клуба.
   const [expandedLevel, setExpandedLevel] =
     useState<string | null>(null);
 
-  // Загружаем историю продаж из 1С.
-  // SCORE рассчитываем по каждому чеку отдельно.
   useEffect(() => {
     if (!user?.phone) {
       setPurchaseCount(null);
-      setKusaiScore(0);
-      setScoreLoading(false);
       return;
     }
 
@@ -126,11 +125,7 @@ function ClubPage() {
 
     async function loadPurchaseCount() {
       try {
-        setScoreLoading(true);
-        setPurchaseCount(null);
-
-        const encodedPhone =
-          encodeURIComponent(clientPhone);
+        const encodedPhone = encodeURIComponent(clientPhone);
 
         const response = await fetch(
           `${API_URL}/api/clients/phone/${encodedPhone}/sales-history`
@@ -149,24 +144,8 @@ function ClubPage() {
           ? data.sales
           : [];
 
-        // За каждые полные 100 ₽ в каждом чеке
-        // начисляется 1 SCORE.
-        // Остатки между чеками не переносятся.
-        const totalScore = sales.reduce(
-          (total: number, sale: any) => {
-            const amount = Number(sale.sum) || 0;
-
-            return (
-              total +
-              Math.floor(Math.max(0, amount) / 100)
-            );
-          },
-          0
-        );
-
         if (!cancelled) {
           setPurchaseCount(sales.length);
-          setKusaiScore(totalScore);
         }
       } catch (error) {
         console.error(
@@ -176,11 +155,6 @@ function ClubPage() {
 
         if (!cancelled) {
           setPurchaseCount(null);
-          setKusaiScore(0);
-        }
-      } finally {
-        if (!cancelled) {
-          setScoreLoading(false);
         }
       }
     }
@@ -192,7 +166,6 @@ function ClubPage() {
     };
   }, [user?.phone]);
 
-  // Определяем текущий уровень.
   const currentLevel =
     kusaiScore >= 15000
       ? "MAX BLACK"
@@ -418,7 +391,6 @@ function ClubPage() {
                     aria-expanded={isExpanded}
                     className="flex w-full items-center gap-4 p-4 text-left"
                   >
-                    {/* ИКОНКА */}
                     <div
                       className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${
                         achieved
@@ -429,7 +401,6 @@ function ClubPage() {
                       <LevelIcon size={25} />
                     </div>
 
-                    {/* НАЗВАНИЕ И ПОРОГ */}
                     <div className="min-w-0 flex-1">
                       <div
                         className={`font-black ${
@@ -462,7 +433,6 @@ function ClubPage() {
                       )}
                     </div>
 
-                    {/* СТАТУС И СТРЕЛКА */}
                     <div className="flex shrink-0 items-center gap-3">
                       {achieved ? (
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-400 text-black">
@@ -487,7 +457,6 @@ function ClubPage() {
                     </div>
                   </button>
 
-                  {/* РАСКРЫВАЮЩИЕСЯ ПРИВИЛЕГИИ */}
                   {isExpanded && (
                     <div className="border-t border-white/10 px-4 pb-4 pt-4">
                       <h3 className="mb-3 text-sm font-bold text-white">
@@ -520,6 +489,7 @@ function ClubPage() {
             })}
           </div>
         </section>
+
         {/* ПРЕДЛОЖЕНИЕ */}
         <section className="rounded-3xl border border-yellow-500/30 bg-gradient-to-r from-zinc-900 to-zinc-800 p-6">
           <h2 className="text-xl font-bold text-white">
@@ -557,13 +527,13 @@ function ClubPage() {
               </div>
 
               <p className="mt-3 text-xs text-zinc-500">
-                Покажите промокод сотруднику при оформлении предзаказа.
+                Покажите промокод сотруднику при оформлении
+                предзаказа.
               </p>
             </div>
           )}
         </section>
       </main>
-
     </div>
   );
 }

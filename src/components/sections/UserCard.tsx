@@ -1,5 +1,4 @@
-import { createPortal } from "react-dom";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import {
@@ -16,6 +15,7 @@ import { useFavorites } from "../../store/FavoritesContext";
 import { useCart } from "../../store/CartContext";
 import { useAuth } from "../../auth/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { useKusaiScore } from "../../hooks/useKusaiScore";
 
 const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:3001"
@@ -31,8 +31,12 @@ function UserCard() {
   const [qrLoading, setQrLoading] = useState(false);
   const [qrError, setQrError] = useState("");
   const [qrImage, setQrImage] = useState<string | null>(null);
-  const [kusaiScore, setKusaiScore] = useState(0);
-  const [scoreLoading, setScoreLoading] = useState(true);
+
+  const {
+    score: kusaiScore,
+    level: kusaiLevel,
+    loading: scoreLoading,
+  } = useKusaiScore(user?.phone);
 
   const points = Number(user?.points ?? 0) || 0;
 
@@ -81,75 +85,6 @@ function UserCard() {
     }
   }
 
-  useEffect(() => {
-    if (!user?.phone) {
-      setKusaiScore(0);
-      setScoreLoading(false);
-      return;
-    }
-
-    const clientPhone = user.phone;
-    let cancelled = false;
-
-    async function loadKusaiScore() {
-      try {
-        setScoreLoading(true);
-
-        const encodedPhone = encodeURIComponent(clientPhone);
-        const response = await fetch(
-          `${API_URL}/api/clients/phone/${encodedPhone}/sales-history`
-        );
-
-        const data = await response.json();
-
-        if (!response.ok || !data.success) {
-          throw new Error(
-            data.message || "Не удалось загрузить историю покупок"
-          );
-        }
-
-        const sales = Array.isArray(data.sales) ? data.sales : [];
-
-        const totalScore = sales.reduce(
-          (total: number, sale: any) => {
-            const amount = Number(sale.sum) || 0;
-            return total + Math.floor(Math.max(0, amount) / 100);
-          },
-          0
-        );
-
-        if (!cancelled) {
-          setKusaiScore(totalScore);
-        }
-      } catch (error) {
-        console.error("Ошибка загрузки Kusai Score:", error);
-
-        if (!cancelled) {
-          setKusaiScore(0);
-        }
-      } finally {
-        if (!cancelled) {
-          setScoreLoading(false);
-        }
-      }
-    }
-
-    void loadKusaiScore();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.phone]);
-
-  const kusaiLevel =
-    kusaiScore >= 15000
-      ? "MAX BLACK"
-      : kusaiScore >= 5000
-      ? "MAX GOLD"
-      : kusaiScore >= 1000
-      ? "MAX SILVER"
-      : "MAX MEMBER";
-
   return (
     <section className="relative">
       <div className="relative mt-4 overflow-hidden rounded-[28px] border border-yellow-400/20 bg-zinc-950 p-6 shadow-2xl">
@@ -158,6 +93,7 @@ function UserCard() {
           <p className="text-sm font-medium text-zinc-400">
             Добро пожаловать
           </p>
+
           <h2 className="mt-1 text-3xl font-black text-white">
             {user?.name || "Гость"} 👋
           </h2>
@@ -165,6 +101,7 @@ function UserCard() {
 
         {/* СТАТИСТИКА */}
         <div className="mt-6 grid grid-cols-2 gap-3">
+
           {/* СТАТУС */}
           <button
             type="button"
@@ -217,7 +154,10 @@ function UserCard() {
                 </h3>
               </div>
 
-              <QrCode size={22} className="text-[#FFE500]" />
+              <QrCode
+                size={22}
+                className="text-[#FFE500]"
+              />
             </div>
 
             <p className="mt-2 text-[10px] uppercase tracking-wider text-zinc-600">
@@ -245,8 +185,14 @@ function UserCard() {
             </p>
 
             <div className="mt-3 flex items-center gap-2 text-white">
-              <Package size={18} className="text-[#FFE500]" />
-              <span className="font-bold">0</span>
+              <Package
+                size={18}
+                className="text-[#FFE500]"
+              />
+
+              <span className="font-bold">
+                0
+              </span>
             </div>
           </div>
 
@@ -262,11 +208,20 @@ function UserCard() {
 
             <div className="mt-3 flex items-center justify-between text-white">
               <div className="flex items-center gap-2">
-                <Heart size={20} className="text-[#FFE500]" />
-                <span className="font-bold">{favorites.length}</span>
+                <Heart
+                  size={20}
+                  className="text-[#FFE500]"
+                />
+
+                <span className="font-bold">
+                  {favorites.length}
+                </span>
               </div>
 
-              <ChevronRight size={22} className="text-[#FFE500]" />
+              <ChevronRight
+                size={22}
+                className="text-[#FFE500]"
+              />
             </div>
           </button>
 
@@ -282,13 +237,20 @@ function UserCard() {
 
             <div className="mt-3 flex items-center justify-between text-white">
               <div className="flex items-center gap-2">
-                <ShoppingBag size={20} className="text-[#FFE500]" />
+                <ShoppingBag
+                  size={20}
+                  className="text-[#FFE500]"
+                />
+
                 <span className="text-sm font-semibold">
                   История покупок
                 </span>
               </div>
 
-              <ChevronRight size={22} className="text-[#FFE500]" />
+              <ChevronRight
+                size={22}
+                className="text-[#FFE500]"
+              />
             </div>
           </button>
         </div>
@@ -300,156 +262,140 @@ function UserCard() {
           className="mt-4 flex w-full items-center justify-between rounded-2xl border border-yellow-400/20 bg-yellow-400 p-4 text-black transition active:scale-[0.98]"
         >
           <div className="flex items-center gap-3">
-            <ShoppingCart size={25} strokeWidth={2.5} />
-            <span className="font-black">В корзине</span>
+            <ShoppingCart
+              size={25}
+              strokeWidth={2.5}
+            />
+
+            <span className="font-black">
+              В корзине
+            </span>
           </div>
 
           <div className="flex items-center gap-3">
-            <span className="text-2xl font-black">{totalItems}</span>
-            <ChevronRight size={26} strokeWidth={3} />
+            <span className="text-2xl font-black">
+              {totalItems}
+            </span>
+
+            <ChevronRight
+              size={26}
+              strokeWidth={3}
+            />
           </div>
         </button>
       </div>
 
       {/* QR MODAL С АНИМАЦИЕЙ */}
-      {createPortal(
-  <AnimatePresence>
-    {isQRModalOpen && (
-      <motion.div
-        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-5 backdrop-blur-md"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.2 }}
-      >
-        <motion.div
-          className="relative max-h-[calc(100dvh-40px)] w-full max-w-[420px] overflow-y-auto rounded-[32px] border border-yellow-400/20 bg-zinc-950 p-6 shadow-2xl"
-          initial={{ opacity: 0, scale: 0.94 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.94 }}
-          transition={{
-            duration: 0.2,
-            ease: [0.22, 1, 0.36, 1],
-          }}
-        >
-
-          <button
-            type="button"
-            onClick={() => setIsQRModalOpen(false)}
-            className="
-              absolute
-              right-5
-              top-5
-              flex
-              h-10
-              w-10
-              items-center
-              justify-center
-              rounded-full
-              bg-zinc-800
-              text-white
-              transition
-              active:scale-95
-            "
-            aria-label="Закрыть QR-код"
+      <AnimatePresence>
+        {isQRModalOpen && (
+          <motion.div
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-5 backdrop-blur-md"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
           >
-            <X size={22} />
-          </button>
+            <motion.div
+              className="relative w-full max-w-[420px] overflow-hidden rounded-[32px] border border-yellow-400/20 bg-zinc-950 p-6 shadow-2xl"
+              initial={{
+                opacity: 0,
+                scale: 0.7,
+              }}
+              animate={{
+                opacity: 1,
+                scale: 1,
+              }}
+              exit={{
+                opacity: 0,
+                scale: 0.7,
+              }}
+              transition={{
+                duration: 0.3,
+                ease: "easeOut",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() =>
+                  setIsQRModalOpen(false)
+                }
+                className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full bg-zinc-800 text-white transition active:scale-95"
+                aria-label="Закрыть QR-код"
+              >
+                <X size={22} />
+              </button>
 
-          <div className="pt-3 text-center">
+              <div className="pt-3 text-center">
+                <div className="text-xs font-bold uppercase tracking-[0.25em] text-[#FFE500]">
+                  KUSAI MAX
+                </div>
 
-            <div className="text-xs font-bold uppercase tracking-[0.25em] text-[#FFE500]">
-              KUSAI MAX
-            </div>
+                <h2 className="mt-3 text-3xl font-black text-white">
+                  Ваш QR-код
+                </h2>
 
-            <h2 className="mt-3 text-3xl font-black text-white">
-              Ваш QR-код
-            </h2>
-
-            <p className="mx-auto mt-3 max-w-[280px] text-sm leading-relaxed text-zinc-500">
-              Покажите этот QR-код продавцу перед покупкой
-            </p>
-
-          </div>
-
-          <div className="mt-7 flex min-h-[280px] items-center justify-center rounded-[24px] bg-white p-5">
-
-            {qrLoading ? (
-
-              <div className="text-center">
-                <QrCode
-                  size={64}
-                  className="mx-auto animate-pulse text-zinc-300"
-                />
-
-                <p className="mt-4 text-sm font-medium text-zinc-500">
-                  Загружаем QR-код…
+                <p className="mx-auto mt-3 max-w-[280px] text-sm leading-relaxed text-zinc-500">
+                  Покажите этот QR-код продавцу перед покупкой
                 </p>
               </div>
 
-            ) : qrImage ? (
+              <div className="mt-7 flex min-h-[280px] items-center justify-center rounded-[24px] bg-white p-5">
+                {qrLoading ? (
+                  <div className="text-center">
+                    <QrCode
+                      size={64}
+                      className="mx-auto animate-pulse text-zinc-300"
+                    />
 
-              <img
-                src={qrImage}
-                alt="QR-код клиента"
-                className="h-full w-full max-h-[280px] max-w-[280px] object-contain"
-              />
+                    <p className="mt-4 text-sm font-medium text-zinc-500">
+                      Загружаем QR-код…
+                    </p>
+                  </div>
+                ) : qrImage ? (
+                  <img
+                    src={qrImage}
+                    alt="QR-код клиента"
+                    className="h-full w-full max-h-[280px] max-w-[280px] object-contain"
+                  />
+                ) : (
+                  <div className="text-center">
+                    <QrCode
+                      size={64}
+                      className="mx-auto text-zinc-300"
+                    />
 
-            ) : (
-
-              <div className="text-center">
-
-                <QrCode
-                  size={64}
-                  className="mx-auto text-zinc-300"
-                />
-
-                <p className="mt-4 text-sm font-medium text-zinc-500">
-                  {qrError || "QR-код пока недоступен"}
-                </p>
-
+                    <p className="mt-4 text-sm font-medium text-zinc-500">
+                      {qrError ||
+                        "QR-код пока недоступен"}
+                    </p>
+                  </div>
+                )}
               </div>
 
-            )}
+              <div className="mt-6 text-center">
+                <p className="text-xs uppercase tracking-widest text-zinc-600">
+                  Клиент
+                </p>
 
-          </div>
+                <p className="mt-2 text-lg font-bold text-white">
+                  {user?.name ||
+                    "KUSAI CLIENT"}
+                </p>
+              </div>
 
-          <div className="mt-6 text-center">
-
-            <p className="text-xs uppercase tracking-widest text-zinc-600">
-              Клиент
-            </p>
-
-            <p className="mt-2 text-lg font-bold text-white">
-              {user?.name || "KUSAI CLIENT"}
-            </p>
-
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setIsQRModalOpen(false)}
-            className="
-              mt-6
-              w-full
-              rounded-2xl
-              bg-[#FFE500]
-              py-4
-              font-black
-              text-black
-              transition
-              active:scale-[0.98]
-            "
-          >
-            ГОТОВО
-          </button>
-
-        </motion.div>
-      </motion.div>
-    )}
-  </AnimatePresence>,
-  document.body
-)}
+              <button
+                type="button"
+                onClick={() =>
+                  setIsQRModalOpen(false)
+                }
+                className="mt-6 w-full rounded-2xl bg-[#FFE500] py-4 font-black text-black transition active:scale-[0.98]"
+              >
+                ГОТОВО
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }
