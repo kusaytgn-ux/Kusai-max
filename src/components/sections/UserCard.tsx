@@ -95,7 +95,7 @@ function UserCard() {
           </p>
 
           <h2 className="mt-1 text-3xl font-black text-white">
-            {user?.name || "Гость"} 👋
+            {user?.name || "Гость"}
           </h2>
         </div>
 
