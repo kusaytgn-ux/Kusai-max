@@ -5,7 +5,7 @@ function Iphone18Banner() {
         className="
           w-full
           overflow-hidden
-          rounded-[55px]
+          rounded-[45px]
           border-white/10
           shadow-2xl
         "
