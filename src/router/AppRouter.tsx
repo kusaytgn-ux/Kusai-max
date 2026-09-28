@@ -37,6 +37,10 @@ import CartPage from "../pages/CartPage";
 import FavoritesPage from "../pages/FavoritesPage";
 
 
+//Удалить позде 
+import Iphone18ProductPage from "../pages/Iphone18ProductPage";
+
+
 const tabOrder = [
   "/",
   "/catalog",
@@ -517,7 +521,7 @@ function AppRouter() {
                   </ProtectedRouter>
                 }
               />
-
+              
 
               {/* ВХОД АДМИНИСТРАТОРА */}
 
@@ -561,7 +565,7 @@ function AppRouter() {
                   )
                 }
               />
-
+            
 
               {/* НЕИЗВЕСТНЫЙ АДРЕС */}
 
@@ -574,6 +578,11 @@ function AppRouter() {
                   />
                 }
               />
+//удалить позже
+<Route
+  path="/catalog/:productId"
+  element={<Iphone18ProductPage />}
+/>
 
             </Routes>
 
