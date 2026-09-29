@@ -63,45 +63,54 @@ function LoginPage() {
     setPhone(digits);
   }
 
-  return (
-    <div className="min-h-screen w-full bg-black">
+    return (
+    <div
+      className="
+        fixed
+        inset-0
+        w-full
+        overflow-hidden
+        bg-black
+      "
+    >
 
-      {/* 
-        Основная область с оригинальной картинкой.
-        Соотношение соответствует твоему изображению
-        828 × 1796.
-      */}
+      {/* Фоновая картинка */}
+
       <div
         className="
           relative
-          mx-auto
+          h-full
           w-full
-          max-w-[828px]
           overflow-hidden
           bg-black
         "
         style={{
-          aspectRatio: "828 / 1796",
           backgroundImage:
             "url('/login-hero-bg.png')",
-          backgroundSize: "100% 100%",
-          backgroundPosition: "top center",
-          backgroundRepeat: "no-repeat",
+
+          backgroundSize: "cover",
+
+          backgroundPosition:
+            "center center",
+
+          backgroundRepeat:
+            "no-repeat",
         }}
       >
 
         {/* =====================================================
             ЖИВАЯ КАРТОЧКА ВХОДА
-            Она располагается поверх карточки,
-            нарисованной на оригинальной картинке.
         ====================================================== */}
 
         <div
           className="
             absolute
-            left-[7.5%]
-            top-[46.2%]
+            left-1/2
+            top-[41%]
             w-[85%]
+            max-w-[700px]
+            -translate-x-1/2
+            -translate-y-1/2
             rounded-[28px]
             border
             border-fuchsia-400/70
@@ -206,8 +215,6 @@ function LoginPage() {
                 size={24}
               />
 
-
-              {/* +7 */}
 
               <div
                 className="
