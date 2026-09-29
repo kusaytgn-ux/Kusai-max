@@ -106,7 +106,7 @@ function LoginPage() {
           className="
             absolute
             left-1/2
-            top-[41%]
+            top-[58%]
             w-[85%]
             max-w-[700px]
             -translate-x-1/2
