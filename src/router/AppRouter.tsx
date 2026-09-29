@@ -179,9 +179,7 @@ function AppRouter() {
     user?.role !== "admin" &&
     isMainTab;
 
-    if (!isAuthenticated && currentPath === "/") {
-      return <LoginPage />;
-    }
+    
 
 
   /*
