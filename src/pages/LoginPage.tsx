@@ -64,73 +64,238 @@ function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black px-4">
-      <div className="w-full max-w-md rounded-3xl bg-zinc-900 p-8">
-        {/* Заголовок */}
-        <h1 className="text-center text-4xl font-black text-white">
-          Добро пожаловать
-        </h1>
+    <div className="min-h-screen w-full bg-black">
 
-        <p className="mt-2 text-center text-zinc-400">
-          Вход в KUSAY MAX
-        </p>
+      {/* 
+        Основная область с оригинальной картинкой.
+        Соотношение соответствует твоему изображению
+        828 × 1796.
+      */}
+      <div
+        className="
+          relative
+          mx-auto
+          w-full
+          max-w-[828px]
+          overflow-hidden
+          bg-black
+        "
+        style={{
+          aspectRatio: "828 / 1796",
+          backgroundImage:
+            "url('/login-hero-bg.png')",
+          backgroundSize: "100% 100%",
+          backgroundPosition: "top center",
+          backgroundRepeat: "no-repeat",
+        }}
+      >
 
-        <div className="mt-8 space-y-5">
-          {/* Имя */}
-          <div className="relative">
-            <User
-              className="absolute left-4 top-1/2 z-20 -translate-y-1/2 text-zinc-500"
-              size={20}
-            />
+        {/* =====================================================
+            ЖИВАЯ КАРТОЧКА ВХОДА
+            Она располагается поверх карточки,
+            нарисованной на оригинальной картинке.
+        ====================================================== */}
 
-            <Input
-              className="h-12 pl-12"
-              placeholder="Ваше имя"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
+        <div
+          className="
+            absolute
+            left-[7.5%]
+            top-[46.2%]
+            w-[85%]
+            rounded-[28px]
+            border
+            border-fuchsia-400/70
+            bg-[#111116]
+            px-[5%]
+            pb-[5%]
+            pt-[4.5%]
+            shadow-[0_0_35px_rgba(217,70,239,0.35)]
+          "
+        >
 
-          {/* Телефон */}
-          <div className="relative">
-            {/* Иконка телефона */}
-            <Phone
-              className="absolute left-4 top-1/2 z-20 -translate-y-1/2 text-zinc-500"
-              size={20}
-            />
+          {/* Заголовок */}
 
-            {/* Фиксированный +7 */}
-            <div className="pointer-events-none absolute left-11 top-1/2 z-20 -translate-y-1/2 font-semibold text-white">
-              +7
-            </div>
-
-            {/* Поле ввода */}
-            <Input
-              className="h-12 pl-20 pr-4"
-              type="tel"
-              inputMode="numeric"
-              placeholder="1234567890"
-              value={phone}
-              onChange={handlePhoneChange}
-            />
-          </div>
-
-          {/* Ошибка */}
-          {error && (
-            <div className="rounded-xl border border-red-500 bg-red-500/10 p-3 text-center text-sm text-red-400">
-              {error}
-            </div>
-          )}
-
-          {/* Вход */}
-          <Button
-            onClick={handleLogin}
-            className="w-full"
+          <h1
+            className="
+              text-center
+              text-[clamp(26px,7vw,52px)]
+              font-black
+              leading-[0.95]
+              text-white
+            "
           >
-            Войти
-          </Button>
+            Добро
+            <br />
+            пожаловать
+          </h1>
+
+
+          <div
+            className="
+              mt-[2.5%]
+              text-center
+              text-[clamp(15px,4vw,30px)]
+              font-semibold
+              text-white
+            "
+          >
+            в{" "}
+            <span className="text-fuchsia-400">
+              KUSAY MAX
+            </span>
+          </div>
+
+
+          {/* Поля */}
+
+          <div className="mt-[6%] space-y-[3.5%]">
+
+            {/* Имя */}
+
+            <div className="relative">
+
+              <User
+                className="
+                  absolute
+                  left-[4%]
+                  top-1/2
+                  z-20
+                  -translate-y-1/2
+                  text-zinc-500
+                "
+                size={24}
+              />
+
+              <Input
+                className="
+                  h-[64px]
+                  w-full
+                  rounded-2xl
+                  border
+                  border-zinc-700
+                  bg-black/30
+                  pl-[14%]
+                  pr-4
+                  text-base
+                  text-white
+                  placeholder:text-zinc-500
+                "
+                placeholder="Ваше имя"
+                value={name}
+                onChange={(e) =>
+                  setName(e.target.value)
+                }
+              />
+
+            </div>
+
+
+            {/* Телефон */}
+
+            <div className="relative">
+
+              <Phone
+                className="
+                  absolute
+                  left-[4%]
+                  top-1/2
+                  z-20
+                  -translate-y-1/2
+                  text-zinc-500
+                "
+                size={24}
+              />
+
+
+              {/* +7 */}
+
+              <div
+                className="
+                  pointer-events-none
+                  absolute
+                  left-[12%]
+                  top-1/2
+                  z-20
+                  -translate-y-1/2
+                  font-semibold
+                  text-white
+                "
+              >
+                +7
+              </div>
+
+
+              <Input
+                className="
+                  h-[64px]
+                  w-full
+                  rounded-2xl
+                  border
+                  border-zinc-700
+                  bg-black/30
+                  pl-[25%]
+                  pr-4
+                  text-base
+                  text-white
+                  placeholder:text-zinc-500
+                "
+                type="tel"
+                inputMode="numeric"
+                placeholder="1234567890"
+                value={phone}
+                onChange={handlePhoneChange}
+              />
+
+            </div>
+
+
+            {/* Ошибка */}
+
+            {error && (
+              <div
+                className="
+                  rounded-xl
+                  border
+                  border-red-500
+                  bg-red-500/10
+                  p-3
+                  text-center
+                  text-sm
+                  text-red-400
+                "
+              >
+                {error}
+              </div>
+            )}
+
+
+            {/* Кнопка */}
+
+            <Button
+              onClick={handleLogin}
+              className="
+                h-[64px]
+                w-full
+                rounded-2xl
+                bg-yellow-400
+                text-lg
+                font-black
+                text-black
+                shadow-[0_0_20px_rgba(250,204,21,0.25)]
+                transition
+                hover:bg-yellow-300
+                active:scale-[0.99]
+              "
+            >
+              Войти
+            </Button>
+
+          </div>
+
         </div>
+
       </div>
+
     </div>
   );
 }

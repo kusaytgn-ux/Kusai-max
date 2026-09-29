@@ -16,7 +16,6 @@ import { useAuth } from "../auth/AuthContext";
 import ProtectedRouter from "../auth/ProtectedRouter";
 import BottomNavigation from "../components/navigation/BottomNavigation";
 
-import WelcomePage from "../pages/WelcomePage";
 import HomePage from "../pages/HomePage";
 import CatalogPage from "../pages/CatalogPage";
 import ProductPage from "../pages/ProductPage";
@@ -179,6 +178,10 @@ function AppRouter() {
     isAuthenticated &&
     user?.role !== "admin" &&
     isMainTab;
+
+    if (!isAuthenticated && currentPath === "/") {
+      return <LoginPage />;
+    }
 
 
   /*
@@ -394,28 +397,18 @@ function AppRouter() {
                 element={
                   isAuthenticated ? (
                     user?.role === "admin" ? (
-                      <Navigate
-                        to="/admin"
-                        replace
-                      />
+                      <Navigate to="/admin" replace />
                     ) : (
                       <HomePage />
                     )
                   ) : (
-                    <WelcomePage />
+                    <LoginPage />
                   )
                 }
               />
 
 
               {/* КЛИЕНТСКАЯ ЧАСТЬ */}
-
-              <Route
-                path="/welcome"
-                element={
-                  <WelcomePage />
-                }
-              />
 
               <Route
                 path="/catalog"
