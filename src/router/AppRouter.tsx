@@ -35,10 +35,8 @@ import AdminClientPage from "../pages/AdminClientPage";
 import CartPage from "../pages/CartPage";
 import FavoritesPage from "../pages/FavoritesPage";
 
-
-//Удалить позде 
+// Удалить позже
 import Iphone18ProductPage from "../pages/Iphone18ProductPage";
-
 
 const tabOrder = [
   "/",
@@ -48,13 +46,11 @@ const tabOrder = [
   "/cart",
 ];
 
-
 const cardRoutes = [
   "/club",
   "/favorites",
   "/purchases",
 ];
-
 
 function getTabIndex(pathname: string) {
   return tabOrder.findIndex((path) => {
@@ -69,31 +65,21 @@ function getTabIndex(pathname: string) {
   });
 }
 
-
 function isCardRoute(pathname: string) {
   return cardRoutes.includes(pathname);
 }
-
 
 function AppRouter() {
   const { user, isAuthenticated } = useAuth();
 
   const location = useLocation();
 
-
   /*
    * Храним предыдущий путь.
-   *
-   * Важно:
-   * значение меняется только после render,
-   * поэтому во время создания новой анимации
-   * previousPath действительно является предыдущим
-   * маршрутом.
    */
   const previousPath = useRef(
     location.pathname
   );
-
 
   /*
    * Предыдущая вкладка.
@@ -102,12 +88,10 @@ function AppRouter() {
     getTabIndex(location.pathname)
   );
 
-
   const currentPath = location.pathname;
 
   const previousPathname =
     previousPath.current;
-
 
   const currentTab =
     getTabIndex(currentPath);
@@ -115,15 +99,8 @@ function AppRouter() {
   const previousTabIndex =
     getTabIndex(previousPathname);
 
-
   /*
    * Направление движения между основными вкладками.
-   *
-   * Вправо:
-   * Главная → Каталог → Выбор → Trade-in → Корзина
-   *
-   * Влево:
-   * Корзина → Trade-in → Выбор → Каталог → Главная
    */
   let direction = 1;
 
@@ -137,7 +114,6 @@ function AppRouter() {
         ? 1
         : -1;
   }
-
 
   /*
    * Карточки:
@@ -155,21 +131,15 @@ function AppRouter() {
       currentPath === "/"
     );
 
-
   /*
    * Concierge не должен находиться
    * внутри transform-анимации.
-   *
-   * Это важно для корректной работы
-   * мобильной клавиатуры.
    */
   const isConcierge =
     currentPath === "/concierge";
 
-
   const isMainTab =
     currentTab !== -1;
-
 
   /*
    * Нижняя навигация.
@@ -179,15 +149,8 @@ function AppRouter() {
     user?.role !== "admin" &&
     isMainTab;
 
-    
-
-
   /*
-   * После того как текущий render завершился,
-   * запоминаем его как предыдущий.
-   *
-   * Это безопаснее, чем менять ref
-   * непосредственно во время render.
+   * После render запоминаем текущий путь.
    */
   useEffect(() => {
     previousPath.current =
@@ -202,18 +165,8 @@ function AppRouter() {
     currentTab,
   ]);
 
-
   /*
    * Варианты анимации.
-   *
-   * Обычные страницы:
-   * лёгкий slide без scale.
-   *
-   * Карточки:
-   * лёгкий scale от 0.94.
-   *
-   * Concierge:
-   * вообще без transform.
    */
   const pageVariants = {
 
@@ -230,7 +183,6 @@ function AppRouter() {
         };
       }
 
-
       if (custom.type === "slide") {
         return {
           opacity: 1,
@@ -239,7 +191,6 @@ function AppRouter() {
         };
       }
 
-
       return {
         opacity: 1,
         scale: 1,
@@ -247,13 +198,11 @@ function AppRouter() {
       };
     },
 
-
     animate: {
       opacity: 1,
       scale: 1,
       x: 0,
     },
-
 
     exit: (custom: {
       type: "slide" | "card" | "none";
@@ -268,7 +217,6 @@ function AppRouter() {
         };
       }
 
-
       if (custom.type === "slide") {
         return {
           opacity: 1,
@@ -276,7 +224,6 @@ function AppRouter() {
           x: custom.direction * -35,
         };
       }
-
 
       return {
         opacity: 1,
@@ -286,7 +233,6 @@ function AppRouter() {
     },
   };
 
-
   /*
    * Определяем тип перехода.
    */
@@ -294,7 +240,6 @@ function AppRouter() {
     | "slide"
     | "card"
     | "none" = "none";
-
 
   if (!isConcierge) {
 
@@ -306,18 +251,13 @@ function AppRouter() {
     }
   }
 
-
   const animationCustom = {
     type: transitionType,
     direction,
   };
 
-
   /*
    * Очень короткая анимация.
-   *
-   * 0.19 сек — достаточно плавно,
-   * но без ощущения задержки.
    */
   const transitionConfig =
     transitionType === "card"
@@ -340,14 +280,8 @@ function AppRouter() {
           ] as const,
         };
 
-
   return (
     <div className="min-h-screen bg-black">
-
-      {/* 
-       * Анимируется только содержимое страниц.
-       * Нижняя навигация находится вне анимации.
-       */}
 
       <div className="pb-24">
 
@@ -373,10 +307,6 @@ function AppRouter() {
               transformOrigin:
                 "center center",
 
-              /*
-               * Помогает браузеру заранее
-               * подготовить transform-слой.
-               */
               willChange:
                 transitionType === "none"
                   ? "auto"
@@ -395,7 +325,10 @@ function AppRouter() {
                 element={
                   isAuthenticated ? (
                     user?.role === "admin" ? (
-                      <Navigate to="/admin" replace />
+                      <Navigate
+                        to="/admin"
+                        replace
+                      />
                     ) : (
                       <HomePage />
                     )
@@ -404,7 +337,6 @@ function AppRouter() {
                   )
                 }
               />
-
 
               {/* КЛИЕНТСКАЯ ЧАСТЬ */}
 
@@ -492,7 +424,6 @@ function AppRouter() {
                 }
               />
 
-
               {/* ПРОФИЛЬ */}
 
               <Route
@@ -512,7 +443,6 @@ function AppRouter() {
                   </ProtectedRouter>
                 }
               />
-              
 
               {/* ВХОД АДМИНИСТРАТОРА */}
 
@@ -522,7 +452,6 @@ function AppRouter() {
                   <AdminLoginPage />
                 }
               />
-
 
               {/* АДМИН-ПАНЕЛЬ */}
 
@@ -540,7 +469,6 @@ function AppRouter() {
                 }
               />
 
-
               {/* КАРТОЧКА КЛИЕНТА */}
 
               <Route
@@ -556,7 +484,6 @@ function AppRouter() {
                   )
                 }
               />
-            
 
               {/* НЕИЗВЕСТНЫЙ АДРЕС */}
 
@@ -569,11 +496,15 @@ function AppRouter() {
                   />
                 }
               />
-//удалить позже
-<Route
-  path="/catalog/:productId"
-  element={<Iphone18ProductPage />}
-/>
+
+              {/* Удалить позже */}
+
+              <Route
+                path="/catalog/:productId"
+                element={
+                  <Iphone18ProductPage />
+                }
+              />
 
             </Routes>
 
@@ -583,8 +514,7 @@ function AppRouter() {
 
       </div>
 
-
-      {/* Нижняя навигация не участвует в анимации */}
+      {/* Нижняя навигация */}
 
       {showBottomNavigation && (
         <BottomNavigation />
@@ -593,6 +523,5 @@ function AppRouter() {
     </div>
   );
 }
-
 
 export default AppRouter;

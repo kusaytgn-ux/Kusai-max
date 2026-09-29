@@ -63,18 +63,19 @@ function LoginPage() {
     setPhone(digits);
   }
 
-    return (
+  return (
     <div
       className="
         fixed
         inset-0
+        h-[100dvh]
         w-full
         overflow-hidden
         bg-black
       "
     >
 
-      {/* Фоновая картинка */}
+      {/* ФОН */}
 
       <div
         className="
@@ -98,9 +99,7 @@ function LoginPage() {
         }}
       >
 
-        {/* =====================================================
-            ЖИВАЯ КАРТОЧКА ВХОДА
-        ====================================================== */}
+        {/* ЖИВАЯ КАРТОЧКА АВТОРИЗАЦИИ */}
 
         <div
           className="
@@ -138,7 +137,6 @@ function LoginPage() {
             пожаловать
           </h1>
 
-
           <div
             className="
               mt-[2.5%]
@@ -154,12 +152,11 @@ function LoginPage() {
             </span>
           </div>
 
-
-          {/* Поля */}
+          {/* ПОЛЯ */}
 
           <div className="mt-[6%] space-y-[3.5%]">
 
-            {/* Имя */}
+            {/* ИМЯ */}
 
             <div className="relative">
 
@@ -198,8 +195,7 @@ function LoginPage() {
 
             </div>
 
-
-            {/* Телефон */}
+            {/* ТЕЛЕФОН */}
 
             <div className="relative">
 
@@ -215,6 +211,7 @@ function LoginPage() {
                 size={24}
               />
 
+              {/* +7 */}
 
               <div
                 className="
@@ -230,7 +227,6 @@ function LoginPage() {
               >
                 +7
               </div>
-
 
               <Input
                 className="
@@ -255,8 +251,7 @@ function LoginPage() {
 
             </div>
 
-
-            {/* Ошибка */}
+            {/* ОШИБКА */}
 
             {error && (
               <div
@@ -275,8 +270,7 @@ function LoginPage() {
               </div>
             )}
 
-
-            {/* Кнопка */}
+            {/* КНОПКА */}
 
             <Button
               onClick={handleLogin}
