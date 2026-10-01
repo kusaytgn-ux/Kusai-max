@@ -162,10 +162,9 @@ function TradeInProductPage() {
           </h1>
 
           <p className="mt-5 text-4xl font-black text-yellow-400">
-            {product.price.toLocaleString(
-              "ru-RU"
-            )}{" "}
-            ₽
+            {product.showPrice
+              ? `${product.price.toLocaleString("ru-RU")} ₽`
+              : "Уточняйте у менеджера"}
           </p>
         </div>
 
@@ -222,15 +221,21 @@ function TradeInProductPage() {
         </div>
 
         <div className="mt-8 space-y-3">
-          <Button onClick={handleBuy}>
-            Купить
-          </Button>
+          {product.showPrice ? (
+            <Button onClick={handleBuy}>
+              Купить
+            </Button>
+          ) : (
+            <Button onClick={handleConsultation}>
+              Уточнить цену у менеджера
+            </Button>
+          )}
 
-          <Button
-            onClick={handleConsultation}
-          >
-            Получить консультацию
-          </Button>
+          {product.showPrice && (
+            <Button onClick={handleConsultation}>
+              Получить консультацию
+            </Button>
+          )}
         </div>
       </main>
     </div>

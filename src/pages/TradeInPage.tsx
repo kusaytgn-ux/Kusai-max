@@ -991,7 +991,9 @@ function TradeInPage() {
 
                   <div className="mt-4">
                     <Button>
-                      Купить
+                      {product.showPrice
+                        ? "Купить"
+                        : "Уточнить цену"}
                     </Button>
                   </div>
                 </div>

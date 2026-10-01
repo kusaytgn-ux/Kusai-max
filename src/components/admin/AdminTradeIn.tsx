@@ -495,9 +495,9 @@ function AdminTradeIn() {
                     </p>
 
                     <p className="mt-1 text-2xl font-black text-[#EC008C]">
-                      {product.price.toLocaleString(
-                        "ru-RU"
-                      )} ₽
+                      {product.showPrice
+                        ? `${product.price.toLocaleString("ru-RU")} ₽`
+                        : "Уточняйте у менеджера"}
                     </p>
 
                   </div>

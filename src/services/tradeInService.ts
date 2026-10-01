@@ -15,6 +15,7 @@ function normalizeTradeInProduct(
       data.description ?? ""
     ),
     price: Number(data.price ?? 0),
+    showPrice: data.showPrice !== false,
     memory: String(data.memory ?? ""),
     color: String(data.color ?? ""),
     condition: String(

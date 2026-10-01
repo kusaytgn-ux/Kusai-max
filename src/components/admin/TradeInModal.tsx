@@ -27,6 +27,7 @@ function TradeInModal({
 }: Props) {
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
+  const [showPrice, setShowPrice] = useState(true);
 
   const [description, setDescription] =
     useState("");
@@ -57,6 +58,7 @@ function TradeInModal({
     if (!product) {
       setTitle("");
       setPrice("");
+      setShowPrice(true);
       setDescription("");
       setMemory("");
       setColor("");
@@ -69,6 +71,7 @@ function TradeInModal({
 
     setTitle(product.title);
     setPrice(product.price.toString());
+    setShowPrice(product.showPrice !== false);
     setDescription(product.description);
     setMemory(product.memory);
     setColor(product.color);
@@ -122,8 +125,13 @@ function TradeInModal({
       return;
     }
 
-    if (!price.trim()) {
-      alert("Введите цену");
+    if (showPrice && !price.trim()) {
+      alert("Введите цену или выберите «Уточняйте у менеджера»");
+      return;
+    }
+
+    if (showPrice && Number(price) < 0) {
+      alert("Цена не может быть отрицательной");
       return;
     }
 
@@ -140,7 +148,8 @@ function TradeInModal({
         title: title.trim(),
         description:
           description.trim(),
-        price: Number(price),
+        price: showPrice ? Number(price) : 0,
+        showPrice,
         memory: memory.trim(),
         color: color.trim(),
         condition:
@@ -396,15 +405,47 @@ function TradeInModal({
             {/* Цена */}
 
             <div className="mt-5 space-y-2">
-              <label
-                className="
-                  text-sm
-                  font-semibold
-                  text-zinc-400
-                "
-              >
-                Цена
-              </label>
+              <div className="mt-5 space-y-3">
+  <div className="flex items-center justify-between gap-4">
+        <label className="text-sm font-semibold text-zinc-400">
+          Цена
+        </label>
+
+        <button
+          type="button"
+          onClick={() => setShowPrice((value) => !value)}
+          className={`rounded-full px-4 py-2 text-xs font-black transition ${
+            showPrice
+              ? "bg-yellow-400 text-black"
+              : "bg-zinc-700 text-white"
+          }`}
+        >
+          {showPrice
+            ? "Показывать цену"
+            : "Уточняйте у менеджера"}
+        </button>
+      </div>
+
+      {showPrice ? (
+        <div className="relative">
+          <input
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="72000"
+            inputMode="decimal"
+            className="w-full rounded-2xl border border-zinc-700 bg-black px-4 py-4 pr-12 text-white outline-none transition placeholder:text-zinc-600 focus:border-yellow-400"
+          />
+
+          <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-zinc-500">
+            ₽
+          </span>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-yellow-400/30 bg-yellow-400/10 px-4 py-4 text-sm font-bold text-yellow-300">
+          Цена скрыта. Клиент увидит «Уточняйте у менеджера».
+        </div>
+      )}
+    </div>
 
               <div className="relative">
                 <input

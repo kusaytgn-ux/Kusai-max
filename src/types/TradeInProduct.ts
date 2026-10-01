@@ -5,6 +5,7 @@ export interface TradeInProduct {
     description: string;
 
     price: number;
+    showPrice: boolean;
 
     memory: string;
     color: string;
