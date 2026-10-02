@@ -139,6 +139,8 @@ async function initializeTradeInTable() {
 
         price NUMERIC NOT NULL DEFAULT 0,
 
+        show_price BOOLEAN NOT NULL DEFAULT TRUE,
+
         memory TEXT NOT NULL DEFAULT '',
 
         color TEXT NOT NULL DEFAULT '',
@@ -153,6 +155,11 @@ async function initializeTradeInTable() {
 
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
+    `);
+
+    await pgQuery(`
+      ALTER TABLE trade_in
+      ADD COLUMN IF NOT EXISTS show_price BOOLEAN NOT NULL DEFAULT TRUE
     `);
 
     await pgQuery(`
@@ -3788,6 +3795,7 @@ app.post("/api/products", async (req, res) => {
         title || name || "",
         name || title || "",
         Number(price) || 0,
+        showPrice !== false,
         Array.isArray(images) ? images : [],
         category || "",
         categoryGroup || "",
@@ -4583,6 +4591,7 @@ app.get("/api/trade-in", async (req, res) => {
       title: item.title,
       description: item.description || "",
       price: Number(item.price || 0),
+      showPrice: item.show_price !== false,
       memory: item.memory || "",
       color: item.color || "",
       condition: item.condition || "",
@@ -4645,6 +4654,7 @@ app.get("/api/trade-in/:id", async (req, res) => {
         title: item.title,
         description: item.description || "",
         price: Number(item.price || 0),
+        showPrice: item.show_price !== false,
         memory: item.memory || "",
         color: item.color || "",
         condition: item.condition || "",
@@ -4679,6 +4689,7 @@ app.post("/api/trade-in", async (req, res) => {
       title,
       description = "",
       price = 0,
+      showPrice = true,
       memory = "",
       color = "",
       condition = "",
@@ -4703,6 +4714,7 @@ app.post("/api/trade-in", async (req, res) => {
         title,
         description,
         price,
+        show_price,
         memory,
         color,
         condition,
@@ -4720,24 +4732,32 @@ app.post("/api/trade-in", async (req, res) => {
         $6,
         $7,
         $8,
-        $9::jsonb,
-        $10,
+        $9,
+        $10::jsonb,
+        $11,
         NOW()
       )
       RETURNING *
       `,
       [
-        id,
-        String(title).trim(),
-        String(description || ""),
-        Number(price) || 0,
-        String(memory || ""),
-        String(color || ""),
-        String(condition || ""),
-        String(warranty || ""),
-        JSON.stringify(Array.isArray(images) ? images : []),
-        status === "sold" ? "sold" : "available",
-      ]
+  id,
+  String(title).trim(),
+  String(description || ""),
+  Number(price) || 0,
+  showPrice !== false,
+  String(memory || ""),
+  String(color || ""),
+  String(condition || ""),
+  String(warranty || ""),
+  JSON.stringify(
+    Array.isArray(images)
+      ? images
+      : []
+  ),
+  status === "sold"
+    ? "sold"
+    : "available",
+]
     );
 
     const item = result.rows[0];
@@ -4752,11 +4772,13 @@ app.post("/api/trade-in", async (req, res) => {
         title: item.title,
         description: item.description,
         price: Number(item.price),
+        showPrice: item.show_price !== false,
         memory: item.memory,
         color: item.color,
         condition: item.condition,
         warranty: item.warranty,
         images: item.images,
+        showPrice: item.show_price !== false,
         status: item.status,
         createdAt: item.created_at,
       },
@@ -4786,6 +4808,7 @@ app.patch("/api/trade-in/:id", async (req, res) => {
       title,
       description = "",
       price = 0,
+      showPrice = true,
       memory = "",
       color = "",
       condition = "",
@@ -4801,12 +4824,13 @@ app.patch("/api/trade-in/:id", async (req, res) => {
         title = $2,
         description = $3,
         price = $4,
-        memory = $5,
-        color = $6,
-        condition = $7,
-        warranty = $8,
-        images = $9::jsonb,
-        status = $10
+        show_price = $5,
+        memory = $6,
+        color = $7,
+        condition = $8,
+        warranty = $9,
+        images = $10::jsonb,
+        status = $11
       WHERE id = $1
       RETURNING *
       `,
@@ -4815,6 +4839,7 @@ app.patch("/api/trade-in/:id", async (req, res) => {
         String(title || "").trim(),
         String(description || ""),
         Number(price) || 0,
+        showPrice !== false,
         String(memory || ""),
         String(color || ""),
         String(condition || ""),

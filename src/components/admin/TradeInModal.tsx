@@ -447,46 +447,7 @@ function TradeInModal({
       )}
     </div>
 
-              <div className="relative">
-                <input
-                  value={price}
-                  onChange={(e) =>
-                    setPrice(
-                      e.target.value
-                    )
-                  }
-                  placeholder="72000"
-                  inputMode="decimal"
-                  className="
-                    w-full
-                    rounded-2xl
-                    border
-                    border-zinc-700
-                    bg-black
-                    px-4
-                    py-4
-                    pr-12
-                    text-white
-                    outline-none
-                    transition
-                    placeholder:text-zinc-600
-                    focus:border-yellow-400
-                  "
-                />
-
-                <span
-                  className="
-                    absolute
-                    right-4
-                    top-1/2
-                    -translate-y-1/2
-                    font-bold
-                    text-zinc-500
-                  "
-                >
-                  ₽
-                </span>
-              </div>
+              
             </div>
 
 
