@@ -963,10 +963,9 @@ function TradeInPage() {
                   </p>
 
                   <p className="mt-4 text-3xl font-black text-yellow-400">
-                    {product.price.toLocaleString(
-                      "ru-RU"
-                    )}{" "}
-                    ₽
+                    {product.showPrice
+                      ? `${product.price.toLocaleString("ru-RU")} ₽`
+                      : "Уточняйте у менеджера"}
                   </p>
 
                   <div className="mt-4 flex items-center justify-between">
