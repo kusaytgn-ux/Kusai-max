@@ -10,6 +10,7 @@ import {
   Check,
   LockKeyhole,
   ChevronDown,
+   Copy,
 } from "lucide-react";
 
 import BackButton from "../components/ui/BackButton";
@@ -99,6 +100,7 @@ const CLUB_PRIVILEGES: Record<string, string[]> = {
 
 function ClubPage() {
   const [showPromoCode, setShowPromoCode] = useState(false);
+  const [promoCopied, setPromoCopied] = useState(false);
   const { user } = useAuth();
 
   const bonuses = Number(user?.bonuses ?? 0) || 0;
@@ -517,21 +519,73 @@ function ClubPage() {
           </button>
 
           {showPromoCode && (
-            <div className="mt-5 rounded-2xl border border-yellow-400/30 bg-black/40 p-5 text-center">
-              <p className="text-sm text-zinc-400">
-                Ваш промокод на скидку 5 000 ₽
-              </p>
+  <div className="relative mt-5 rounded-2xl border border-yellow-400/30 bg-black/40 p-5 text-center">
 
-              <div className="mt-3 text-3xl font-black tracking-widest text-yellow-400">
-                KUSAY5000
-              </div>
+    {/* КНОПКА КОПИРОВАНИЯ */}
 
-              <p className="mt-3 text-xs text-zinc-500">
-                Покажите промокод сотруднику при оформлении
-                заказа.
-              </p>
-            </div>
-          )}
+    <button
+      type="button"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText("KUSAY5000");
+
+          setPromoCopied(true);
+
+          window.setTimeout(() => {
+            setPromoCopied(false);
+          }, 2000);
+        } catch (error) {
+          console.error(
+            "Не удалось скопировать промокод:",
+            error
+          );
+        }
+      }}
+      className="
+        absolute
+        right-3
+        top-3
+        flex
+        h-10
+        w-10
+        items-center
+        justify-center
+        rounded-xl
+        bg-zinc-800
+        text-yellow-400
+        transition
+        hover:bg-zinc-700
+        active:scale-95
+      "
+      aria-label="Скопировать промокод"
+      title="Скопировать промокод"
+    >
+      {promoCopied ? (
+        <Check size={18} />
+      ) : (
+        <Copy size={18} />
+      )}
+    </button>
+
+
+    <p className="text-sm text-zinc-400">
+      Ваш промокод на скидку 5 000 ₽
+    </p>
+
+
+    <div className="mt-3 text-3xl font-black tracking-widest text-yellow-400">
+      KUSAY5000
+    </div>
+
+
+    <p className="mt-3 text-xs text-zinc-500">
+      {promoCopied
+        ? "Промокод скопирован"
+        : "Покажите промокод сотруднику при оформлении заказа."}
+    </p>
+
+  </div>
+)}
         </section>
       </main>
     </div>
