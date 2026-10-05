@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+const MAX_CHAT_URL = "https://max.ru/u/f9LHodD0cOJQb3kW_ElzLk8YYjGx1iP_tTEoNwDaq5XdRaETUi-wrE1FC-8";
 
 import {
   Heart,
@@ -552,109 +553,212 @@ function UserCard() {
 
               {/* WAYS TO EARN */}
 
-              <div className="mt-4">
-                <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-500">
-                  За что начисляется Score
-                </p>
+<div className="mt-4">
+  <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-500">
+    За что начисляется Score
+  </p>
 
-                <div className="space-y-2">
-                  {/* ПОКУПКИ */}
+  <div className="space-y-2">
 
-                  <div className="flex items-center justify-between rounded-xl bg-zinc-900 px-3 py-2">
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg">
-                        🛒
-                      </span>
+    {/* ПОКУПКИ */}
 
-                      <div>
-                        <p className="text-xs font-bold text-white">
-                          Покупки
-                        </p>
+    <div className="flex items-center justify-between rounded-xl bg-zinc-900 px-3 py-2">
+      <div className="flex items-center gap-3">
+        <span className="text-lg">
+          🛒
+        </span>
 
-                        <p className="text-[9px] text-zinc-500">
-                          1 Score за каждые 100 ₽
-                        </p>
-                      </div>
-                    </div>
+        <div>
+          <p className="text-xs font-bold text-white">
+            Покупки
+          </p>
 
-                    <span className="text-sm font-black text-[#FFE500]">
-                      +1
-                    </span>
-                  </div>
+          <p className="text-[9px] text-zinc-500">
+            1 Score за каждые 100 ₽
+          </p>
+        </div>
+      </div>
 
-                  {/* TRADE-IN */}
+      <span className="text-sm font-black text-[#FFE500]">
+        +1
+      </span>
+    </div>
 
-                  <div className="flex items-center justify-between rounded-xl bg-zinc-900 px-3 py-2">
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg">
-                        🔄
-                      </span>
 
-                      <div>
-                        <p className="text-xs font-bold text-white">
-                          Trade-In
-                        </p>
+    {/* TRADE-IN */}
 
-                        <p className="text-[9px] text-zinc-500">
-                          За участие в Trade-In
-                        </p>
-                      </div>
-                    </div>
+    <div className="flex items-center justify-between rounded-xl bg-zinc-900 px-3 py-2">
+      <div className="flex items-center gap-3">
+        <span className="text-lg">
+          🔄
+        </span>
 
-                    <span className="text-sm font-black text-[#FFE500]">
-                      +150
-                    </span>
-                  </div>
+        <div>
+          <p className="text-xs font-bold text-white">
+            Trade-In
+          </p>
 
-                  {/* РЕКОМЕНДАЦИЯ */}
+          <p className="text-[9px] text-zinc-500">
+            За участие в Trade-In
+          </p>
+        </div>
+      </div>
 
-                  <div className="flex items-center justify-between rounded-xl bg-zinc-900 px-3 py-2">
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg">
-                        👥
-                      </span>
+      <span className="text-sm font-black text-[#FFE500]">
+        +150
+      </span>
+    </div>
 
-                      <div>
-                        <p className="text-xs font-bold text-white">
-                          Рекомендация друга
-                        </p>
 
-                        <p className="text-[9px] text-zinc-500">
-                          За приведённого друга
-                        </p>
-                      </div>
-                    </div>
+    {/* РЕКОМЕНДАЦИЯ */}
 
-                    <span className="text-sm font-black text-[#FFE500]">
-                      +200
-                    </span>
-                  </div>
+    <div className="flex items-center justify-between rounded-xl bg-zinc-900 px-3 py-2">
+      <div className="flex items-center gap-3">
+        <span className="text-lg">
+          👥
+        </span>
 
-                  {/* ОТЗЫВ */}
+        <div>
+          <p className="text-xs font-bold text-white">
+            Рекомендация друга
+          </p>
 
-                  <div className="flex items-center justify-between rounded-xl bg-zinc-900 px-3 py-2">
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg">
-                        ⭐
-                      </span>
+          <p className="text-[9px] text-zinc-500">
+            За приведённого друга
+          </p>
+        </div>
+      </div>
 
-                      <div>
-                        <p className="text-xs font-bold text-white">
-                          Отзыв
-                        </p>
+      <span className="text-sm font-black text-[#FFE500]">
+        +200
+      </span>
+    </div>
 
-                        <p className="text-[9px] text-zinc-500">
-                          За оставленный отзыв
-                        </p>
-                      </div>
-                    </div>
 
-                    <span className="text-sm font-black text-[#FFE500]">
-                      +50
-                    </span>
-                  </div>
-                </div>
-              </div>
+    {/* ОТЗЫВ */}
+
+    <div className="flex items-center justify-between rounded-xl bg-zinc-900 px-3 py-2">
+      <div className="flex items-center gap-3">
+        <span className="text-lg">
+          ⭐
+        </span>
+
+        <div>
+          <p className="text-xs font-bold text-white">
+            Отзыв
+          </p>
+
+          <p className="text-[9px] text-zinc-500">
+            За оставленный отзыв
+          </p>
+        </div>
+      </div>
+
+      <span className="text-sm font-black text-[#FFE500]">
+        +50
+      </span>
+    </div>
+
+
+    {/* СТОРИС INSTAGRAM */}
+
+    <div className="flex items-center justify-between rounded-xl bg-zinc-900 px-3 py-2">
+      <div className="flex items-center gap-3">
+        <span className="text-lg">
+          📸
+        </span>
+
+        <div>
+          <p className="text-xs font-bold text-white">
+            Сторис в Instagram
+          </p>
+
+          <p className="text-[9px] text-zinc-500">
+            За публикацию сторис
+          </p>
+        </div>
+      </div>
+
+      <span className="text-sm font-black text-[#FFE500]">
+        +200
+      </span>
+    </div>
+
+
+    {/* ПОСТ INSTAGRAM */}
+
+    <div className="flex items-center justify-between rounded-xl bg-zinc-900 px-3 py-2">
+      <div className="flex items-center gap-3">
+        <span className="text-lg">
+          📱
+        </span>
+
+        <div>
+          <p className="text-xs font-bold text-white">
+            Пост в Instagram
+          </p>
+
+          <p className="text-[9px] text-zinc-500">
+            За публикацию поста
+          </p>
+        </div>
+      </div>
+
+      <span className="text-sm font-black text-[#FFE500]">
+        +500
+      </span>
+    </div>
+
+  </div>
+
+
+  {/* ПОДТВЕРЖДЕНИЕ */}
+
+  <div className="mt-3 rounded-xl border border-yellow-400/20 bg-zinc-900 px-3 py-3">
+
+    <p className="text-xs font-black text-white">
+      Выполнили задание?
+    </p>
+
+    <p className="mt-1 text-[9px] leading-relaxed text-zinc-500">
+      Выполните любое задание выше и
+      отправьте подтверждение в нашем
+      чате MAX. Администратор проверит
+      выполнение и начислит вам баллы.
+    </p>
+
+    <button
+      type="button"
+      onClick={() => {
+        window.open(
+          MAX_CHAT_URL,
+          "_blank",
+          "noopener,noreferrer"
+        );
+      }}
+      className="
+        mt-3
+        flex
+        w-full
+        items-center
+        justify-center
+        gap-2
+        rounded-xl
+        bg-[#FFE500]
+        px-4
+        py-3
+        text-xs
+        font-black
+        text-black
+        transition
+        active:scale-[0.98]
+      "
+    >
+      ПЕРЕЙТИ В ЧАТ MAX →
+    </button>
+
+  </div>
+</div>
 
               {/* LEVEL */}
 
@@ -693,26 +797,7 @@ function UserCard() {
 
               {/* CLOSE */}
 
-              <button
-                type="button"
-                onClick={() =>
-                  setIsScoreInfoOpen(false)
-                }
-                className="
-                  mt-3
-                  w-full
-                  rounded-xl
-                  bg-[#FFE500]
-                  py-3
-                  text-sm
-                  font-black
-                  text-black
-                  transition
-                  active:scale-[0.98]
-                "
-              >
-                ГОТОВО
-              </button>
+            
             </div>
           </div>,
           document.body
