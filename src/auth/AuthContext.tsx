@@ -86,153 +86,181 @@ export function AuthProvider({
   // ===================================================
 
   useEffect(() => {
-    const saved = localStorage.getItem("currentUser");
+  let saved: string | null = null;
 
-    if (!saved) {
+  try {
+    saved = localStorage.getItem("currentUser");
+  } catch (error) {
+    console.error(
+      "Не удалось получить currentUser из localStorage:",
+      error
+    );
+
+    return;
+  }
+
+  if (!saved) {
+    return;
+  }
+
+  let savedUser: User;
+
+  try {
+    savedUser = JSON.parse(saved);
+  } catch {
+    try {
+      localStorage.removeItem("currentUser");
+    } catch (error) {
+      console.error(
+        "Не удалось удалить повреждённый currentUser:",
+        error
+      );
+    }
+
+    return;
+  }
+
+  setUser(savedUser);
+
+  // Администратору не требуется обновление клиентского баланса.
+  if (savedUser.role === "admin" || !savedUser.phone) {
+    return;
+  }
+
+  let cancelled = false;
+  let isRefreshing = false;
+
+  async function refreshClient() {
+    if (isRefreshing || cancelled) {
       return;
     }
 
-    let savedUser: User;
+    isRefreshing = true;
 
     try {
-      savedUser = JSON.parse(saved);
-    } catch {
-      localStorage.removeItem("currentUser");
-      return;
-    }
+      const apiUrl = getApiUrl();
 
-    setUser(savedUser);
+      const response = await fetch(
+        `${apiUrl}/api/clients/phone/${encodeURIComponent(
+          savedUser.phone
+        )}`
+      );
 
-    // Администратору не требуется обновление клиентского баланса.
-    if (savedUser.role === "admin" || !savedUser.phone) {
-      return;
-    }
+      const data = await response.json();
 
-    let cancelled = false;
-    let isRefreshing = false;
+      if (!response.ok || !data.success || !data.client) {
+        throw new Error(
+          data.message || "Не удалось обновить профиль"
+        );
+      }
 
-    async function refreshClient() {
-      if (isRefreshing || cancelled) {
+      const client = data.client;
+
+      if (cancelled) {
         return;
       }
 
-      isRefreshing = true;
-
-      try {
-        const apiUrl = getApiUrl();
-
-        const response = await fetch(
-          `${apiUrl}/api/clients/phone/${encodeURIComponent(
-            savedUser.phone
-          )}`
-        );
-
-        const data = await response.json();
-
-        if (!response.ok || !data.success || !data.client) {
-          throw new Error(
-            data.message || "Не удалось обновить профиль"
-          );
+      setUser((currentUser) => {
+        if (
+          !currentUser ||
+          currentUser.role === "admin" ||
+          currentUser.phone !== savedUser.phone
+        ) {
+          return currentUser;
         }
 
-        const client = data.client;
+        const updatedUser: User = {
+          ...currentUser,
+          ...client,
 
-        if (cancelled) {
-          return;
-        }
+          id: client.id ?? currentUser.id,
+          name: client.name ?? currentUser.name,
+          phone: client.phone ?? currentUser.phone,
 
-        setUser((currentUser) => {
-          if (
-            !currentUser ||
-            currentUser.role === "admin" ||
-            currentUser.phone !== savedUser.phone
-          ) {
-            return currentUser;
-          }
+          points: Number(
+            client.points ?? currentUser.points ?? 0
+          ),
 
-          const updatedUser: User = {
-            ...currentUser,
-            ...client,
+          bonuses: Number(
+            client.bonuses ??
+              client.points ??
+              currentUser.bonuses ??
+              currentUser.points ??
+              0
+          ),
 
-            id: client.id ?? currentUser.id,
-            name: client.name ?? currentUser.name,
-            phone: client.phone ?? currentUser.phone,
+          status: client.status ?? currentUser.status,
 
-            points: Number(
-              client.points ?? currentUser.points ?? 0
-            ),
+          orders: Number(
+            client.orders ?? currentUser.orders ?? 0
+          ),
 
-            bonuses: Number(
-              client.bonuses ??
-                client.points ??
-                currentUser.bonuses ??
-                currentUser.points ??
-                0
-            ),
+          customerQR:
+            client.customerQR ??
+            client.customer_qr ??
+            client.qr ??
+            currentUser.customerQR,
 
-            status: client.status ?? currentUser.status,
-            orders: Number(
-              client.orders ?? currentUser.orders ?? 0
-            ),
+          role: "user",
+        };
 
-            customerQR:
-              client.customerQR ??
-              client.customer_qr ??
-              client.qr ??
-              currentUser.customerQR,
-
-            role: "user",
-          };
-
+        try {
           localStorage.setItem(
             "currentUser",
             JSON.stringify(updatedUser)
           );
+        } catch (error) {
+          console.error(
+            "Не удалось сохранить currentUser в localStorage:",
+            error
+          );
+        }
 
-          return updatedUser;
-        });
-      } catch (error) {
-        console.error(
-          "Ошибка обновления профиля клиента:",
-          error
-        );
-      } finally {
-        isRefreshing = false;
-      }
+        return updatedUser;
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка обновления профиля клиента:",
+        error
+      );
+    } finally {
+      isRefreshing = false;
     }
+  }
 
-    // Обновляем сразу после восстановления сессии.
+  void refreshClient();
+
+  function handleFocus() {
     void refreshClient();
+  }
 
-    // Обновляем при возвращении пользователя в приложение.
-    function handleFocus() {
+  function handleVisibilityChange() {
+    if (document.visibilityState === "visible") {
       void refreshClient();
     }
+  }
 
-    function handleVisibilityChange() {
-      if (document.visibilityState === "visible") {
-        void refreshClient();
-      }
-    }
+  window.addEventListener("focus", handleFocus);
 
-    window.addEventListener("focus", handleFocus);
+  document.addEventListener(
+    "visibilitychange",
+    handleVisibilityChange
+  );
 
-    document.addEventListener(
+  return () => {
+    cancelled = true;
+
+    window.removeEventListener(
+      "focus",
+      handleFocus
+    );
+
+    document.removeEventListener(
       "visibilitychange",
       handleVisibilityChange
     );
-
-    return () => {
-      cancelled = true;
-
-      window.removeEventListener("focus", handleFocus);
-
-      document.removeEventListener(
-        "visibilitychange",
-        handleVisibilityChange
-      );
-    };
-  }, []);
+  };
+}, []);
 
   // ===================================================
   // ВХОД КЛИЕНТА
