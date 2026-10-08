@@ -11,6 +11,20 @@ import "./index.css";
 import { FavoritesProvider } from "./store/FavoritesContext";
 import { AuthProvider } from "./auth/AuthContext";
 
+window.addEventListener(
+  "vite:preloadError",
+  (event) => {
+    event.preventDefault();
+
+    const key = "kusay-vite-reload";
+
+    if (!sessionStorage.getItem(key)) {
+      sessionStorage.setItem(key, "1");
+      window.location.reload();
+    }
+  }
+);
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>
