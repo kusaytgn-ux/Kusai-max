@@ -37,24 +37,37 @@ export function CartProvider({
 }: {
   children: ReactNode;
 }) {
-  const [cart, setCart] = useState<CartItem[]>(() =>{
+  const [cart, setCart] = useState<CartItem[]>(() => {
+  try {
     const saved = localStorage.getItem(STORAGE_KEY);
 
-    if (!saved) return [];
-
-    try{
-      return JSON.parse(saved);
-    } catch{
+    if (!saved) {
       return [];
     }
-  });
+
+    const parsed = JSON.parse(saved);
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed;
+  } catch (error) {
+    console.error("Ошибка загрузки корзины:", error);
+    return [];
+  }
+});
 
   useEffect(() => {
+  try {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify(cart)
     );
-  }, [cart]);
+  } catch (error) {
+    console.error("Ошибка сохранения корзины:", error);
+  }
+}, [cart]);
 
   function addToCart(item: Omit<CartItem, "quantity"> ){
     setCart((prev) => {
