@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { useConcierge } from "../../store/ConciergeContext";
+import { usePushNotifications } from "../../hooks/usePushNotifications";
 
 function AdminConcierge() {
   const {
@@ -24,6 +25,22 @@ function AdminConcierge() {
     getUnreadForAdmin,
     getTotalUnreadForAdmin,
   } = useConcierge();
+
+  /*
+   * Подписка админа на push-уведомления о новых
+   * сообщениях от пользователей.
+   */
+  const {
+    isSupported: isPushSupported,
+    permission: pushPermission,
+    subscribe: subscribeToPush,
+  } = usePushNotifications("admin", "admin");
+
+  useEffect(() => {
+    if (isPushSupported && pushPermission === "default") {
+      subscribeToPush();
+    }
+  }, [isPushSupported, pushPermission, subscribeToPush]);
 
   const [selectedUser, setSelectedUser] = useState("");
   const [text, setText] = useState("");
