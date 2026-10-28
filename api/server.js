@@ -10,6 +10,12 @@ import {
   getProducts,
 } from "./moysklad.js";
 
+import {
+  initializePushTable,
+  registerPushRoutes,
+  sendPushToOwner,
+} from "./push.js";
+
 
 import { db } from "./firebaseAdmin.js";
 import { calculateBonusDiscount } from "./bonus.js";
@@ -196,6 +202,9 @@ const initializeHomepageTables =
   registerHomepageRoutes(app, pgQuery);
 
 await initializeHomepageTables();
+
+await initializePushTable();
+registerPushRoutes(app);
 
 // =====================================================
 // HELPERS
@@ -4373,9 +4382,32 @@ app.post("/api/messages", async (req, res) => {
       result.rows[0];
 
     console.log(
-      `СЂСџвЂ™В¬ Р СњР С•Р Р†Р С•Р Вµ РЎРѓР С•Р С•Р В±РЎвЂ°Р ВµР Р…Р С‘Р Вµ Р С•РЎвЂљ ${author}:`,
+      `Создано сообщение от ${author}:`,
       cleanUserLogin
     );
+
+    if (author === "user") {
+      // Пользователь написал — уведомляем всех админов
+      sendPushToOwner("admin", "admin", {
+        title: "Новое сообщение",
+        body: cleanText,
+        url: "/admin",
+        tag: `concierge-admin-${cleanUserLogin}`,
+      }).catch((error) => {
+        console.error("Ошибка отправки push админу:", error);
+      });
+    } else if (author === "admin") {
+      // Админ ответил — уведомляем конкретного пользователя
+      sendPushToOwner(cleanUserLogin, "user", {
+        title: "Консьерж ответил",
+        body: cleanText,
+        url: "/concierge",
+        tag: "concierge-user",
+      }).catch((error) => {
+        console.error("Ошибка отправки push пользователю:", error);
+      });
+    }
+
 
     return res.status(201).json({
       success: true,
