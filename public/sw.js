@@ -1,8 +1,8 @@
 /**
- * Service Worker для Web Push уведомлений.
+ * Service Worker for Web Push notifications.
  *
- * Файл лежит в public/sw.js, Vite копирует его в корень
- * собранного сайта -> https://ваш-домен/sw.js
+ * This file must live at public/sw.js so Vite copies it
+ * to the root of the built site -> https://your-domain/sw.js
  */
 
 self.addEventListener("install", () => {
@@ -14,7 +14,7 @@ self.addEventListener("activate", (event) => {
 });
 
 /**
- * Приходит push с сервера — показываем системное уведомление.
+ * A push arrives from the server -> show a system notification.
  */
 self.addEventListener("push", (event) => {
   let data = {};
@@ -44,7 +44,7 @@ self.addEventListener("push", (event) => {
 });
 
 /**
- * Клик по уведомлению — открываем/фокусируем нужную страницу.
+ * Click on notification -> open/focus the right page.
  */
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
